@@ -47,11 +47,16 @@ def info():
 
 
 def _mount_routers() -> None:
-    from .api import categories, locations
+    from .api import bulk, categories, exports, imports, locations, parts, stock
 
     app.include_router(categories.router)
     app.include_router(locations.router)
-    # parts, stock, bulk, import, kicad -> added in the next milestone
+    app.include_router(parts.router)
+    app.include_router(stock.router)
+    app.include_router(bulk.router)
+    app.include_router(imports.router)
+    app.include_router(exports.router)
+    # kicad -> next milestone
 
 
 _mount_routers()

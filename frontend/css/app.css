@@ -33,6 +33,7 @@ button.primary {
 button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 button.ghost { background: transparent; border-color: transparent; }
 button.ghost:hover { background: var(--surface-raised); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -192,3 +193,191 @@ main.body {
   padding: 10px 16px 4px;
   font-size: 12px;
 }
+
+/* ---------- toolbar / buttons in topbar ---------- */
+.topbar .tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.scan-ind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.scan-ind .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.scan-ind.armed {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.scan-ind.armed .dot {
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+}
+
+/* ---------- parts view ---------- */
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.filters input[type="search"] { min-width: 220px; }
+.filters .grow { flex: 1; }
+.count-tag { color: var(--text-muted); font-size: 12px; }
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+table.parts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.parts-table th,
+.parts-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.parts-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-weight: 600;
+  z-index: 1;
+}
+.parts-table tbody tr:hover { background: var(--surface-raised); }
+.parts-table tbody tr.sel { background: var(--accent-soft); }
+.parts-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.parts-table td.name { font-weight: 600; white-space: normal; }
+.parts-table td.locs { color: var(--text-muted); white-space: normal; }
+.parts-table .low { color: var(--warn); }
+.parts-table .zero { color: var(--text-faint); }
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  margin-right: 3px;
+}
+
+/* bulk action bar */
+.bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+.bulkbar .n { font-weight: 700; color: var(--accent); }
+.bulkbar .sep { flex: 1; }
+
+/* ---------- modal ---------- */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+}
+.modal h3 {
+  margin: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.modal .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.modal .row { display: flex; gap: 10px; align-items: center; }
+.modal .row label { min-width: 120px; color: var(--text-muted); }
+.modal .row > select,
+.modal .row > input { flex: 1; }
+.modal .actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.pre {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font: 12px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* drawer for part detail */
+.drawer-back { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 40; }
+.drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(460px, 94vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  z-index: 41;
+  overflow: auto;
+  padding: 16px;
+}
+.drawer h3 { margin: 0 0 4px; }
+.drawer .sub { color: var(--text-muted); margin-bottom: 12px; }
+.drawer dl { display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; margin: 0 0 14px; }
+.drawer dt { color: var(--text-muted); }
+.drawer dd { margin: 0; }
+.drawer .stock-row { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 4px 0; }
+
+/* toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 14px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  z-index: 60;
+}
+.toast button { background: transparent; border-color: var(--accent); color: var(--accent); }

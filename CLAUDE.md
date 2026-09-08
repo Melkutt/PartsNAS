@@ -110,13 +110,32 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   or delete `data/partsnas.db` in dev.
 - New frontend file → add `<script>/<link>` to `index.html` with `?v=N`, bump on change.
 
+## API surface so far
+
+- `/api/categories`, `/api/locations` — tree CRUD (see files).
+- `/api/parts` (list+filter), `/api/parts/ids` (select-all-matching),
+  `/api/parts/lookup?code=` (scanner), `/api/parts/{id}` CRUD.
+- `/api/parts/{id}/stock` (+ `/move`) — the ledger for one part.
+- `/api/bulk` + `/api/bulk/{id}/undo` — move_category / move_stock / add_tag /
+  remove_tag / set_min_stock / delete, each with an undo payload.
+- `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
+
+Frontend: `js/parts.js` (table + bulk bar + detail drawer), `js/importexport.js`
+(Import/Export topbar buttons), `js/scan.js` (global `partsnas:scan` event from a
+keyboard-wedge USB scanner; parts view looks the code up and opens or ticks it).
+
 ## Roadmap
 
 1. **done** — repo skeleton, schema, seed, category + location trees, theme.
-2. Parts: list (virtual table, filter, facets), detail/edit with per-class fields,
-   images (Pillow thumbnails on `.img-mat`), tags.
-3. Stock ledger UI + **bulk move** (parts→category, stock→location) + undo.
-4. PartsBox importer (+ review list for "≈75 in the other box" split notes).
-5. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
-6. Projects / builds / shortage report; min-stock warnings.
-7. API enrichment (Nexar/Mouser/Digikey), label/QR print, theme sync via Setting.
+2. **done** — English rename of all seed data / labels.
+3. **done** — Parts list + detail drawer, stock ledger, **bulk move**
+   (parts→category, stock→location) + undo, PartsBox importer (with the
+   "≈75 in the other box" review list), CSV/XLSX export, USB scanner input.
+4. Part detail **edit** form with per-class fields (`part_classes.json`), images
+   (Pillow thumbnails on `.img-mat`), manual stock adjust UI, the review-list
+   stock-split helper.
+5. **Barcode / QR** — `GET /api/label/{id}?fmt=code128|qr` (server-side, offline)
+   + a printable label view; "Label" button on a part.
+6. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
+7. Projects / builds / shortage report; min-stock warnings.
+8. API enrichment (Nexar/Mouser/Digi-Key), theme sync via `Setting`.
