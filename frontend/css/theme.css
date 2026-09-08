@@ -1,0 +1,105 @@
+/* PartsNAS theme tokens.
+ *
+ * Three palettes, switched by `data-theme` on <html>:
+ *   (none / "gray")  default - dim slate, easy on white product photos
+ *   "dark"           near-black, for low light
+ *   "light"          included for completeness, not the focus
+ *
+ * Product images always sit on a neutral ~18% grey mat (--img-mat) so a photo
+ * shot on a white background never glares, in any theme. Accent is amber.
+ */
+
+:root,
+:root[data-theme="gray"] {
+  --bg: #1b1e23;
+  --surface: #23272e;
+  --surface-raised: #2b3038;
+  --surface-sunken: #171a1f;
+  --border: #363c45;
+  --border-strong: #464e59;
+  --text: #e6e8eb;
+  --text-muted: #9aa1ac;
+  --text-faint: #6b7280;
+
+  --accent: #e08a2b;
+  --accent-hover: #f0a04a;
+  --accent-contrast: #1b1e23;
+  --accent-soft: rgba(224, 138, 43, 0.16);
+
+  --img-mat: #40454e;
+  --img-mat-border: rgba(255, 255, 255, 0.08);
+
+  --danger: #e5534b;
+  --ok: #3fb950;
+  --warn: #d29922;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  --radius: 8px;
+  --radius-sm: 5px;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-raised: #1c2230;
+  --surface-sunken: #0b0e13;
+  --border: #30363d;
+  --border-strong: #3d444d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --text-faint: #59636e;
+
+  --accent: #e08a2b;
+  --accent-hover: #f0a04a;
+  --accent-contrast: #0d1117;
+  --accent-soft: rgba(224, 138, 43, 0.14);
+
+  --img-mat: #3a3f47;
+  --img-mat-border: rgba(255, 255, 255, 0.07);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="light"] {
+  --bg: #eef0f2;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #e6e8eb;
+  --border: #d5d9de;
+  --border-strong: #c2c8cf;
+  --text: #1c2024;
+  --text-muted: #5b636d;
+  --text-faint: #8b939d;
+
+  --accent: #b96a12;
+  --accent-hover: #d07d1e;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(185, 106, 18, 0.12);
+
+  --img-mat: #d9dce0;
+  --img-mat-border: rgba(0, 0, 0, 0.08);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+
+/* Neutral mat for any component/product image. Checkerboard shows through
+ * transparent PNGs without fighting the photo. */
+.img-mat {
+  background-color: var(--img-mat);
+  background-image:
+    linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  border: 1px solid var(--img-mat-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.img-mat img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

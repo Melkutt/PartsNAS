@@ -1,0 +1,18 @@
+# runtime data (SQLite db, uploaded images, thumbnails) -> NAS volume
+/data/
+!/data/.gitkeep
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+
+# editor
+.vscode/
+.idea/
+
+# os
+Thumbs.db
+.DS_Store

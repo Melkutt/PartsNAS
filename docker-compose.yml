@@ -1,0 +1,19 @@
+# DS224+ (Container Manager): put this file + the repo on the NAS and
+#   docker compose up -d
+# Then browse to http://<nas-ip>:8770
+services:
+  partsnas:
+    build: .
+    image: partsnas:latest
+    container_name: partsnas
+    restart: unless-stopped
+    ports:
+      - "8770:8000"
+    volumes:
+      # keep the database + images on the NAS volume, outside the container
+      - ./data:/data
+    environment:
+      PARTSNAS_DEFAULT_CURRENCY: SEK
+      PARTSNAS_DEFAULT_VAT_PERCENT: "25"
+      # set a token once the app is reachable outside localhost:
+      # PARTSNAS_API_TOKEN: "change-me"

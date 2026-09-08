@@ -1,0 +1,613 @@
+[
+  {
+    "name": "Passivt",
+    "children": [
+      {
+        "name": "Resistor",
+        "children": [
+          {
+            "name": "Tunnfilm",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Tjockfilm",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Metallfilm",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Trådlindad",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Effektmotstånd",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Nätverksresistor",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Potentiometer",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Joystick",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Kondensator",
+        "children": [
+          {
+            "name": "Keramisk",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Elektrolytisk (Al)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Tantal",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Film",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Superkondensator",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Induktor",
+        "children": [
+          {
+            "name": "Shielded",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Unshielded",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Ferritpärla",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Toroid",
+            "children": [],
+            "comment": "T37-x, T50-x, FT37-x mm"
+          },
+          {
+            "name": "RF",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Power induktor",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Kristall & Oscillator",
+        "children": [
+          {
+            "name": "Kristall (passiv)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Oscillator (aktiv)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "TCXO/VCTCXO",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Övrig passiv",
+        "children": [
+          {
+            "name": "Varistor (MOV)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Termistor (NTC/PTC)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Säkring",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      }
+    ],
+    "comment": null
+  },
+  {
+    "name": "Halvledare",
+    "children": [
+      {
+        "name": "Diod",
+        "children": [
+          {
+            "name": "Likriktardiod",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Schottky",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Zenerdiod",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "TVS-diod",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "LED",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Varicap",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Transistor",
+        "children": [
+          {
+            "name": "BJT NPN",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "BJT PNP",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "MOSFET N-ch",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "MOSFET P-ch",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "IGBT",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "TRIAC",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Thyristor (SCR)",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "IC – Analog",
+        "children": [
+          {
+            "name": "Op-amp",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Komparator",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Spänningsreferens",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "LDO / Spänningsregulator",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "DC/DC converter",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Motordriver",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "IC – Digital/Mixed",
+        "children": [
+          {
+            "name": "MCU / Microcontroller",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Logik (Grind, Buffer, FF)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Minne (Flash, EEPROM, RAM)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Interface (USB, CAN, RS485)",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "RF – Sändare/Mottagare",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "RF – SAW/BAW filter",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Sensor",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      }
+    ],
+    "comment": null
+  },
+  {
+    "name": "Kontakt",
+    "children": [
+      {
+        "name": "Pin header / Socket",
+        "children": [
+          {
+            "name": "2.54mm",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "2.0mm",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Annat raster",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "D-SUB",
+        "children": [
+          {
+            "name": "Kontakt",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Kåpa",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Molex",
+        "children": [
+          {
+            "name": "PicoBlade",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "KK 254",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "KK 396",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Micro-Fit",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "USB",
+        "children": [
+          {
+            "name": "USB-A",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "USB-C",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Micro/Mini USB",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "RF-kontakt",
+        "children": [
+          {
+            "name": "Adapter",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "SMA",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "SMB",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "BNC",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "N",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "F",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "FME",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "U.FL",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "UHF",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Plint / Terminal",
+        "children": [
+          {
+            "name": "Skruvplint",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Fjäderplint",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      }
+    ],
+    "comment": null
+  },
+  {
+    "name": "Mekanisk",
+    "children": [
+      {
+        "name": "Skruv & Mutter",
+        "children": [
+          {
+            "name": "M2 / M2.5",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "M3",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "M4 / M5",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Övrig",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Distans",
+        "children": [
+          {
+            "name": "Metall",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Plast/Nylon",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Lager",
+        "children": [
+          {
+            "name": "Kullager",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Övrig mek",
+        "children": [
+          {
+            "name": "Kylflänsar",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Kapsling / Låda",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      }
+    ],
+    "comment": null
+  },
+  {
+    "name": "Övrigt",
+    "children": [
+      {
+        "name": "Modul",
+        "children": [
+          {
+            "name": "Arduino/ESP/Pi",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Nätverksmodul",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Displaymodul",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Övrigt",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Verktyg & Förbrukningsvaror",
+        "children": [
+          {
+            "name": "Kemikalier",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Lödning",
+            "children": [],
+            "comment": null
+          },
+          {
+            "name": "Övrigt",
+            "children": [],
+            "comment": null
+          }
+        ],
+        "comment": null
+      },
+      {
+        "name": "Okänt / Osorterat",
+        "children": [],
+        "comment": "Ny komponent utan kategori läggs här"
+      }
+    ],
+    "comment": null
+  }
+]

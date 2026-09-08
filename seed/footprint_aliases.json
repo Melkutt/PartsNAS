@@ -1,0 +1,397 @@
+[
+  {
+    "canonical": "0201",
+    "aliases": [
+      "0201",
+      "RC0201"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "0402",
+    "aliases": [
+      "0402",
+      "EMC0402",
+      "RC0402"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "0603",
+    "aliases": [
+      "0603",
+      "EMC0603",
+      "RC0603"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "0805",
+    "aliases": [
+      "0805",
+      "RC0805"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "1206",
+    "aliases": [
+      "1206",
+      "RC1206"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "1210",
+    "aliases": [
+      "1210",
+      "RC1210"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "2010",
+    "aliases": [
+      "2010"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "2512",
+    "aliases": [
+      "2512"
+    ],
+    "group": "SMD passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOT-23-3",
+    "aliases": [
+      "SC-59",
+      "SOT-23",
+      "SOT-23-3",
+      "SOT23",
+      "SOT23-3"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOT-23-5",
+    "aliases": [
+      "SC-74A",
+      "SOT-23-5",
+      "SOT23-5"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOT-23-6",
+    "aliases": [
+      "SC-74",
+      "SOT-23-6",
+      "SOT23-6"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOT-89-3",
+    "aliases": [
+      "SOT-89",
+      "SOT-89-3",
+      "SOT89"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOT-223-3",
+    "aliases": [
+      "SOT-223",
+      "SOT-223-3",
+      "SOT223",
+      "SOT223-3"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SC-88-6",
+    "aliases": [
+      "SC-88",
+      "SC-88-6",
+      "SC88",
+      "SOT-363"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TO-92",
+    "aliases": [
+      "TO-92",
+      "TO92"
+    ],
+    "group": "THT aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TO-220",
+    "aliases": [
+      "TO-220",
+      "TO-220AB",
+      "TO220"
+    ],
+    "group": "THT aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TO-247",
+    "aliases": [
+      "TO-247",
+      "TO247"
+    ],
+    "group": "THT aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TO-252 (D-PAK)",
+    "aliases": [
+      "D-PAK",
+      "DPAK",
+      "TO-252",
+      "TO-252 (D-PAK)"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TO-263 (D2-PAK)",
+    "aliases": [
+      "D2-PAK",
+      "D2PAK",
+      "TO-263",
+      "TO-263 (D2-PAK)"
+    ],
+    "group": "SMD aktiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOIC-8",
+    "aliases": [
+      "SO-8",
+      "SOIC-8",
+      "SOIC8",
+      "SOP-8"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOIC-14",
+    "aliases": [
+      "SO-14",
+      "SOIC-14",
+      "SOIC14",
+      "SOP-14"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "SOIC-16",
+    "aliases": [
+      "SO-16",
+      "SOIC-16",
+      "SOIC16",
+      "SOP-16"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TSSOP-8",
+    "aliases": [
+      "TSSOP-8",
+      "TSSOP8"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "TSSOP-16",
+    "aliases": [
+      "TSSOP-16",
+      "TSSOP16"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "QFN-14",
+    "aliases": [
+      "MLF14",
+      "QFN-14",
+      "QFN14"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "QFN-20",
+    "aliases": [
+      "MLF20",
+      "QFN-20",
+      "QFN20"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "QFP-44",
+    "aliases": [
+      "QFP-44",
+      "QFP44",
+      "TQFP-44",
+      "TQFP44"
+    ],
+    "group": "SMD IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DIP-8",
+    "aliases": [
+      "DIP-8",
+      "DIP8",
+      "PDIP-8"
+    ],
+    "group": "THT IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DIP-14",
+    "aliases": [
+      "DIP-14",
+      "DIP14",
+      "PDIP-14"
+    ],
+    "group": "THT IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DIP-16",
+    "aliases": [
+      "DIP-16",
+      "DIP16",
+      "PDIP-16"
+    ],
+    "group": "THT IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DIP-20",
+    "aliases": [
+      "DIP-20",
+      "DIP20"
+    ],
+    "group": "THT IC",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DO-35",
+    "aliases": [
+      "DO-35",
+      "DO35"
+    ],
+    "group": "THT diod",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DO-41",
+    "aliases": [
+      "DO-41",
+      "DO41"
+    ],
+    "group": "THT diod",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DO-214AA (SMA)",
+    "aliases": [
+      "DO-214AA",
+      "DO-214AA (SMA)",
+      "SMA"
+    ],
+    "group": "SMD diod",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DO-214AB (SMB)",
+    "aliases": [
+      "DO-214AB",
+      "DO-214AB (SMB)",
+      "SMB"
+    ],
+    "group": "SMD diod",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DO-214AC (SMC)",
+    "aliases": [
+      "DO-214AC",
+      "DO-214AC (SMC)",
+      "SMC"
+    ],
+    "group": "SMD diod",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "DO-219AD",
+    "aliases": [
+      "DO-219AD",
+      "DO219AD",
+      "PowerDI123"
+    ],
+    "group": "SMD diod",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "Axial THT",
+    "aliases": [
+      "AXIAL",
+      "Axial",
+      "Axial THT"
+    ],
+    "group": "THT passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "Radial THT 5mm",
+    "aliases": [
+      "RM5",
+      "Radial 5mm",
+      "Radial THT 5mm"
+    ],
+    "group": "THT passiv",
+    "kicad_footprint": null
+  },
+  {
+    "canonical": "Radial THT 2mm",
+    "aliases": [
+      "RM2",
+      "Radial 2mm",
+      "Radial THT 2mm"
+    ],
+    "group": "THT passiv",
+    "kicad_footprint": null
+  }
+]
