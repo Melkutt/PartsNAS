@@ -5,7 +5,7 @@
       "0201",
       "RC0201"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -15,7 +15,7 @@
       "EMC0402",
       "RC0402"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -25,7 +25,7 @@
       "EMC0603",
       "RC0603"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -34,7 +34,7 @@
       "0805",
       "RC0805"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -43,7 +43,7 @@
       "1206",
       "RC1206"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -52,7 +52,7 @@
       "1210",
       "RC1210"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -60,7 +60,7 @@
     "aliases": [
       "2010"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -68,7 +68,7 @@
     "aliases": [
       "2512"
     ],
-    "group": "SMD passiv",
+    "group": "SMD passive",
     "kicad_footprint": null
   },
   {
@@ -80,7 +80,7 @@
       "SOT23",
       "SOT23-3"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -90,7 +90,7 @@
       "SOT-23-5",
       "SOT23-5"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -100,7 +100,7 @@
       "SOT-23-6",
       "SOT23-6"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -110,7 +110,7 @@
       "SOT-89-3",
       "SOT89"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -121,7 +121,7 @@
       "SOT223",
       "SOT223-3"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -132,7 +132,7 @@
       "SC88",
       "SOT-363"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -141,7 +141,7 @@
       "TO-92",
       "TO92"
     ],
-    "group": "THT aktiv",
+    "group": "THT active",
     "kicad_footprint": null
   },
   {
@@ -151,7 +151,7 @@
       "TO-220AB",
       "TO220"
     ],
-    "group": "THT aktiv",
+    "group": "THT active",
     "kicad_footprint": null
   },
   {
@@ -160,7 +160,7 @@
       "TO-247",
       "TO247"
     ],
-    "group": "THT aktiv",
+    "group": "THT active",
     "kicad_footprint": null
   },
   {
@@ -171,7 +171,7 @@
       "TO-252",
       "TO-252 (D-PAK)"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -182,7 +182,7 @@
       "TO-263",
       "TO-263 (D2-PAK)"
     ],
-    "group": "SMD aktiv",
+    "group": "SMD active",
     "kicad_footprint": null
   },
   {
@@ -312,7 +312,7 @@
       "DO-35",
       "DO35"
     ],
-    "group": "THT diod",
+    "group": "THT diode",
     "kicad_footprint": null
   },
   {
@@ -321,7 +321,7 @@
       "DO-41",
       "DO41"
     ],
-    "group": "THT diod",
+    "group": "THT diode",
     "kicad_footprint": null
   },
   {
@@ -331,7 +331,7 @@
       "DO-214AA (SMA)",
       "SMA"
     ],
-    "group": "SMD diod",
+    "group": "SMD diode",
     "kicad_footprint": null
   },
   {
@@ -341,7 +341,7 @@
       "DO-214AB (SMB)",
       "SMB"
     ],
-    "group": "SMD diod",
+    "group": "SMD diode",
     "kicad_footprint": null
   },
   {
@@ -351,7 +351,7 @@
       "DO-214AC (SMC)",
       "SMC"
     ],
-    "group": "SMD diod",
+    "group": "SMD diode",
     "kicad_footprint": null
   },
   {
@@ -361,7 +361,7 @@
       "DO219AD",
       "PowerDI123"
     ],
-    "group": "SMD diod",
+    "group": "SMD diode",
     "kicad_footprint": null
   },
   {
@@ -371,7 +371,7 @@
       "Axial",
       "Axial THT"
     ],
-    "group": "THT passiv",
+    "group": "THT passive",
     "kicad_footprint": null
   },
   {
@@ -381,7 +381,7 @@
       "Radial 5mm",
       "Radial THT 5mm"
     ],
-    "group": "THT passiv",
+    "group": "THT passive",
     "kicad_footprint": null
   },
   {
@@ -391,7 +391,7 @@
       "Radial 2mm",
       "Radial THT 2mm"
     ],
-    "group": "THT passiv",
+    "group": "THT passive",
     "kicad_footprint": null
   }
 ]

@@ -1,37 +1,37 @@
 [
   {
-    "name": "Passivt",
+    "name": "Passive",
     "children": [
       {
         "name": "Resistor",
         "children": [
           {
-            "name": "Tunnfilm",
+            "name": "Thin film",
             "children": [],
             "comment": null
           },
           {
-            "name": "Tjockfilm",
+            "name": "Thick film",
             "children": [],
             "comment": null
           },
           {
-            "name": "Metallfilm",
+            "name": "Metal film",
             "children": [],
             "comment": null
           },
           {
-            "name": "Trådlindad",
+            "name": "Wirewound",
             "children": [],
             "comment": null
           },
           {
-            "name": "Effektmotstånd",
+            "name": "Power resistor",
             "children": [],
             "comment": null
           },
           {
-            "name": "Nätverksresistor",
+            "name": "Resistor network",
             "children": [],
             "comment": null
           },
@@ -49,20 +49,20 @@
         "comment": null
       },
       {
-        "name": "Kondensator",
+        "name": "Capacitor",
         "children": [
           {
-            "name": "Keramisk",
+            "name": "Ceramic",
             "children": [],
             "comment": null
           },
           {
-            "name": "Elektrolytisk (Al)",
+            "name": "Electrolytic (Al)",
             "children": [],
             "comment": null
           },
           {
-            "name": "Tantal",
+            "name": "Tantalum",
             "children": [],
             "comment": null
           },
@@ -72,7 +72,7 @@
             "comment": null
           },
           {
-            "name": "Superkondensator",
+            "name": "Supercapacitor",
             "children": [],
             "comment": null
           }
@@ -80,7 +80,7 @@
         "comment": null
       },
       {
-        "name": "Induktor",
+        "name": "Inductor",
         "children": [
           {
             "name": "Shielded",
@@ -93,14 +93,14 @@
             "comment": null
           },
           {
-            "name": "Ferritpärla",
+            "name": "Ferrite bead",
             "children": [],
             "comment": null
           },
           {
             "name": "Toroid",
             "children": [],
-            "comment": "T37-x, T50-x, FT37-x mm"
+            "comment": "T37-x, T50-x, FT37-x, ..."
           },
           {
             "name": "RF",
@@ -108,7 +108,7 @@
             "comment": null
           },
           {
-            "name": "Power induktor",
+            "name": "Power inductor",
             "children": [],
             "comment": null
           }
@@ -116,20 +116,20 @@
         "comment": null
       },
       {
-        "name": "Kristall & Oscillator",
+        "name": "Crystal & Oscillator",
         "children": [
           {
-            "name": "Kristall (passiv)",
+            "name": "Crystal (passive)",
             "children": [],
             "comment": null
           },
           {
-            "name": "Oscillator (aktiv)",
+            "name": "Oscillator (active)",
             "children": [],
             "comment": null
           },
           {
-            "name": "TCXO/VCTCXO",
+            "name": "TCXO / VCTCXO",
             "children": [],
             "comment": null
           }
@@ -137,7 +137,7 @@
         "comment": null
       },
       {
-        "name": "Övrig passiv",
+        "name": "Other passive",
         "children": [
           {
             "name": "Varistor (MOV)",
@@ -145,12 +145,12 @@
             "comment": null
           },
           {
-            "name": "Termistor (NTC/PTC)",
+            "name": "Thermistor (NTC / PTC)",
             "children": [],
             "comment": null
           },
           {
-            "name": "Säkring",
+            "name": "Fuse",
             "children": [],
             "comment": null
           }
@@ -161,13 +161,13 @@
     "comment": null
   },
   {
-    "name": "Halvledare",
+    "name": "Semiconductor",
     "children": [
       {
-        "name": "Diod",
+        "name": "Diode",
         "children": [
           {
-            "name": "Likriktardiod",
+            "name": "Rectifier diode",
             "children": [],
             "comment": null
           },
@@ -177,12 +177,12 @@
             "comment": null
           },
           {
-            "name": "Zenerdiod",
+            "name": "Zener diode",
             "children": [],
             "comment": null
           },
           {
-            "name": "TVS-diod",
+            "name": "TVS diode",
             "children": [],
             "comment": null
           },
@@ -249,17 +249,17 @@
             "comment": null
           },
           {
-            "name": "Komparator",
+            "name": "Comparator",
             "children": [],
             "comment": null
           },
           {
-            "name": "Spänningsreferens",
+            "name": "Voltage reference",
             "children": [],
             "comment": null
           },
           {
-            "name": "LDO / Spänningsregulator",
+            "name": "LDO / Voltage regulator",
             "children": [],
             "comment": null
           },
@@ -269,7 +269,7 @@
             "comment": null
           },
           {
-            "name": "Motordriver",
+            "name": "Motor driver",
             "children": [],
             "comment": null
           }
@@ -277,7 +277,7 @@
         "comment": null
       },
       {
-        "name": "IC – Digital/Mixed",
+        "name": "IC – Digital / Mixed",
         "children": [
           {
             "name": "MCU / Microcontroller",
@@ -285,12 +285,12 @@
             "comment": null
           },
           {
-            "name": "Logik (Grind, Buffer, FF)",
+            "name": "Logic (gate, buffer, FF)",
             "children": [],
             "comment": null
           },
           {
-            "name": "Minne (Flash, EEPROM, RAM)",
+            "name": "Memory (Flash, EEPROM, RAM)",
             "children": [],
             "comment": null
           },
@@ -300,7 +300,7 @@
             "comment": null
           },
           {
-            "name": "RF – Sändare/Mottagare",
+            "name": "RF – Transceiver",
             "children": [],
             "comment": null
           },
@@ -321,23 +321,23 @@
     "comment": null
   },
   {
-    "name": "Kontakt",
+    "name": "Connector",
     "children": [
       {
         "name": "Pin header / Socket",
         "children": [
           {
-            "name": "2.54mm",
+            "name": "2.54 mm",
             "children": [],
             "comment": null
           },
           {
-            "name": "2.0mm",
+            "name": "2.0 mm",
             "children": [],
             "comment": null
           },
           {
-            "name": "Annat raster",
+            "name": "Other pitch",
             "children": [],
             "comment": null
           }
@@ -345,15 +345,15 @@
         "comment": null
       },
       {
-        "name": "D-SUB",
+        "name": "D-Sub",
         "children": [
           {
-            "name": "Kontakt",
+            "name": "Connector",
             "children": [],
             "comment": null
           },
           {
-            "name": "Kåpa",
+            "name": "Backshell",
             "children": [],
             "comment": null
           }
@@ -400,7 +400,7 @@
             "comment": null
           },
           {
-            "name": "Micro/Mini USB",
+            "name": "Micro / Mini USB",
             "children": [],
             "comment": null
           }
@@ -408,7 +408,7 @@
         "comment": null
       },
       {
-        "name": "RF-kontakt",
+        "name": "RF connector",
         "children": [
           {
             "name": "Adapter",
@@ -459,15 +459,15 @@
         "comment": null
       },
       {
-        "name": "Plint / Terminal",
+        "name": "Terminal block",
         "children": [
           {
-            "name": "Skruvplint",
+            "name": "Screw terminal",
             "children": [],
             "comment": null
           },
           {
-            "name": "Fjäderplint",
+            "name": "Spring terminal",
             "children": [],
             "comment": null
           }
@@ -478,10 +478,10 @@
     "comment": null
   },
   {
-    "name": "Mekanisk",
+    "name": "Mechanical",
     "children": [
       {
-        "name": "Skruv & Mutter",
+        "name": "Screw & Nut",
         "children": [
           {
             "name": "M2 / M2.5",
@@ -499,7 +499,7 @@
             "comment": null
           },
           {
-            "name": "Övrig",
+            "name": "Other",
             "children": [],
             "comment": null
           }
@@ -507,15 +507,15 @@
         "comment": null
       },
       {
-        "name": "Distans",
+        "name": "Standoff",
         "children": [
           {
-            "name": "Metall",
+            "name": "Metal",
             "children": [],
             "comment": null
           },
           {
-            "name": "Plast/Nylon",
+            "name": "Plastic / Nylon",
             "children": [],
             "comment": null
           }
@@ -523,10 +523,10 @@
         "comment": null
       },
       {
-        "name": "Lager",
+        "name": "Bearing",
         "children": [
           {
-            "name": "Kullager",
+            "name": "Ball bearing",
             "children": [],
             "comment": null
           }
@@ -534,15 +534,15 @@
         "comment": null
       },
       {
-        "name": "Övrig mek",
+        "name": "Other mechanical",
         "children": [
           {
-            "name": "Kylflänsar",
+            "name": "Heatsink",
             "children": [],
             "comment": null
           },
           {
-            "name": "Kapsling / Låda",
+            "name": "Enclosure / Box",
             "children": [],
             "comment": null
           }
@@ -553,28 +553,28 @@
     "comment": null
   },
   {
-    "name": "Övrigt",
+    "name": "Other",
     "children": [
       {
-        "name": "Modul",
+        "name": "Module",
         "children": [
           {
-            "name": "Arduino/ESP/Pi",
+            "name": "Arduino / ESP / Pi",
             "children": [],
             "comment": null
           },
           {
-            "name": "Nätverksmodul",
+            "name": "Network module",
             "children": [],
             "comment": null
           },
           {
-            "name": "Displaymodul",
+            "name": "Display module",
             "children": [],
             "comment": null
           },
           {
-            "name": "Övrigt",
+            "name": "Other",
             "children": [],
             "comment": null
           }
@@ -582,20 +582,20 @@
         "comment": null
       },
       {
-        "name": "Verktyg & Förbrukningsvaror",
+        "name": "Tools & Consumables",
         "children": [
           {
-            "name": "Kemikalier",
+            "name": "Chemicals",
             "children": [],
             "comment": null
           },
           {
-            "name": "Lödning",
+            "name": "Soldering",
             "children": [],
             "comment": null
           },
           {
-            "name": "Övrigt",
+            "name": "Other",
             "children": [],
             "comment": null
           }
@@ -603,9 +603,9 @@
         "comment": null
       },
       {
-        "name": "Okänt / Osorterat",
+        "name": "Unknown / Unsorted",
         "children": [],
-        "comment": "Ny komponent utan kategori läggs här"
+        "comment": "New parts without a category go here"
       }
     ],
     "comment": null

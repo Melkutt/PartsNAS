@@ -1,130 +1,119 @@
 {
   "resistor": {
     "id": "resistor",
-    "label_sv": "Resistor",
+    "label": "Resistor",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Resistans",
+        "label": "Resistance",
         "kicad_field": "Value",
         "unit": "Ω",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Lagras i Ohm, visas med lämplig prefix (kΩ, MΩ)"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tolerance",
-        "label_sv": "Tolerans",
+        "label": "Tolerance",
         "kicad_field": "Tolerance",
         "unit": "%",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "t.ex. 1, 5, 10"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "power",
-        "label_sv": "Effekt",
+        "label": "Power",
         "kicad_field": "Power",
         "unit": "W",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "t.ex. 0.1, 0.25, 0.5, 1"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tempcoeff",
-        "label_sv": "Temperaturkoefficient",
+        "label": "Temperature coefficient",
         "kicad_field": "TempCoeff",
         "unit": "ppm/°C",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "t.ex. 100"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "voltage",
-        "label_sv": "Max spänning",
+        "label": "Max voltage",
         "kicad_field": "Voltage",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "resistortyp",
-        "label_sv": "Resistortyp",
+        "key": "resistor_type",
+        "label": "Resistor type",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Octopart/Nexar",
-        "comment": "Tjockfilm, Tunnfilm, Metallfilm, Trådlindad, Nätverks",
         "options": [
-          "Tjockfilm",
-          "Tunnfilm",
-          "Metallfilm",
-          "Trådlindad",
-          "Nätverks"
+          "Thick film",
+          "Thin film",
+          "Metal film",
+          "Wirewound",
+          "Network"
         ]
       },
       {
-        "key": "seriesortiment",
-        "label_sv": "Seriesortiment",
+        "key": "e_series",
+        "label": "E-series",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "T.ex. E24, E96, E192"
+        "api_source": "Manuell"
       }
     ]
   },
   "capacitor": {
     "id": "capacitor",
-    "label_sv": "Kondensator",
+    "label": "Capacitor",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Kapacitans",
+        "label": "Capacitance",
         "kicad_field": "Value",
         "unit": "F",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Lagras i Farad (t.ex. 100e-9), visas som 100nF"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "voltage",
-        "label_sv": "Spänning (max)",
+        "label": "Voltage (max)",
         "kicad_field": "Voltage",
         "unit": "V",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Nominell spänning"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tolerance",
-        "label_sv": "Tolerans",
+        "label": "Tolerance",
         "kicad_field": "Tolerance",
         "unit": "%",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tempchar",
-        "label_sv": "Temperaturkarakteristik",
+        "label": "Temperature characteristic",
         "kicad_field": "TempChar",
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Octopart/Nexar",
-        "comment": "X7R, X5R, C0G/NP0, Y5V, Z5U",
         "options": [
           "X7R",
           "X5R",
@@ -136,165 +125,150 @@
       },
       {
         "key": "esr",
-        "label_sv": "ESR",
+        "label": "ESR",
         "kicad_field": "ESR",
         "unit": "Ω",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Ekvivalent serieresistans"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "esl",
-        "label_sv": "ESL",
+        "label": "ESL",
         "kicad_field": "ESL",
         "unit": "H",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Ekvivalent serieinduktans"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "lackstrom",
-        "label_sv": "Läckström",
+        "key": "leakage_current",
+        "label": "Leakage current",
         "kicad_field": null,
         "unit": "A",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "maxtemp",
-        "label_sv": "Max temp",
+        "label": "Max temperature",
         "kicad_field": "MaxTemp",
         "unit": "°C",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "t.ex. 85, 105, 125"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "dielectric",
-        "label_sv": "Dielektrikum",
+        "label": "Dielectric",
         "kicad_field": "Dielectric",
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Octopart/Nexar",
-        "comment": "Keramisk, Elektrolytisk (Al), Tantal, Film, Superkap",
         "options": [
-          "Keramisk",
-          "Tantal",
+          "Ceramic",
+          "Tantalum",
           "Film",
-          "Superkap"
+          "Supercap"
         ]
       },
       {
-        "key": "polariserad",
-        "label_sv": "Polariserad",
+        "key": "polarized",
+        "label": "Polarized",
         "kicad_field": null,
         "unit": "JA/NEJ",
         "type": "bool",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Viktigt för elektrolytiska/tantal"
+        "api_source": "Octopart/Nexar"
       }
     ]
   },
   "inductor": {
     "id": "inductor",
-    "label_sv": "Induktor",
+    "label": "Inductor",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Induktans",
+        "label": "Inductance",
         "kicad_field": "Value",
         "unit": "H",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Lagras i Henry, visas som µH/mH"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "currentrating",
-        "label_sv": "Max ström (DC)",
+        "label": "Max current (DC)",
         "kicad_field": "CurrentRating",
         "unit": "A",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Mättnadsström"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "currentrms",
-        "label_sv": "Max ström (RMS)",
+        "label": "Max current (RMS)",
         "kicad_field": "CurrentRMS",
         "unit": "A",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Termisk begränsning"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "dcr",
-        "label_sv": "DC-resistans (DCR)",
+        "label": "DC resistance (DCR)",
         "kicad_field": "DCR",
         "unit": "Ω",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tolerance",
-        "label_sv": "Tolerans",
+        "label": "Tolerance",
         "kicad_field": "Tolerance",
         "unit": "%",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "srf",
-        "label_sv": "Resonansfrekvens (SRF)",
+        "label": "Self-resonant frequency (SRF)",
         "kicad_field": "SRF",
         "unit": "Hz",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Self-resonant frequency"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "q",
-        "label_sv": "Q-faktor",
+        "label": "Q factor",
         "kicad_field": "Q",
         "unit": null,
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Vid angiven frekvens"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "induktanskoefficient",
-        "label_sv": "Induktanskoefficient",
+        "key": "inductance_factor_al",
+        "label": "Inductance factor (AL)",
         "kicad_field": null,
         "unit": "AL",
         "type": "number",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "AL induktansen med nH/N² (nanohenry per varv i kvadrat)"
+        "api_source": "Manuell"
       },
       {
-        "key": "typ",
-        "label_sv": "Typ",
+        "key": "type",
+        "label": "Type",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Manuell",
-        "comment": "Shielded, Unshielded, Ferrite bead, Toroid, Power, RF",
         "options": [
           "Shielded",
           "Unshielded",
@@ -304,42 +278,39 @@
         ]
       },
       {
-        "key": "karnmaterial",
-        "label_sv": "Kärnmaterial",
+        "key": "core_material",
+        "label": "Core material",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "T.ex. Ferrit, Pulverjärn, Luft. Viktigt för Amidon-toroider"
+        "api_source": "Manuell"
       },
       {
-        "key": "amidon_mix_nr",
-        "label_sv": "Amidon mix-nr",
+        "key": "amidon_mix_no",
+        "label": "Amidon mix no.",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "T.ex. T37-2, T50-6. Specifikt för RF-toroider"
+        "api_source": "Manuell"
       }
     ]
   },
   "diode": {
     "id": "diode",
-    "label_sv": "Diod",
+    "label": "Diode",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Typ",
+        "label": "Type",
         "kicad_field": "Value",
         "unit": null,
         "type": "enum",
         "required": true,
         "api_source": "Octopart/Nexar",
-        "comment": "Likriktardiod, Zener, Schottky, TVS, LED, Varicap",
         "options": [
-          "Likriktardiod",
+          "Rectifier diode",
           "Zener",
           "Schottky",
           "TVS",
@@ -349,274 +320,249 @@
       },
       {
         "key": "voltage",
-        "label_sv": "Max spärspänning (Vr)",
+        "label": "Max reverse voltage (Vr)",
         "kicad_field": "Voltage",
         "unit": "V",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "PIV/PRV"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "currentrating",
-        "label_sv": "Max framström (If)",
+        "label": "Max forward current (If)",
         "kicad_field": "CurrentRating",
         "unit": "A",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vf",
-        "label_sv": "Framspänning (Vf)",
+        "label": "Forward voltage (Vf)",
         "kicad_field": "Vf",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Vid angiven ström"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vz",
-        "label_sv": "Zener-spänning (Vz)",
+        "label": "Zener voltage (Vz)",
         "kicad_field": "Vz",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Endast Zener"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "toppstrom_ifsm",
-        "label_sv": "Toppström (Ifsm)",
+        "key": "surge_current_ifsm",
+        "label": "Surge current (Ifsm)",
         "kicad_field": null,
         "unit": "A",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Surge-ström"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "kapacitans",
-        "label_sv": "Kapacitans",
+        "key": "capacitance",
+        "label": "Capacitance",
         "kicad_field": null,
         "unit": "pF",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Junction-kapacitans"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "color",
-        "label_sv": "Färg (LED)",
+        "label": "Colour (LED)",
         "kicad_field": "Color",
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Manuell",
-        "comment": "Röd, Grön, Blå, Vit, Gul, IR, UV",
         "options": [
-          "Röd",
-          "Grön",
-          "Blå",
-          "Vit",
-          "Gul",
+          "Red",
+          "Green",
+          "Blue",
+          "White",
+          "Yellow",
           "IR",
           "UV"
         ]
       },
       {
         "key": "wavelength",
-        "label_sv": "Våglängd (LED)",
+        "label": "Wavelength (LED)",
         "kicad_field": "Wavelength",
         "unit": "nm",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       }
     ]
   },
   "transistor_bjt": {
     "id": "transistor_bjt",
-    "label_sv": "Transistor BJT",
+    "label": "Transistor (BJT)",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Polaritet",
+        "label": "Polarity",
         "kicad_field": "Value",
         "unit": "NPN/PNP",
         "type": "enum",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vceo",
-        "label_sv": "Max Vceo",
+        "label": "Max Vceo",
         "kicad_field": "Vceo",
         "unit": "V",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Kollektor-emitter spänning"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "ic",
-        "label_sv": "Max Ic",
+        "label": "Max Ic",
         "kicad_field": "Ic",
         "unit": "A",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Kollektorström"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "power",
-        "label_sv": "Max effekt (Ptot)",
+        "label": "Max power (Ptot)",
         "kicad_field": "Power",
         "unit": "W",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "hfe",
-        "label_sv": "DC-strömförstärkning (hFE)",
+        "label": "DC current gain (hFE)",
         "kicad_field": "hFE",
         "unit": null,
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Typvärde"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "ft",
-        "label_sv": "Transitionsfrekvens (ft)",
+        "label": "Transition frequency (ft)",
         "kicad_field": "ft",
         "unit": "Hz",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vbe",
-        "label_sv": "Vbe (sat)",
+        "label": "Vbe (sat)",
         "kicad_field": "Vbe",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vce_sat",
-        "label_sv": "Max Vce(sat)",
+        "label": "Max Vce(sat)",
         "kicad_field": "Vce_sat",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       }
     ]
   },
   "transistor_mosfet": {
     "id": "transistor_mosfet",
-    "label_sv": "Transistor MOSFET",
+    "label": "Transistor (MOSFET)",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Kanal",
+        "label": "Channel",
         "kicad_field": "Value",
         "unit": "N-ch/P-ch",
         "type": "enum",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vds",
-        "label_sv": "Max Vds",
+        "label": "Max Vds",
         "kicad_field": "Vds",
         "unit": "V",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Drain-source spänning"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "id",
-        "label_sv": "Max Id",
+        "label": "Max Id",
         "kicad_field": "Id",
         "unit": "A",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Drain-ström kontinuerlig"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "power",
-        "label_sv": "Max effekt (Ptot)",
+        "label": "Max power (Ptot)",
         "kicad_field": "Power",
         "unit": "W",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "rdson",
-        "label_sv": "Rds(on)",
+        "label": "Rds(on)",
         "kicad_field": "Rdson",
         "unit": "Ω",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Vid angiven Vgs"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vgsth",
-        "label_sv": "Vgs(th)",
+        "label": "Vgs(th)",
         "kicad_field": "Vgsth",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Threshold-spänning"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vgs",
-        "label_sv": "Max Vgs",
+        "label": "Max Vgs",
         "kicad_field": "Vgs",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Gate-source spänning max"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "qg",
-        "label_sv": "Qg (gate charge)",
+        "label": "Qg (gate charge)",
         "kicad_field": "Qg",
         "unit": "C",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Total gate charge"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "typ",
-        "label_sv": "Typ",
+        "key": "type",
+        "label": "Type",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Octopart/Nexar",
-        "comment": "Enhancement, Depletion, Dual-gate",
         "options": [
           "Enhancement",
           "Depletion",
@@ -627,33 +573,31 @@
   },
   "ic": {
     "id": "ic",
-    "label_sv": "IC – Integrerad krets",
+    "label": "IC – Integrated circuit",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Funktion",
+        "label": "Function",
         "kicad_field": "Value",
         "unit": null,
         "type": "text",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "T.ex. \"Step-down regulator\", \"Op-amp\", \"MCU\""
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "underkategori_ic",
-        "label_sv": "Underkategori IC",
+        "key": "ic_subcategory",
+        "label": "IC subcategory",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": true,
         "api_source": "Manuell",
-        "comment": "MCU, Op-amp, Komparator, Logik, Minne, PMIC, RF, Sensor, Driver...",
         "options": [
           "MCU",
           "Op-amp",
-          "Komparator",
-          "Logik",
-          "Minne",
+          "Comparator",
+          "Logic",
+          "Memory",
           "PMIC",
           "RF",
           "Sensor",
@@ -661,140 +605,127 @@
         ]
       },
       {
-        "key": "montering",
-        "label_sv": "Montering",
+        "key": "mounting",
+        "label": "Mounting",
         "kicad_field": null,
         "unit": "Typ",
         "type": "bool",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Yt eller hålmonterad"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vcc_min",
-        "label_sv": "Matningsspänning min",
+        "label": "Supply voltage min",
         "kicad_field": "Vcc_min",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "vcc_max",
-        "label_sv": "Matningsspänning max",
+        "label": "Supply voltage max",
         "kicad_field": "Vcc_max",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "icc",
-        "label_sv": "Max matningsström",
+        "label": "Max supply current",
         "kicad_field": "Icc",
         "unit": "A",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "pincount",
-        "label_sv": "Antal pinnar",
+        "label": "Pin count",
         "kicad_field": "PinCount",
         "unit": "st",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "interface",
-        "label_sv": "Gränssnitt",
+        "label": "Interface",
         "kicad_field": "Interface",
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "T.ex. I2C, SPI, UART, USB"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "frequency",
-        "label_sv": "Frekvens (MCU/OSC)",
+        "label": "Frequency (MCU / OSC)",
         "kicad_field": "Frequency",
         "unit": "Hz",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Max klockhastighet"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "flash",
-        "label_sv": "Flashminne",
+        "label": "Flash memory",
         "kicad_field": "Flash",
         "unit": "B",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Lagras i bytes"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "ram",
-        "label_sv": "RAM",
+        "label": "RAM",
         "kicad_field": "RAM",
         "unit": "B",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Lagras i bytes"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tmin",
-        "label_sv": "Operationstemperatur min",
+        "label": "Operating temperature min",
         "kicad_field": "Tmin",
         "unit": "°C",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tmax",
-        "label_sv": "Operationstemperatur max",
+        "label": "Operating temperature max",
         "kicad_field": "Tmax",
         "unit": "°C",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       }
     ]
   },
   "crystal": {
     "id": "crystal",
-    "label_sv": "Kristall & Oscillator",
+    "label": "Crystal & Oscillator",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Frekvens",
+        "label": "Frequency",
         "kicad_field": "Value",
         "unit": "Hz",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "Lagras i Hz, visas som MHz/kHz"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "typ",
-        "label_sv": "Typ",
+        "key": "type",
+        "label": "Type",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": true,
         "api_source": "Manuell",
-        "comment": "Kristall (passiv), Oscillator (aktiv), TCXO, VCTCXO, MEMS",
         "options": [
           "TCXO",
           "VCTCXO",
@@ -803,73 +734,66 @@
       },
       {
         "key": "stability",
-        "label_sv": "Frekvensstabilitet",
+        "label": "Frequency stability",
         "kicad_field": "Stability",
         "unit": "ppm",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "loadcap",
-        "label_sv": "Lastkapacitans (CL)",
+        "label": "Load capacitance (CL)",
         "kicad_field": "LoadCap",
         "unit": "pF",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "esr",
-        "label_sv": "ESR",
+        "label": "ESR",
         "kicad_field": "ESR",
         "unit": "Ω",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "tempstab",
-        "label_sv": "Temperaturstabilitet",
+        "label": "Temperature stability",
         "kicad_field": "TempStab",
         "unit": "ppm",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "temperaturomrade",
-        "label_sv": "Temperaturområde",
+        "key": "temperature_range",
+        "label": "Temperature range",
         "kicad_field": null,
         "unit": "°C",
         "type": "text",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "T.ex. -40 till +85"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "outputvoltage",
-        "label_sv": "Utgångsspänning (OSC)",
+        "label": "Output voltage (OSC)",
         "kicad_field": "OutputVoltage",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "Endast aktiva oscillatorer"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "outputtype",
-        "label_sv": "Logiktyp (OSC)",
+        "label": "Output logic type (OSC)",
         "kicad_field": "OutputType",
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Octopart/Nexar",
-        "comment": "CMOS, TTL, LVDS, Sinus",
         "options": [
           "CMOS",
           "TTL",
@@ -881,27 +805,25 @@
   },
   "connector": {
     "id": "connector",
-    "label_sv": "Kontakt & Connector",
+    "label": "Connector",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Antal poler",
+        "label": "Number of poles",
         "kicad_field": "Value",
         "unit": "st",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "kontakttyp",
-        "label_sv": "Kontakttyp",
+        "key": "connector_type",
+        "label": "Connector type",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": true,
         "api_source": "Manuell",
-        "comment": "Pin header, Socket, JST, Molex PicoBlade, USB, D-Sub, SMA, BNC, Terminal block...",
         "options": [
           "Socket",
           "JST",
@@ -913,187 +835,171 @@
       },
       {
         "key": "pitch",
-        "label_sv": "Rasteravstånd",
+        "label": "Pitch",
         "kicad_field": "Pitch",
         "unit": "mm",
         "type": "number",
         "required": true,
-        "api_source": "Octopart/Nexar",
-        "comment": "T.ex. 2.54, 2.0, 1.25, 1.0"
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "rows",
-        "label_sv": "Antal rader",
+        "label": "Number of rows",
         "kicad_field": "Rows",
         "unit": "st",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "currentrating",
-        "label_sv": "Max ström per kontakt",
+        "label": "Max current per contact",
         "kicad_field": "CurrentRating",
         "unit": "A",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
         "key": "voltage",
-        "label_sv": "Max spänning",
+        "label": "Max voltage",
         "kicad_field": "Voltage",
         "unit": "V",
         "type": "number",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": null
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "kontaktmaterial",
-        "label_sv": "Kontaktmaterial",
+        "key": "contact_material",
+        "label": "Contact material",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "T.ex. Förgylld, Försilvrad"
+        "api_source": "Octopart/Nexar"
       },
       {
-        "key": "kon",
-        "label_sv": "Kön",
+        "key": "gender",
+        "label": "Gender",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Manuell",
-        "comment": "Hane, Hona, Neutral",
         "options": [
-          "Hane",
-          "Hona",
+          "Male",
+          "Female",
           "Neutral"
         ]
       },
       {
-        "key": "vinkel",
-        "label_sv": "Vinkel",
+        "key": "angle",
+        "label": "Angle",
         "kicad_field": null,
         "unit": null,
         "type": "enum",
         "required": false,
         "api_source": "Manuell",
-        "comment": "Rak, 90°",
         "options": [
-          "Rak",
+          "Straight",
           "90°"
         ]
       },
       {
-        "key": "lasmekanism",
-        "label_sv": "Låsmekanism",
+        "key": "locking_mechanism",
+        "label": "Locking mechanism",
         "kicad_field": null,
         "unit": "JA/NEJ",
         "type": "bool",
         "required": false,
-        "api_source": "Octopart/Nexar",
-        "comment": "T.ex. PicoBlade har lås"
+        "api_source": "Octopart/Nexar"
       }
     ]
   },
   "mechanical": {
     "id": "mechanical",
-    "label_sv": "Mekanisk",
+    "label": "Mechanical",
     "fields": [
       {
         "key": "value",
-        "label_sv": "Typ",
+        "label": "Type",
         "kicad_field": "Value",
         "unit": null,
         "type": "enum",
         "required": true,
         "api_source": "Manuell",
-        "comment": "Skruv, Mutter, Distans, Lager, Kylflänsar, Kabelbindare, Kapsling...",
         "options": [
-          "Skruv",
-          "Mutter",
-          "Distans",
-          "Lager",
-          "Kylflänsar",
-          "Kabelbindare",
-          "Kapsling"
+          "Screw",
+          "Nut",
+          "Standoff",
+          "Bearing",
+          "Heatsink",
+          "Cable tie",
+          "Enclosure"
         ]
       },
       {
         "key": "material",
-        "label_sv": "Material",
+        "label": "Material",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "T.ex. Rostfritt, Aluminium, Mässing, Plast"
+        "api_source": "Manuell"
       },
       {
         "key": "dimension_1",
-        "label_sv": "Dimension 1",
+        "label": "Dimension 1",
         "kicad_field": null,
         "unit": "mm",
         "type": "number",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "Diameter / bredd / ID"
+        "api_source": "Manuell"
       },
       {
         "key": "dimension_2",
-        "label_sv": "Dimension 2",
+        "label": "Dimension 2",
         "kicad_field": null,
         "unit": "mm",
         "type": "number",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "Längd / höjd / OD"
+        "api_source": "Manuell"
       },
       {
         "key": "dimension_3",
-        "label_sv": "Dimension 3",
+        "label": "Dimension 3",
         "kicad_field": null,
         "unit": "mm",
         "type": "number",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "Bredd (W) om tillämpligt"
+        "api_source": "Manuell"
       },
       {
-        "key": "ganga",
-        "label_sv": "Gänga",
+        "key": "thread",
+        "label": "Thread",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "T.ex. M3, M4, #6-32"
+        "api_source": "Manuell"
       },
       {
-        "key": "max_last",
-        "label_sv": "Max last",
+        "key": "max_load",
+        "label": "Max load",
         "kicad_field": null,
         "unit": "N/kg",
         "type": "number",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "Lager, hållare mm"
+        "api_source": "Manuell"
       },
       {
-        "key": "ytbehandling",
-        "label_sv": "Ytbehandling",
+        "key": "surface_finish",
+        "label": "Surface finish",
         "kicad_field": null,
         "unit": null,
         "type": "text",
         "required": false,
-        "api_source": "Manuell",
-        "comment": "T.ex. Förzinkad, Anodiserad"
+        "api_source": "Manuell"
       }
     ]
   }

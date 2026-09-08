@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 from .core.config import get_settings
 from .models import Category, FootprintAlias, StorageLocation
 
-UNSORTED_NAME = "Unsorted / Uncategorized"
+# the spec's catch-all node; if the seed tree doesn't contain it we add one
+UNSORTED_NAMES = ("Unknown / Unsorted", "Unsorted / Uncategorized", "Unsorted")
+UNSORTED_NAME = "Unsorted"
 
 
 def _slug(name: str) -> str:
@@ -49,7 +51,7 @@ def seed_categories(db: Session) -> None:
         return
     tree = _load("categories.json") or []
     _insert_category_tree(db, tree, None)
-    unsorted = db.scalar(select(Category).where(Category.name == UNSORTED_NAME))
+    unsorted = db.scalar(select(Category).where(Category.name.in_(UNSORTED_NAMES)))
     if not unsorted:
         unsorted = Category(
             name=UNSORTED_NAME, slug="unsorted", sort_order=999, is_unsorted=True

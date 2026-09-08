@@ -1,272 +1,245 @@
 [
   {
     "key": "partsbox_id",
-    "label_sv": "Internt ID",
+    "label": "Internal ID",
     "kicad_field": "PartsBox_ID",
     "unit": "UUID/text",
     "type": "text",
     "required": true,
-    "api_source": "Auto",
-    "comment": "Systemgenererat, unikt"
+    "api_source": "Auto"
   },
   {
     "key": "mpn",
-    "label_sv": "MPN",
+    "label": "MPN",
     "kicad_field": "MPN",
     "unit": null,
     "type": "text",
     "required": true,
-    "api_source": "Octopart/Nexar",
-    "comment": "Manufacturer Part Number – nyckel för API-lookup"
+    "api_source": "Octopart/Nexar"
   },
   {
     "key": "manufacturer",
-    "label_sv": "Tillverkare",
+    "label": "Manufacturer",
     "kicad_field": "Manufacturer",
     "unit": null,
     "type": "text",
     "required": true,
-    "api_source": "Octopart/Nexar",
-    "comment": null
+    "api_source": "Octopart/Nexar"
   },
   {
     "key": "value",
-    "label_sv": "Namn/Beteckning",
+    "label": "Name / designation",
     "kicad_field": "Value",
     "unit": null,
     "type": "text",
     "required": true,
-    "api_source": "Manuell/API",
-    "comment": "Visningsnamn, t.ex. \"100nF 0603 X7R\""
+    "api_source": "Manuell/API"
   },
   {
     "key": "description",
-    "label_sv": "Beskrivning",
+    "label": "Description",
     "kicad_field": "Description",
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Octopart/Nexar",
-    "comment": "Lång beskrivning från tillverkare"
+    "api_source": "Octopart/Nexar"
   },
   {
-    "key": "kategori",
-    "label_sv": "Kategori",
+    "key": "category",
+    "label": "Category",
     "kicad_field": null,
     "unit": null,
     "type": "enum",
     "required": true,
-    "api_source": "Manuell",
-    "comment": "Hierarkisk, t.ex. Passivt > Kondensator > Keramisk"
+    "api_source": "Manuell"
   },
   {
-    "key": "underkategori",
-    "label_sv": "Underkategori",
+    "key": "subcategory",
+    "label": "Subcategory",
     "kicad_field": null,
     "unit": null,
     "type": "enum",
     "required": true,
-    "api_source": "Manuell",
-    "comment": null
+    "api_source": "Manuell"
   },
   {
-    "key": "montageteknik",
-    "label_sv": "Montageteknik",
+    "key": "mounting_technology",
+    "label": "Mounting technology",
     "kicad_field": null,
     "unit": "SMD/THT/Övrig",
     "type": "enum",
     "required": true,
-    "api_source": "Octopart/Nexar",
-    "comment": "Primärt filter i UI"
+    "api_source": "Octopart/Nexar"
   },
   {
     "key": "footprint",
-    "label_sv": "Kapsel/Footprint",
+    "label": "Package / footprint",
     "kicad_field": "Footprint",
     "unit": null,
     "type": "enum",
     "required": true,
-    "api_source": "Octopart/Nexar",
-    "comment": "Normaliserat namn, t.ex. SOT-23-3. Aliastabell hanterar varianter"
+    "api_source": "Octopart/Nexar"
   },
   {
-    "key": "smd_kod",
-    "label_sv": "SMD-kod",
+    "key": "smd_code",
+    "label": "SMD code",
     "kicad_field": null,
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Manuell",
-    "comment": "Märkning på komponenten, t.ex. \"1C\" för 1nF. Lookup mot SMD-koddatabas"
+    "api_source": "Manuell"
   },
   {
     "key": "datasheet",
-    "label_sv": "Datablad URL",
+    "label": "Datasheet URL",
     "kicad_field": "Datasheet",
     "unit": "URL",
     "type": "text",
     "required": false,
-    "api_source": "Octopart/Nexar",
-    "comment": null
+    "api_source": "Octopart/Nexar"
   },
   {
-    "key": "bild_url_sokvag",
-    "label_sv": "Bild URL/sökväg",
+    "key": "image_url_path",
+    "label": "Image URL / path",
     "kicad_field": null,
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Octopart/Nexar",
-    "comment": "Lokal sökväg eller extern URL"
+    "api_source": "Octopart/Nexar"
   },
   {
-    "key": "lagersaldo",
-    "label_sv": "Lagersaldo",
+    "key": "stock_quantity",
+    "label": "Stock quantity",
     "kicad_field": null,
     "unit": "st",
     "type": "number",
     "required": true,
-    "api_source": "Auto",
-    "comment": "Beräknas från transaktionstabellen"
+    "api_source": "Auto"
   },
   {
-    "key": "lagsta_lager_varning",
-    "label_sv": "Lägsta lager (varning)",
+    "key": "low_stock_threshold",
+    "label": "Low-stock threshold",
     "kicad_field": null,
     "unit": "st",
     "type": "number",
     "required": false,
-    "api_source": "Manuell",
-    "comment": "Notifiering när saldo understiger detta"
+    "api_source": "Manuell"
   },
   {
-    "key": "forvaringsplats",
-    "label_sv": "Förvaringsplats",
+    "key": "storage_location",
+    "label": "Storage location",
     "kicad_field": null,
     "unit": null,
     "type": "enum",
     "required": false,
-    "api_source": "Manuell",
-    "comment": "Koppling till förvaringstabell, t.ex. Skåp 4 > Rad 3"
+    "api_source": "Manuell"
   },
   {
-    "key": "fack_position",
-    "label_sv": "Fack/Position",
+    "key": "bin_position",
+    "label": "Bin / position",
     "kicad_field": null,
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Manuell",
-    "comment": "Fritext för exakt position"
+    "api_source": "Manuell"
   },
   {
-    "key": "inkopspris",
-    "label_sv": "Inköpspris",
+    "key": "purchase_price",
+    "label": "Purchase price",
     "kicad_field": null,
     "unit": "SEK",
     "type": "number",
     "required": false,
-    "api_source": "Manuell/Transaktion",
-    "comment": "Senaste faktiska inköpspris"
+    "api_source": "Manuell/Transaktion"
   },
   {
-    "key": "aktuellt_pris_mouser",
-    "label_sv": "Aktuellt pris (Mouser)",
+    "key": "current_price_mouser",
+    "label": "Current price (Mouser)",
     "kicad_field": null,
     "unit": "SEK",
     "type": "number",
     "required": false,
-    "api_source": "Mouser",
-    "comment": "Automatiskt uppdaterat, tidsstämplat"
+    "api_source": "Mouser"
   },
   {
-    "key": "aktuellt_pris_digikey",
-    "label_sv": "Aktuellt pris (Digikey)",
+    "key": "current_price_digi_key",
+    "label": "Current price (Digi-Key)",
     "kicad_field": null,
     "unit": "SEK",
     "type": "number",
     "required": false,
-    "api_source": "Digikey",
-    "comment": "Automatiskt uppdaterat, tidsstämplat"
+    "api_source": "Digikey"
   },
   {
-    "key": "utpris",
-    "label_sv": "Utpris",
+    "key": "sale_price",
+    "label": "Sale price",
     "kicad_field": null,
     "unit": "SEK",
     "type": "number",
     "required": false,
-    "api_source": "Manuell",
-    "comment": "Valfritt om komponenter säljs vidare"
+    "api_source": "Manuell"
   },
   {
-    "key": "valuta",
-    "label_sv": "Valuta",
+    "key": "currency",
+    "label": "Currency",
     "kicad_field": null,
     "unit": "SEK/USD/EUR",
     "type": "enum",
     "required": false,
-    "api_source": "Auto",
-    "comment": "Standardvärde SEK"
+    "api_source": "Auto"
   },
   {
-    "key": "moms",
-    "label_sv": "Moms",
+    "key": "vat",
+    "label": "VAT",
     "kicad_field": null,
     "unit": null,
     "type": "number",
     "required": false,
-    "api_source": "Auto",
-    "comment": "Standard 25%"
+    "api_source": "Auto"
   },
   {
-    "key": "skapad_datum",
-    "label_sv": "Skapad datum",
+    "key": "created",
+    "label": "Created",
     "kicad_field": null,
     "unit": "YYYY-MM-DD",
     "type": "date",
     "required": true,
-    "api_source": "Auto",
-    "comment": null
+    "api_source": "Auto"
   },
   {
-    "key": "senast_andrad",
-    "label_sv": "Senast ändrad",
+    "key": "last_modified",
+    "label": "Last modified",
     "kicad_field": null,
     "unit": "YYYY-MM-DD",
     "type": "date",
     "required": true,
-    "api_source": "Auto",
-    "comment": null
+    "api_source": "Auto"
   },
   {
-    "key": "anteckningar",
-    "label_sv": "Anteckningar",
+    "key": "notes",
+    "label": "Notes",
     "kicad_field": null,
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Manuell",
-    "comment": "Fritext, t.ex. \"Passar till LMR51610\""
+    "api_source": "Manuell"
   },
   {
     "key": "keywords",
-    "label_sv": "Taggar",
+    "label": "Tags",
     "kicad_field": "Keywords",
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Manuell/API",
-    "comment": "Kommaseparerade, t.ex. \"RF, filter, 137MHz\""
+    "api_source": "Manuell/API"
   },
   {
     "key": "octopart_id",
-    "label_sv": "Octopart ID",
+    "label": "Octopart ID",
     "kicad_field": null,
     "unit": null,
     "type": "text",
     "required": false,
-    "api_source": "Auto",
-    "comment": "För API-lookup, finns redan i PartsBox-exporten"
+    "api_source": "Auto"
   }
 ]
