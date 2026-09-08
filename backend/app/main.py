@@ -32,6 +32,15 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="PartsNAS", version=__version__, lifespan=lifespan)
 
 
+@app.middleware("http")
+async def _no_cache_assets(request, call_next):
+    resp = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.get("/api/health", tags=["meta"])
 def health():
     return {"status": "ok", "version": __version__}
@@ -47,13 +56,29 @@ def info():
 
 
 def _mount_routers() -> None:
-    from .api import bulk, categories, exports, imports, locations, parts, stock
+    from .api import (
+        bulk,
+        categories,
+        design_notes,
+        exports,
+        images,
+        imports,
+        locations,
+        meta,
+        parts,
+        stock,
+        suppliers,
+    )
 
     app.include_router(categories.router)
     app.include_router(locations.router)
     app.include_router(parts.router)
     app.include_router(stock.router)
     app.include_router(bulk.router)
+    app.include_router(suppliers.router)
+    app.include_router(images.router)
+    app.include_router(design_notes.router)
+    app.include_router(meta.router)
     app.include_router(imports.router)
     app.include_router(exports.router)
     # kicad -> next milestone
@@ -61,7 +86,8 @@ def _mount_routers() -> None:
 
 _mount_routers()
 
-app.mount("/media", StaticFiles(directory=settings.images_dir), name="media")
+# /media serves everything under data/ (images/ and thumbs/)
+app.mount("/media", StaticFiles(directory=settings.data_dir), name="media")
 app.mount("/", StaticFiles(directory=settings.frontend_dir, html=True), name="frontend")
 
 

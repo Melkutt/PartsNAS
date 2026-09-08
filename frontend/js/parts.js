@@ -1,11 +1,12 @@
 // Parts tab: filter bar, checkbox table, bulk action bar, detail drawer.
 import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
+import { PartDetail } from "./partdetail.js";
 
 export class PartsView {
-  constructor() {
+  constructor(initial = {}) {
     this.el = el("div", { class: "parts" });
-    this.filter = { q: "", category_id: "", location_id: "", low_stock: false };
+    this.initial = initial; // {category_id, location_id, q}
     this.selected = new Set();
     this.lastTotal = 0;
     this.items = [];
@@ -15,6 +16,9 @@ export class PartsView {
     container.append(this.el);
     this.el.append(this._filterBar(), (this.bulkHost = el("div")), (this.tableWrap = el("div", { class: "table-wrap" })));
     await this._loadFilterOptions();
+    if (this.initial.q) this.q.value = this.initial.q;
+    if (this.initial.category_id) this.catSel.value = String(this.initial.category_id);
+    if (this.initial.location_id) this.locSel.value = String(this.initial.location_id);
     await this.reload();
     document.addEventListener("partsnas:scan", this._onScan);
   }
@@ -305,51 +309,7 @@ export class PartsView {
     });
   }
 
-  // ---- detail drawer ----
   async openDetail(id) {
-    document.querySelectorAll(".drawer, .drawer-back").forEach((n) => n.remove());
-    const p = await api(`/api/parts/${id}`);
-    const back = el("div", { class: "drawer-back", onclick: close });
-    const d = el("div", { class: "drawer" });
-    const stock = await api(`/api/parts/${id}/stock`);
-    d.append(
-      el("button", { class: "ghost", style: "float:right", onclick: close }, "✕"),
-      el("h3", {}, p.name),
-      el("div", { class: "sub" }, [p.mpn, p.manufacturer].filter(Boolean).join(" · ") || "—"),
-      el(
-        "dl",
-        {},
-        el("dt", {}, "Category"), el("dd", {}, p.category || "—"),
-        el("dt", {}, "Footprint"), el("dd", {}, p.footprint_raw || "—"),
-        el("dt", {}, "On hand"), el("dd", {}, String(p.on_hand)),
-        el("dt", {}, "Min stock"), el("dd", {}, String(p.min_stock)),
-        el("dt", {}, "Datasheet"), el("dd", {}, p.datasheet_url ? el("a", { href: p.datasheet_url, target: "_blank" }, "open") : "—"),
-        el("dt", {}, "Tags"), el("dd", {}, p.tags.join(", ") || "—"),
-        el("dt", {}, "Notes"), el("dd", {}, p.description || p.notes || "—"),
-      ),
-      el("h3", {}, "Stock by location"),
-      ...(stock.by_location.length
-        ? stock.by_location.map((r) => el("div", { class: "stock-row" }, el("span", {}, r.location), el("b", {}, String(r.qty))))
-        : [el("div", { class: "hint" }, "no stock")]),
-      el("h3", { style: "margin-top:14px" }, "Recent ledger"),
-      ...stock.entries.slice(0, 8).map((e) =>
-        el(
-          "div",
-          { class: "stock-row" },
-          el("span", {}, `${e.kind}  ${e.location}`),
-          el("b", { class: e.delta < 0 ? "low" : "" }, (e.delta > 0 ? "+" : "") + e.delta),
-        ),
-      ),
-    );
-    document.body.append(back, d);
-    document.addEventListener("keydown", esc);
-    function esc(ev) {
-      if (ev.key === "Escape") close();
-    }
-    function close() {
-      document.removeEventListener("keydown", esc);
-      back.remove();
-      d.remove();
-    }
+    await new PartDetail(id, { onChange: () => this.reload() }).open();
   }
 }

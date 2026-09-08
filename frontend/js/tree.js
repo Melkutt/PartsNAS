@@ -5,10 +5,11 @@ import { api } from "./api.js";
 const COLLAPSE_KEY = (base) => `partsnas.collapsed.${base}`;
 
 export class Tree {
-  constructor(base, { noun = "item", rootAddLabel } = {}) {
+  constructor(base, { noun = "item", rootAddLabel, onSelect } = {}) {
     this.base = base; // "/api/categories" | "/api/locations"
     this.noun = noun;
     this.rootAddLabel = rootAddLabel || `New ${noun}`;
+    this.onSelect = onSelect;
     this.el = document.createElement("div");
     this.collapsed = new Set(load(COLLAPSE_KEY(base)));
   }
@@ -64,7 +65,18 @@ export class Tree {
     const label = document.createElement("span");
     label.className = "label";
     label.textContent = node.name;
-    label.addEventListener("dblclick", () => this.startRename(node, label));
+    if (this.onSelect) {
+      label.style.cursor = "pointer";
+      label.title = `Show ${this.noun === "category" ? "parts in this category" : "parts stored here"}`;
+      label.addEventListener("click", () => {
+        clearTimeout(this._clickT);
+        this._clickT = setTimeout(() => this.onSelect(node), 220);
+      });
+    }
+    label.addEventListener("dblclick", () => {
+      clearTimeout(this._clickT);
+      this.startRename(node, label);
+    });
     row.appendChild(label);
 
     if (node.is_unsorted) {

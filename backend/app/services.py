@@ -86,6 +86,18 @@ def location_breakdown_bulk(db: Session, part_ids: list[str]) -> dict[str, list[
     return acc
 
 
+def resolve_part_class(db: Session, cat_id: int | None) -> str | None:
+    """Nearest-ancestor `part_class` for a category."""
+    seen: set[int] = set()
+    cur = db.get(Category, cat_id) if cat_id else None
+    while cur and cur.id not in seen:
+        if cur.part_class:
+            return cur.part_class
+        seen.add(cur.id)
+        cur = cur.parent
+    return None
+
+
 def category_path(db: Session, cat_id: int | None) -> str:
     """'Passive > Resistor > Thick film' for one category id."""
     if cat_id is None:

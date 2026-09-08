@@ -26,6 +26,7 @@ from ..services import (
     location_breakdown,
     location_breakdown_bulk,
     on_hand_map,
+    resolve_part_class,
 )
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
@@ -210,6 +211,9 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
     p = db.get(Part, part_id)
     if p is None:
         raise HTTPException(404, "part not found")
+    from ..api.images import _row as image_row
+    from ..api.suppliers import _link_row
+
     return {
         "id": p.id,
         "name": p.name,
@@ -218,6 +222,7 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "description": p.description,
         "category_id": p.category_id,
         "category": category_path(db, p.category_id),
+        "part_class": resolve_part_class(db, p.category_id),
         "mount": p.mount,
         "footprint_raw": p.footprint_raw,
         "kicad_symbol": p.kicad_symbol,
@@ -230,6 +235,9 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "tags": [t.name for t in p.tags],
         "on_hand": on_hand_map(db, [p.id]).get(p.id, 0),
         "stock": location_breakdown(db, p.id),
+        "suppliers": [_link_row(x) for x in p.suppliers],
+        "images": [image_row(a) for a in p.attachments],
+        "design_note_count": len(p.design_notes),
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }

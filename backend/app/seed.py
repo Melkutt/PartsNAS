@@ -11,7 +11,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .core.config import get_settings
-from .models import Category, FootprintAlias, StorageLocation
+from .models import Category, FootprintAlias, StorageLocation, Supplier
+
+BUILTIN_SUPPLIERS = [
+    ("Digi-Key", "https://www.digikey.se", "US"),
+    ("Mouser", "https://www.mouser.se", "US"),
+    ("RS Components", "https://se.rs-online.com", "GB"),
+    ("Farnell", "https://se.farnell.com", "GB"),
+    ("TME", "https://www.tme.eu", "PL"),
+    ("Electrokit", "https://www.electrokit.com", "SE"),
+]
 
 # the spec's catch-all node; if the seed tree doesn't contain it we add one
 UNSORTED_NAMES = ("Unknown / Unsorted", "Unsorted / Uncategorized", "Unsorted")
@@ -30,6 +39,28 @@ def _load(name: str):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+# category name -> part-class id (seed/part_classes.json), so the detail form can
+# offer the right parameter fields. Children inherit the nearest ancestor's value.
+CATEGORY_CLASS = {
+    "Resistor": "resistor",
+    "Capacitor": "capacitor",
+    "Inductor": "inductor",
+    "Diode": "diode",
+    "Transistor": "transistor_bjt",
+    "Crystal & Oscillator": "crystal",
+    "IC – Analog": "ic",
+    "IC – Digital / Mixed": "ic",
+    "Connector": "connector",
+    "RF connector": "connector",
+    "Pin header / Socket": "connector",
+    "Terminal block": "connector",
+    "Molex": "connector",
+    "D-Sub": "connector",
+    "USB": "connector",
+    "Mechanical": "mechanical",
+}
+
+
 def _insert_category_tree(db: Session, nodes: list[dict], parent: Category | None, order0: int = 0):
     for i, node in enumerate(nodes):
         cat = Category(
@@ -38,6 +69,7 @@ def _insert_category_tree(db: Session, nodes: list[dict], parent: Category | Non
             slug=_slug(node["name"]),
             sort_order=order0 + i,
             comment=node.get("comment"),
+            part_class=CATEGORY_CLASS.get(node["name"]),
         )
         db.add(cat)
         db.flush()
@@ -92,7 +124,19 @@ def seed_locations(db: Session) -> None:
     db.commit()
 
 
+def seed_suppliers(db: Session) -> None:
+    for i, (name, site, country) in enumerate(BUILTIN_SUPPLIERS):
+        if not db.scalar(select(Supplier).where(Supplier.name == name)):
+            db.add(
+                Supplier(
+                    name=name, website=site, country=country, builtin=True, sort_order=i
+                )
+            )
+    db.commit()
+
+
 def run_all(db: Session) -> None:
     seed_categories(db)
     seed_footprints(db)
     seed_locations(db)
+    seed_suppliers(db)

@@ -146,6 +146,20 @@ class Part(Base):
         back_populates="part", cascade="all, delete-orphan"
     )
     tags: Mapped[list["Tag"]] = relationship(secondary="part_tag", back_populates="parts")
+    suppliers: Mapped[list["PartSupplier"]] = relationship(
+        back_populates="part", cascade="all, delete-orphan", order_by="PartSupplier.id"
+    )
+    attachments: Mapped[list["Attachment"]] = relationship(
+        back_populates="part",
+        cascade="all, delete-orphan",
+        order_by="Attachment.sort_order, Attachment.id",
+    )
+    design_notes: Mapped[list["DesignNote"]] = relationship(
+        back_populates="part",
+        cascade="all, delete-orphan",
+        foreign_keys="DesignNote.part_id",
+        order_by="DesignNote.sort_order, DesignNote.id",
+    )
 
 
 class Tag(Base):
@@ -176,9 +190,14 @@ class StockEntry(Base):
     )
     delta: Mapped[int] = mapped_column(Integer)  # +in / -out
     kind: Mapped[str] = mapped_column(String(12))  # add|remove|move|count|correction|build
-    unit_price: Mapped[float | None] = mapped_column(Float)
+    unit_price: Mapped[float | None] = mapped_column(Float)  # canonical: EX VAT
+    vat_percent: Mapped[float] = mapped_column(Float, default=25.0)
     currency: Mapped[str] = mapped_column(String(3), default="SEK")
-    supplier: Mapped[str | None] = mapped_column(String(80))
+    supplier: Mapped[str | None] = mapped_column(String(80))  # free-text snapshot
+    supplier_id: Mapped[int | None] = mapped_column(
+        ForeignKey("supplier.id", ondelete="SET NULL")
+    )
+    supplier_sku: Mapped[str | None] = mapped_column(String(80))
     order_ref: Mapped[str | None] = mapped_column(String(120))
     note: Mapped[str | None] = mapped_column(Text)
     move_group: Mapped[str | None] = mapped_column(String(20), index=True)
@@ -186,6 +205,7 @@ class StockEntry(Base):
 
     part: Mapped["Part"] = relationship(back_populates="stock_entries")
     location: Mapped["StorageLocation | None"] = relationship()
+    supplier_ref: Mapped["Supplier | None"] = relationship()
 
     __table_args__ = (
         CheckConstraint(
@@ -252,6 +272,112 @@ class BulkOp(Base):
     undo: Mapped[dict] = mapped_column(JSON, default=dict)
     undone: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Supplier(Base):
+    """Where parts are bought. Six built-ins are seeded; the user adds more."""
+
+    __tablename__ = "supplier"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True)
+    website: Mapped[str | None] = mapped_column(String(200))
+    country: Mapped[str | None] = mapped_column(String(40))
+    builtin: Mapped[bool] = mapped_column(default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100)
+
+
+class PartSupplier(Base):
+    """A part <-> supplier link: their article number, a link, last known price.
+
+    `unit_price` is stored EX VAT in `currency`; `vat_percent` lets the UI show
+    the inc-VAT figure too. `active` = the supplier still lists it.
+    """
+
+    __tablename__ = "part_supplier"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    part_id: Mapped[str] = mapped_column(ForeignKey("part.id", ondelete="CASCADE"), index=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("supplier.id", ondelete="CASCADE"))
+    sku: Mapped[str | None] = mapped_column(String(80))
+    url: Mapped[str | None] = mapped_column(String(500))
+    unit_price: Mapped[float | None] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String(3), default="SEK")
+    vat_percent: Mapped[float] = mapped_column(Float, default=25.0)
+    active: Mapped[bool] = mapped_column(default=True)
+    preferred: Mapped[bool] = mapped_column(default=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+    part: Mapped["Part"] = relationship(back_populates="suppliers")
+    supplier: Mapped["Supplier"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("part_id", "supplier_id", "sku", name="uq_part_supplier_sku"),
+    )
+
+
+class Attachment(Base):
+    __tablename__ = "attachment"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    part_id: Mapped[str] = mapped_column(ForeignKey("part.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="image")  # image | datasheet | file
+    filename: Mapped[str] = mapped_column(String(200))
+    stored: Mapped[str] = mapped_column(String(300))  # path relative to DATA_DIR
+    thumb: Mapped[str | None] = mapped_column(String(300))
+    content_type: Mapped[str | None] = mapped_column(String(80))
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    part: Mapped["Part"] = relationship(back_populates="attachments")
+
+
+class DesignNote(Base):
+    """A reusable design hint attached to an "anchor" part (e.g. a regulator IC):
+    under some condition, use these companion parts. Searchable across the board.
+    """
+
+    __tablename__ = "design_note"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    part_id: Mapped[str] = mapped_column(ForeignKey("part.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    condition: Mapped[str | None] = mapped_column(String(160))  # "Vout=5V", "fsw=400kHz"
+    body: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+    part: Mapped["Part"] = relationship(back_populates="design_notes", foreign_keys=[part_id])
+    links: Mapped[list["DesignNoteLink"]] = relationship(
+        back_populates="note",
+        cascade="all, delete-orphan",
+        order_by="DesignNoteLink.sort_order, DesignNoteLink.id",
+    )
+
+
+class DesignNoteLink(Base):
+    __tablename__ = "design_note_link"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    note_id: Mapped[int] = mapped_column(
+        ForeignKey("design_note.id", ondelete="CASCADE"), index=True
+    )
+    part_id: Mapped[str | None] = mapped_column(ForeignKey("part.id", ondelete="SET NULL"))
+    role: Mapped[str | None] = mapped_column(String(60))  # "R1", "R2", "L1", "FB top"
+    value_hint: Mapped[str | None] = mapped_column(String(80))  # "10k", "33uH"
+    mpn: Mapped[str | None] = mapped_column(String(120))  # when the part isn't in the DB
+    qty: Mapped[float] = mapped_column(Float, default=1)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    note: Mapped["DesignNote"] = relationship(back_populates="links")
+    part: Mapped["Part | None"] = relationship()
 
 
 class Setting(Base):

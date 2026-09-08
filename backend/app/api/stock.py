@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
-from ..models import Part, StockEntry, StorageLocation
+from ..models import Part, PartSupplier, StockEntry, StorageLocation, Supplier
+from ..money import price_block, strip_vat
 from ..services import location_breakdown
 
 router = APIRouter(prefix="/api/parts", tags=["stock"])
@@ -29,9 +30,13 @@ class StockIn(BaseModel):
     location_id: int | None = None
     delta: int
     kind: str = "add"
-    unit_price: float | None = None
+    unit_price: float | None = None  # price per unit as typed
+    price_includes_vat: bool = False
+    vat_percent: float = 25.0
     currency: str = "SEK"
-    supplier: str | None = None
+    supplier_id: int | None = None
+    supplier_sku: str | None = None
+    link_to_part: bool = True  # also upsert the part<->supplier link
     order_ref: str | None = None
     note: str | None = None
 
@@ -69,9 +74,10 @@ def history(part_id: str, db: Session = Depends(get_db)):
                 "location": names.get(e.location_id, "Unknown location")
                 if e.location_id
                 else "Unknown location",
-                "unit_price": e.unit_price,
-                "currency": e.currency,
+                "price": price_block(e.unit_price, e.vat_percent, e.currency),
                 "supplier": e.supplier,
+                "supplier_id": e.supplier_id,
+                "supplier_sku": e.supplier_sku,
                 "order_ref": e.order_ref,
                 "note": e.note,
                 "move_group": e.move_group,
@@ -89,18 +95,51 @@ def add_entry(part_id: str, body: StockIn, db: Session = Depends(get_db)):
         raise HTTPException(400, f"kind must be one of {sorted(KINDS)}")
     if body.location_id is not None and db.get(StorageLocation, body.location_id) is None:
         raise HTTPException(400, "unknown location_id")
+
+    sup = db.get(Supplier, body.supplier_id) if body.supplier_id else None
+    if body.supplier_id and sup is None:
+        raise HTTPException(400, "unknown supplier_id")
+    ex_price = (
+        strip_vat(body.unit_price, body.vat_percent)
+        if body.price_includes_vat
+        else body.unit_price
+    )
+
     e = StockEntry(
         part_id=part_id,
         location_id=body.location_id,
         delta=body.delta,
         kind=body.kind,
-        unit_price=body.unit_price,
+        unit_price=ex_price,
+        vat_percent=body.vat_percent,
         currency=body.currency,
-        supplier=body.supplier,
+        supplier=sup.name if sup else None,
+        supplier_id=sup.id if sup else None,
+        supplier_sku=body.supplier_sku or None,
         order_ref=body.order_ref,
         note=body.note,
     )
     db.add(e)
+
+    # keep the part<->supplier catalogue in sync with what we actually buy
+    if sup and body.link_to_part and body.delta > 0:
+        link = db.scalar(
+            select(PartSupplier).where(
+                PartSupplier.part_id == part_id,
+                PartSupplier.supplier_id == sup.id,
+                PartSupplier.sku == (body.supplier_sku or None),
+            )
+        )
+        if link is None:
+            link = PartSupplier(
+                part_id=part_id, supplier_id=sup.id, sku=body.supplier_sku or None
+            )
+            db.add(link)
+        if ex_price is not None:
+            link.unit_price = ex_price
+            link.vat_percent = body.vat_percent
+            link.currency = body.currency
+
     db.commit()
     return {"id": e.id}
 

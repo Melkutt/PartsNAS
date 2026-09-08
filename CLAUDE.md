@@ -93,7 +93,17 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   per-class fields; `price_cache` JSON for API prices. `category_id` / `footprint_id`
   are `SET NULL` on delete.
 - **StockEntry** — ledger: `part_id`, `location_id`, `delta`, `kind`
-  (add|remove|move|count|correction|build), `unit_price`, `move_group`.
+  (add|remove|move|count|correction|build), `unit_price` (**EX VAT**),
+  `vat_percent`, `supplier_id`/`supplier_sku`, `move_group`.
+- **Supplier** — master list; 6 built-ins seeded (Digi-Key, Mouser, RS, Farnell,
+  TME, Electrokit), user adds more. **PartSupplier** — part↔supplier link:
+  `sku`, `url`, `unit_price` (EX VAT) + `vat_percent`, `active`, `preferred`.
+- **Attachment** — `kind` (image|datasheet|file), `stored`/`thumb` paths under
+  DATA_DIR, served at `/media/<stored>`. Part.image_path caches the primary thumb.
+- **DesignNote** + **DesignNoteLink** — a hint anchored to a part ("for Vout=5V
+  use R1/R2…"); links point at companion parts (or an unresolved MPN).
+- Prices are stored **ex VAT** everywhere; `app/money.py` derives the inc-VAT
+  figure. Input forms take a "price includes VAT" toggle.
 - **FootprintAlias** — `canonical`, `aliases` JSON, `group`, `kicad_footprint`.
 - **Project / BomLine / Build** — BOM lines may be unresolved (`unresolved_mpn`);
   a Build turns into negative `StockEntry` rows.
@@ -115,27 +125,34 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - `/api/categories`, `/api/locations` — tree CRUD (see files).
 - `/api/parts` (list+filter), `/api/parts/ids` (select-all-matching),
   `/api/parts/lookup?code=` (scanner), `/api/parts/{id}` CRUD.
-- `/api/parts/{id}/stock` (+ `/move`) — the ledger for one part.
+- `/api/parts/{id}/stock` (+ `/move`) — the ledger for one part; the `add` body
+  takes `supplier_id`/`supplier_sku`/`price_includes_vat` and upserts PartSupplier.
 - `/api/bulk` + `/api/bulk/{id}/undo` — move_category / move_stock / add_tag /
   remove_tag / set_min_stock / delete, each with an undo payload.
+- `/api/suppliers` CRUD; `/api/parts/{id}/suppliers` link CRUD.
+- `/api/parts/{id}/images` upload (Pillow thumbs) / delete / `…/primary`.
+- `/api/design-notes` searchable list + CRUD; `/api/parts/{id}/design-notes`.
+- `/api/meta/part-classes` — field schemas for the detail form.
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
 
-Frontend: `js/parts.js` (table + bulk bar + detail drawer), `js/importexport.js`
-(Import/Export topbar buttons), `js/scan.js` (global `partsnas:scan` event from a
-keyboard-wedge USB scanner; parts view looks the code up and opens or ticks it).
+Frontend: `js/parts.js` (table + bulk bar), `js/partdetail.js` (right-side panel:
+Details edit w/ per-class fields + images, Stock adjust/move, Suppliers ex/inc
+VAT, Notes), `js/suppliers.js` (master list tab), `js/designnotes.js` (search
+tab), `js/importexport.js`, `js/scan.js` (USB keyboard-wedge → `partsnas:scan`).
+Clicking a Category/Location tree node jumps to Parts filtered by it.
 
 ## Roadmap
 
 1. **done** — repo skeleton, schema, seed, category + location trees, theme.
 2. **done** — English rename of all seed data / labels.
-3. **done** — Parts list + detail drawer, stock ledger, **bulk move**
-   (parts→category, stock→location) + undo, PartsBox importer (with the
-   "≈75 in the other box" review list), CSV/XLSX export, USB scanner input.
-4. Part detail **edit** form with per-class fields (`part_classes.json`), images
-   (Pillow thumbnails on `.img-mat`), manual stock adjust UI, the review-list
-   stock-split helper.
-5. **Barcode / QR** — `GET /api/label/{id}?fmt=code128|qr` (server-side, offline)
-   + a printable label view; "Label" button on a part.
-6. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
-7. Projects / builds / shortage report; min-stock warnings.
-8. API enrichment (Nexar/Mouser/Digi-Key), theme sync via `Setting`.
+3. **done** — Parts list, stock ledger, **bulk move** + undo, PartsBox importer,
+   CSV/XLSX export, USB scanner input.
+4. **done** — part detail panel (edit + per-class fields + images), stock
+   adjust/move UI, suppliers + VAT (ex/inc), 6 built-in suppliers + custom,
+   supplier SKU, tree→parts linking.
+5. **Design Notes** tab — searchable "for part X at condition Y use these parts".
+6. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
+   server-side offline) + printable label view.
+7. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
+8. Projects / builds / shortage report; min-stock warnings.
+9. API enrichment (Nexar/Mouser/Digi-Key), theme sync via `Setting`.
