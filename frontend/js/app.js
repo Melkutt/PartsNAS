@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { Tree } from "./tree.js";
 import { PartsView } from "./parts.js";
 import { SuppliersView } from "./suppliers.js";
+import { DesignNotesView } from "./designnotes.js";
 import { initScanner } from "./scan.js";
 import { openImport, openExport } from "./importexport.js";
 
@@ -10,6 +11,7 @@ const view = document.getElementById("view");
 const tabs = document.getElementById("tabs");
 let activeObj = null;
 let pendingPartsFilter = null;
+let pendingNoteQuery = "";
 
 const TABS = {
   parts: mountParts,
@@ -21,6 +23,7 @@ const TABS = {
     mountTree("/api/locations", "location", "Storage locations", "New location", (node) =>
       gotoPartsFiltered({ location_id: node.id }),
     ),
+  notes: mountNotes,
   suppliers: mountSuppliers,
 };
 
@@ -41,6 +44,14 @@ async function mountParts() {
 async function mountSuppliers() {
   clearView();
   const v = new SuppliersView();
+  activeObj = v;
+  await v.mount(view);
+}
+
+async function mountNotes() {
+  clearView();
+  const v = new DesignNotesView({ q: pendingNoteQuery });
+  pendingNoteQuery = "";
   activeObj = v;
   await v.mount(view);
 }
@@ -85,8 +96,8 @@ async function main() {
   document.getElementById("btn-export").addEventListener("click", openExport);
   document.addEventListener("partsnas:gototab", (e) => {
     const d = e.detail || {};
-    if (d.tab === "notes" && TABS.notes) {
-      pendingPartsFilter = null;
+    if (d.tab === "notes") {
+      pendingNoteQuery = d.q || "";
       selectTab("notes");
     } else if (d.q !== undefined) {
       gotoPartsFiltered({ q: d.q });

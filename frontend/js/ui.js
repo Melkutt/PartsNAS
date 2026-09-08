@@ -69,6 +69,61 @@ export function toast(text, { actionText, onAction, timeout = 6000 } = {}) {
   if (timeout) setTimeout(() => t.remove(), timeout);
 }
 
+// A text input that searches parts and calls onPick({id, name, mpn}) on select.
+// Returns { el, get, set }. `get()` -> the picked part or null.
+export function partSearch({ placeholder = "search part…", onPick } = {}) {
+  const wrap = el("div", { style: "position:relative;flex:1" });
+  const input = el("input", { type: "text", placeholder, style: "width:100%" });
+  const list = el("div", {
+    style:
+      "position:absolute;left:0;right:0;top:100%;z-index:70;background:var(--surface);" +
+      "border:1px solid var(--border-strong);border-radius:6px;max-height:220px;overflow:auto;display:none",
+  });
+  wrap.append(input, list);
+  let picked = null;
+  let t;
+
+  input.addEventListener("input", () => {
+    picked = null;
+    clearTimeout(t);
+    const q = input.value.trim();
+    if (!q) return void (list.style.display = "none");
+    t = setTimeout(async () => {
+      const data = await api(`/api/parts?q=${encodeURIComponent(q)}&limit=12`);
+      list.innerHTML = "";
+      for (const p of data.items) {
+        const row = el(
+          "div",
+          {
+            style: "padding:6px 9px;cursor:pointer;border-bottom:1px solid var(--border)",
+            onmouseenter: (e) => (e.target.style.background = "var(--surface-raised)"),
+            onmouseleave: (e) => (e.target.style.background = ""),
+            onclick: () => {
+              picked = { id: p.id, name: p.name, mpn: p.mpn };
+              input.value = p.name + (p.mpn && p.mpn !== p.name ? `  (${p.mpn})` : "");
+              list.style.display = "none";
+              onPick && onPick(picked);
+            },
+          },
+          `${p.name}${p.mpn && p.mpn !== p.name ? "  ·  " + p.mpn : ""}  —  ${p.on_hand} on hand`,
+        );
+        list.append(row);
+      }
+      list.style.display = data.items.length ? "block" : "none";
+    }, 200);
+  });
+  input.addEventListener("blur", () => setTimeout(() => (list.style.display = "none"), 150));
+
+  return {
+    el: wrap,
+    get: () => picked,
+    set: (p) => {
+      picked = p;
+      input.value = p ? p.name : "";
+    },
+  };
+}
+
 // flat, indented <option> list for a category or location tree
 export async function treeOptions(base, { includeBlank = "—" } = {}) {
   const forest = await api(base);

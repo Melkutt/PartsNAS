@@ -150,7 +150,8 @@ Clicking a Category/Location tree node jumps to Parts filtered by it.
 4. **done** — part detail panel (edit + per-class fields + images), stock
    adjust/move UI, suppliers + VAT (ex/inc), 6 built-in suppliers + custom,
    supplier SKU, tree→parts linking.
-5. **Design Notes** tab — searchable "for part X at condition Y use these parts".
+5. **done** — Design Notes tab (searchable "for part X at condition Y use these
+   parts"), with a part-search picker and a Notes sub-tab on the part panel.
 6. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
    server-side offline) + printable label view.
 7. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.

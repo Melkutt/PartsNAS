@@ -452,11 +452,42 @@ export class PartDetail {
     await this._reload();
   }
 
-  // ---------- Images (shown inside Details tab footer) & Notes ----------
-  _notes(body) {
+  // ---------- Notes ----------
+  async _notes(body) {
     body.append(
-      el("p", {}, `${this.p.design_note_count} design note(s) reference this part.`),
-      el("button", { onclick: () => document.dispatchEvent(new CustomEvent("partsnas:gototab", { detail: { tab: "notes", q: this.p.mpn || this.p.name } })) }, "Open in Design Notes tab"),
+      el("button", {
+        onclick: () =>
+          document.dispatchEvent(
+            new CustomEvent("partsnas:gototab", { detail: { tab: "notes", q: this.p.mpn || this.p.name } }),
+          ),
+      }, "Open in Design Notes tab →"),
     );
+    let data;
+    try {
+      data = await api(`/api/parts/${this.id}/design-notes`);
+    } catch {
+      return;
+    }
+    const section = (heading, notes, anchored) => {
+      body.append(el("div", { class: "section-title" }, heading));
+      if (!notes.length) return body.append(el("div", { class: "pill-off" }, "none"));
+      for (const n of notes) {
+        body.append(
+          el(
+            "div",
+            { style: "border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px" },
+            el("div", { style: "display:flex;gap:6px;align-items:baseline" },
+              el("b", {}, n.title),
+              n.condition ? el("span", { class: "chip", style: "border-color:var(--accent);color:var(--accent)" }, n.condition) : null,
+              anchored ? "" : el("span", { class: "sub", style: "color:var(--text-muted)" }, ` — anchor: ${n.anchor_name || "?"}`)),
+            n.body ? el("div", { style: "white-space:pre-wrap;margin:4px 0" }, n.body) : null,
+            el("div", {}, ...(n.links || []).map((l) =>
+              el("span", { class: "chip" }, `${l.role ? l.role + ": " : ""}${l.part_name || l.label || l.mpn || "?"}${l.value_hint ? " (" + l.value_hint + ")" : ""}`))),
+          ),
+        );
+      }
+    };
+    section("Notes anchored here", data.anchored, true);
+    section("Referenced by other notes", data.referenced_by, false);
   }
 }
