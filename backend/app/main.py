@@ -62,6 +62,7 @@ def info():
 
 def _mount_routers() -> None:
     from .api import (
+        backup,
         bulk,
         categories,
         design_notes,
@@ -92,6 +93,7 @@ def _mount_routers() -> None:
     app.include_router(lookup.router)
     app.include_router(imports.router)
     app.include_router(exports.router)
+    app.include_router(backup.router)
     # kicad -> next milestone
 
 

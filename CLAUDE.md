@@ -182,6 +182,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   stock), hiding the quote from the default list; `unarchive` reverses it. All
   reversible.
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
+- `/api/export/backup.zip?only_with_supplier=&category_id=&q=` — a full,
+  re-importable backup: `parts.json` (attributes, tags, suppliers, stock,
+  replacement links, design notes) + `images/<part_id>/<file>`.
+  `/api/import/backup` (multipart `file`=zip, `mode`=merge|update|replace,
+  `dry_run`) — matches existing parts by `id` then `mpn`, creates categories /
+  locations by path, links suppliers by name. `merge` never doubles.
 
 ### Supplier providers (`app/providers/`)
 
