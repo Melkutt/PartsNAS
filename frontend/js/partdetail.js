@@ -17,6 +17,9 @@ async function attrValues(force) {
 
 const MOUNTS = ["", "smd", "tht", "other"];
 
+// "3,3" -> "3.3" so a comma and a dot don't create two values of the same thing
+const commaFix = (v) => (/^-?\d+,\d+$/.test(String(v).trim()) ? String(v).trim().replace(",", ".") : v);
+
 export class PartDetail {
   constructor(id, { onChange } = {}) {
     this.id = id;
@@ -197,10 +200,11 @@ export class PartDetail {
             style: "flex:1",
             oninput: (e) => (draft.attributes[f.key] = e.target.value),
             onchange: (e) => {
+              e.target.value = commaFix(e.target.value);
               if (f.key === "value" && kind !== "num" && e.target.value.trim()) {
                 e.target.value = formatValue(e.target.value, kind);
-                draft.attributes[f.key] = e.target.value;
               }
+              draft.attributes[f.key] = e.target.value;
             } });
           node = el("span", { style: "display:flex;gap:0" }, box, dl);
         }
@@ -219,7 +223,8 @@ export class PartDetail {
       const extras = Object.keys(draft.attributes).filter((k) => !schemaKeys.has(k)).sort();
       for (const k of extras) {
         const inp = el("input", { type: "text", value: draft.attributes[k] ?? "", style: "flex:1",
-          oninput: (e) => (draft.attributes[k] = e.target.value) });
+          oninput: (e) => (draft.attributes[k] = e.target.value),
+          onchange: (e) => { e.target.value = commaFix(e.target.value); draft.attributes[k] = e.target.value; } });
         og.append(
           el("label", { title: k }, k),
           el("span", { style: "display:flex;gap:4px" }, inp,
@@ -521,8 +526,17 @@ export class PartDetail {
 
   _linkDialog(existing) {
     const sup = this._supplierSelect();
-    if (existing) sup.value = String(existing.supplier_id);
-    const sku = el("input", { type: "text", value: existing?.sku || "" });
+    if (existing) {
+      sup.value = String(existing.supplier_id);
+    } else {
+      // default to the remembered supplier (last one chosen that is an API
+      // provider), else Mouser
+      const want = (localStorage.getItem("partsnas.defaultSupplier") || "Mouser").toLowerCase();
+      const opt = [...sup.options].find((o) => o.textContent.toLowerCase() === want)
+        || [...sup.options].find((o) => o.textContent.toLowerCase() === "mouser");
+      if (opt) sup.value = opt.value;
+    }
+    const sku = el("input", { type: "text", value: existing?.sku || (existing ? "" : this.p.mpn || "") });
     const url = el("input", { type: "text", value: existing?.url || "", placeholder: "product page URL" });
     const price = el("input", { type: "text", inputmode: "decimal", value: existing?.price.ex_vat ?? "" });
     const incVat = el("input", { type: "checkbox" });
@@ -547,8 +561,15 @@ export class PartDetail {
           price_includes_vat: incVat.checked, vat_percent: parseNum(vat.value) || 25,
           active: active.checked, preferred: pref.checked,
         };
-        if (existing) await api(`/api/parts/${this.id}/suppliers/${existing.id}`, { method: "PATCH", body: payload });
-        else await api(`/api/parts/${this.id}/suppliers`, { method: "POST", body: { supplier_id: Number(sup.value), ...payload } });
+        if (existing) {
+          await api(`/api/parts/${this.id}/suppliers/${existing.id}`, { method: "PATCH", body: payload });
+        } else {
+          await api(`/api/parts/${this.id}/suppliers`, { method: "POST", body: { supplier_id: Number(sup.value), ...payload } });
+          // remember this supplier as the default if it's an API provider
+          const name = sup.selectedOptions[0]?.textContent || "";
+          const providers = (this._provNames ||= (await api("/api/lookup/providers")).map((p) => p.label.toLowerCase()));
+          if (providers.includes(name.toLowerCase())) localStorage.setItem("partsnas.defaultSupplier", name);
+        }
         toast("Saved");
         await this._reload();
       },

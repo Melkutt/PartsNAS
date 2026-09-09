@@ -5,32 +5,59 @@ import { formatValue, valueKind } from "./units.js";
 
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const slug = (s) => norm(s).slice(0, 40) || "attr";
+
+// our field key -> normalised aliases seen in Mouser/other attribute names.
+// Mouser decorates names a lot ("Voltage - Supply", "Current - Output (Max)",
+// "Number of I/O") so entries are matched as substrings after norm().
 const ALIAS = {
-  value: ["resistance", "capacitance", "inductance", "value", "frequency", "currentrating"],
-  voltage: ["voltagerating", "voltage", "voltagedc", "ratedvoltage", "dcvoltagerating", "workingvoltage"],
+  value: ["resistance", "capacitance", "inductance", "frequency", "clockfrequency", "speed", "currentaveragerectified", "io"],
+  voltage: ["voltagerating", "voltage", "voltagedc", "ratedvoltage", "workingvoltage", "voltagereverse", "vr", "vrrm", "breakdownvoltage", "vdss", "drainsourcevoltage"],
   tolerance: ["tolerance"],
-  power: ["powerrating", "power", "powerw"],
+  power: ["powerrating", "power", "powermax", "powerdissipation", "ptot"],
   tempchar: ["temperaturecoefficient", "tempchar", "dielectric"],
   dielectric: ["dielectric", "dielectricmaterial", "dielectriccharacteristic"],
-  mounting: ["mountingstyle", "mounting", "packagingtype", "terminationstyle", "mountingtype"],
-  pitch: ["pitch", "leadpitch", "leadspacing"],
-  pincount: ["numberofpins", "pincount", "pins", "numberofcontacts", "numberofpositions"],
-  current_rating: ["currentrating", "currentcontinuous", "ratedcurrent", "current"],
-  esr: ["esr", "equivalentseriesresistance", "dcr", "dcresistance"],
+  mounting: ["mountingstyle", "mounting", "mountingtype", "terminationstyle", "packagingtype", "packagetype"],
+  pitch: ["pitch", "leadpitch", "leadspacing", "pinpitch", "contactpitch"],
+  pincount: ["numberofpins", "pincount", "pins", "numberofcontacts", "numberofpositions", "numberofio", "numberofterminations", "numberofcircuits", "circuits"],
+  current_rating: ["currentrating", "currentcontinuous", "ratedcurrent", "currentoutput", "currentmax", "currentcontinuousdrain", "id", "if", "currentaveragerectified"],
+  esr: ["esr", "equivalentseriesresistance", "dcr", "dcresistance", "impedance"],
   ripple_current: ["ripplecurrent", "ripple"],
   series: ["series", "productseries", "family"],
-  lifetime_hours: ["lifetime", "loadlife", "usefullife"],
+  lifetime_hours: ["lifetime", "loadlife", "usefullife", "operationallife"],
   breaking_capacity: ["breakingcapacity", "interruptingrating"],
   fuse_type: ["fusetype", "response", "blowcharacteristic", "speed"],
-  operating_temp_min: ["operatingtemperaturemin", "mintemp", "minimumoperatingtemperature", "tmin"],
-  operating_temp_max: ["operatingtemperaturemax", "maxtemp", "maximumoperatingtemperature", "tmax"],
-  maxtemp: ["maxtemp", "maximumoperatingtemperature", "tmax"],
+  operating_temp_min: ["operatingtemperaturemin", "minimumoperatingtemperature", "tmin"],
+  operating_temp_max: ["operatingtemperaturemax", "maximumoperatingtemperature", "tmax"],
+  maxtemp: ["maxtemp"],
+  vcc_min: ["voltagesupplymin", "supplyvoltagemin", "vccmin", "vsmin"],
+  vcc_max: ["voltagesupplymax", "supplyvoltagemax", "vccmax", "vsmax"],
+  icc: ["currentsupply", "supplycurrent", "icc", "quiescentcurrent", "iq"],
+  frequency: ["frequency", "clockfrequency", "speed", "maxoperatingfrequency", "bandwidth"],
+  flash: ["memorysize", "flashsize", "programmemorysize"],
+  ram: ["ramsize", "sramsize", "datamemorysize"],
+  interface: ["interface"],
+  function: ["function", "type", "amplifiertype", "regulatortopology"],
+  vds: ["vdss", "drainsourcevoltage", "vds"],
+  vgsth: ["vgsth", "gatethresholdvoltage"],
+  rdson: ["rdson", "drainsourceonresistance"],
+  vf: ["voltageforward", "vf"],
+  vz: ["voltagezener", "vz"],
   body_diameter: ["diameter", "bodydiameter"],
-  body_length: ["length", "bodylength", "height"],
+  body_length: ["bodylength", "length"],
+  body_width: ["bodywidth", "width"],
+  body_height: ["height", "heightseated", "bodyheight", "thickness"],
+};
+
+// Mouser attribute-name -> our "<base>" for a min/max field pair (if the class
+// has <base>_min and <base>_max), matched loosely.
+const RANGE_BASES = {
+  operating_temp: ["operatingtemperature", "temperaturerange", "temprange", "workingtemperature"],
+  vcc: ["voltagesupply", "supplyvoltage"],
 };
 
 function guessField(attrName, fields) {
   const a = norm(attrName);
+  const keys = new Set(fields.map((f) => f.key));
   for (const f of fields) if (norm(f.label) === a || norm(f.key) === a) return f.key;
   for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a === al)) return f.key;
   for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a.includes(al) || al.includes(a))) return f.key;
@@ -39,10 +66,20 @@ function guessField(attrName, fields) {
 }
 
 function splitRange(v) {
-  const m = String(v).match(/(-?\d+(?:\.\d+)?)\s*°?\s*C?\s*(?:~|to|\.\.\.?|–|—|-)\s*(\+?-?\d+(?:\.\d+)?)/i);
+  const m = String(v).match(/([-+]?\d+(?:\.\d+)?)\s*[^\d~.\-–—]*\s*(?:~|to|\.\.\.?|–|—|-)\s*([-+]?\d+(?:\.\d+)?)/i);
   return m ? [m[1].replace("+", ""), m[2].replace("+", "")] : null;
 }
-const TEMP_RANGE_ATTR = /operating temp|temperature range|temp\.? range|working temp/i;
+
+// if an attr name matches a known range base and the class has *_min/*_max, return that base
+function rangeBaseFor(attrName, fields) {
+  const a = norm(attrName);
+  const keys = new Set(fields.map((f) => f.key));
+  for (const [base, als] of Object.entries(RANGE_BASES)) {
+    if (!keys.has(base + "_min") || !keys.has(base + "_max")) continue;
+    if (als.some((al) => a.includes(al))) return base;
+  }
+  return null;
+}
 
 export async function openLookup(part, classFields, onApplied) {
   const cls = part.part_class;
@@ -91,20 +128,20 @@ export async function openLookup(part, classFields, onApplied) {
   function buildRows(r) {
     rows = [];
     for (const [name, raw] of Object.entries(r.attributes || {})) {
-      const rng = TEMP_RANGE_ATTR.test(name) && splitRange(raw);
+      const base = rangeBaseFor(name, classFields);
+      const rng = base && splitRange(raw);
       if (rng) {
-        rows.push(mkRow(name + " (min)", rng[0]));
-        rows.push(mkRow(name + " (max)", rng[1]));
-        rows[rows.length - 2].field = pickKey("operating_temp_min", classFields);
-        rows[rows.length - 1].field = pickKey("operating_temp_max", classFields);
-        rows.push({ ...mkRow(name, raw), include: false }); // keep the raw range too, unchecked
+        const lo = mkRow(name + " (min)", rng[0]);
+        const hi = mkRow(name + " (max)", rng[1]);
+        lo.field = base + "_min";
+        hi.field = base + "_max";
+        recompute(lo);
+        recompute(hi);
+        rows.push(lo, hi, { ...mkRow(name, raw), include: false }); // keep the raw range, unchecked
       } else {
         rows.push(mkRow(name, raw));
       }
     }
-  }
-  function pickKey(key, fields) {
-    return fields.some((f) => f.key === key) ? key : "";
   }
 
   function render(results) {

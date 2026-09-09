@@ -300,6 +300,22 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
                     "unit": fdef.get("unit"),
                     "options": opts,
                 }
+    # every OTHER attribute key present in the data (e.g. copied from a lookup and
+    # not mapped to a class field) becomes a filter too — nothing is unfilterable
+    seen_keys: set[str] = set()
+    for p in parts_for(None):
+        seen_keys |= set((p.attributes or {}).keys())
+    for key in sorted(seen_keys):
+        if key in attr_facets or not _KEY_RE.match(key):
+            continue
+        opts = count(lambda p, k=key: (p.attributes or {}).get(k), f"attr:{key}")
+        if opts:
+            attr_facets[key] = {
+                "label": key.replace("_", " "),
+                "unit": None,
+                "options": opts,
+                "unmapped": True,
+            }
     result["attributes"] = attr_facets
     return result
 

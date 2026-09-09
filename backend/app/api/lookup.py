@@ -9,6 +9,8 @@ providers/safety.py), so re-opening the dialog costs no request.
 """
 from __future__ import annotations
 
+import re
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -122,8 +124,14 @@ def _sniff(data: bytes) -> tuple[str, str] | None:
     return None
 
 
-def _fetch_image(url: str, referer: str | None) -> tuple:
-    """-> (bytes, filename, content_type, None) or (None, None, None, reason)."""
+_OG = re.compile(
+    r'<meta[^>]+(?:property|name)=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']'
+    r'|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']og:image["\']',
+    re.I,
+)
+
+
+def _try_one(url: str, referer: str | None) -> tuple:
     headers = {
         "User-Agent": _BROWSER_UA,
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
@@ -147,6 +155,35 @@ def _fetch_image(url: str, referer: str | None) -> tuple:
     if sniff:
         return r.content, f"lookup-image{sniff[1]}", sniff[0], None
     return None, None, None, f"not an image (content-type {ct or 'none'})"
+
+
+def _og_image(product_url: str) -> str | None:
+    try:
+        with httpx.Client(timeout=12.0, follow_redirects=True) as c:
+            r = c.get(product_url, headers={"User-Agent": _BROWSER_UA,
+                                            "Accept": "text/html,*/*"})
+        if r.status_code != 200:
+            return None
+        m = _OG.search(r.text)
+        return (m.group(1) or m.group(2)) if m else None
+    except httpx.HTTPError:
+        return None
+
+
+def _fetch_image(url: str, referer: str | None) -> tuple:
+    """-> (bytes, filename, content_type, None) or (None, None, None, reason).
+    Falls back to the product page's og:image if the direct URL isn't an image
+    (Mouser sometimes serves an anti-hotlink HTML page)."""
+    res = _try_one(url, referer)
+    if res[0] is not None:
+        return res
+    if referer:
+        og = _og_image(referer)
+        if og and og != url:
+            alt = _try_one(og, referer)
+            if alt[0] is not None:
+                return alt
+    return res
 
 
 @router.post("/api/parts/{pid}/apply-lookup")
