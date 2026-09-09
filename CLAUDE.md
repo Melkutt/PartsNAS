@@ -142,7 +142,21 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   lead pitch, body W/H, radial/axial mounting), merged in `app/partschema.py`.
 - `/api/meta/attr-values` — distinct values already used per attribute key, so
   the edit form offers them as a `<datalist>` (recurring params → dropdown).
+- `/api/settings/providers` (GET list + status, PUT `{api_key}`), `/api/lookup/providers`,
+  `POST /api/lookup` `{mpn, provider}`, `POST /api/parts/{id}/apply-lookup`.
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
+
+### Supplier providers (`app/providers/`)
+
+`base.py` (Provider ABC + `ProviderResult`), `mouser.py` (Search API v1),
+`safety.py` — every outbound call goes through `guarded_request()`:
+per-minute token bucket + per-day quota (persisted in `Setting` under
+`provider:<name>:state`), disk cache at `data/providers/<name>/<sha1(mpn)>.json`
+(14-day TTL), exponential backoff on 429/5xx honouring `Retry-After`, and a
+**circuit breaker** — a 403/429/"blocked" body sets `blocked_until` and the
+provider is skipped for 8 h (the Celestrak lesson). Providers run **only** from
+the "Look up specs" button, never bulk/auto. Keys: env
+`PARTSNAS_MOUSER_API_KEY` wins, else the `Setting` value; never returned by the API.
 
 Frontend: `js/parts.js` is a two-pane view — `js/catrail.js` (left: selectable
 Categories/Locations tree) + faceted filter bar (multi-select checkboxes with
@@ -166,12 +180,10 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
 6. **done** — two-pane Parts view (left rail + faceted dynamic filters incl.
    class parameters over subcategories), expanded per-class dimensions
    (`part_classes_extra.json`), parameter datalists from prior values.
-7. **Supplier APIs** (Mouser / TME / Digi-Key / Farnell) — keys in `Setting`,
-   an `app/providers/` package with a shared rate-limited + disk-cached +
-   backoff HTTP client and a per-provider circuit breaker (Celestrak lesson:
-   `is_blocked_until` persisted, daily quota counter, honest UA, fetch only on
-   an explicit user click, never bulk/auto). A "Look up specs" button on the
-   part panel fills attributes / price / datasheet / image from a match.
+7. **partly done** — `app/providers/` framework (rate limit + quota + disk cache
+   + backoff + circuit breaker), **Mouser** provider, Settings modal for keys,
+   "Look up specs" button → apply attributes / price / datasheet / image /
+   supplier link. TODO: TME (HMAC), Digi-Key (OAuth2), Farnell.
 8. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
    server-side offline) + printable label view.
 9. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.

@@ -64,8 +64,10 @@ def _mount_routers() -> None:
         images,
         imports,
         locations,
+        lookup,
         meta,
         parts,
+        settings_api,
         stock,
         suppliers,
     )
@@ -79,6 +81,8 @@ def _mount_routers() -> None:
     app.include_router(images.router)
     app.include_router(design_notes.router)
     app.include_router(meta.router)
+    app.include_router(settings_api.router)
+    app.include_router(lookup.router)
     app.include_router(imports.router)
     app.include_router(exports.router)
     # kicad -> next milestone

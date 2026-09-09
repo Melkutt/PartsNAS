@@ -1,6 +1,7 @@
 // Part detail panel: Details (edit) / Stock / Suppliers / Notes, in a right-side overlay.
 import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
+import { openLookup } from "./lookup.js";
 
 let CLASSES = null; // cached /api/meta/part-classes
 async function partClasses() {
@@ -182,6 +183,11 @@ export class PartDetail {
     const saveBar = el(
       "div",
       { class: "save-bar" },
+      el("button", {
+        onclick: () =>
+          openLookup(this.p, this.classes[this.p.part_class]?.fields || [], () => this._reload()),
+      }, "Look up specs…"),
+      el("span", { style: "flex:1" }),
       el("button", { class: "primary", onclick: () => this._saveDetails(draft) }, "Save"),
     );
     body.append(saveBar);

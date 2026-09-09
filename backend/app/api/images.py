@@ -76,17 +76,8 @@ def list_images(pid: str, db: Session = Depends(get_db)):
     return [_row(a) for a in rows]
 
 
-@router.post("/api/parts/{pid}/images", status_code=201)
-async def upload_images(
-    pid: str, files: list[UploadFile] = File(...), db: Session = Depends(get_db)
-):
-    part = _need_part(db, pid)
-    img_dir = settings.data_dir / "images" / pid
-    th_dir = settings.data_dir / "thumbs" / pid
-    img_dir.mkdir(parents=True, exist_ok=True)
-    th_dir.mkdir(parents=True, exist_ok=True)
-
-    base_order = (
+def _next_order(db: Session, pid: str) -> int:
+    return (
         db.scalar(
             select(Attachment.sort_order)
             .where(Attachment.part_id == pid)
@@ -95,37 +86,49 @@ async def upload_images(
         )
         or 0
     )
+
+
+def store_attachment(
+    db: Session, pid: str, filename: str, raw: bytes, content_type: str | None
+) -> Attachment:
+    """Write one file + (for images) a thumbnail, add the Attachment row. Caller
+    commits and refreshes the primary."""
+    (settings.data_dir / "images" / pid).mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "thumbs" / pid).mkdir(parents=True, exist_ok=True)
+    ext = Path(filename or "").suffix.lower() or ".bin"
+    key = secrets.token_hex(8)
+    stored_rel = f"images/{pid}/{key}{ext}"
+    (settings.data_dir / stored_rel).write_bytes(raw)
+    thumb_rel = None
+    kind = "image" if ext in IMAGE_EXT else ("datasheet" if ext == ".pdf" else "file")
+    if kind == "image":
+        try:
+            im = Image.open(settings.data_dir / stored_rel)
+            im.thumbnail((THUMB_PX, THUMB_PX))
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            thumb_rel = f"thumbs/{pid}/{key}.jpg"
+            im.save(settings.data_dir / thumb_rel, "JPEG", quality=82)
+        except (UnidentifiedImageError, OSError):
+            kind = "file"
+    a = Attachment(
+        part_id=pid, kind=kind, filename=filename or f"file{key}",
+        stored=stored_rel, thumb=thumb_rel, content_type=content_type,
+        size=len(raw), sort_order=_next_order(db, pid) + 1,
+    )
+    db.add(a)
+    return a
+
+
+@router.post("/api/parts/{pid}/images", status_code=201)
+async def upload_images(
+    pid: str, files: list[UploadFile] = File(...), db: Session = Depends(get_db)
+):
+    part = _need_part(db, pid)
     made = []
-    for i, up in enumerate(files, 1):
+    for up in files:
         raw = await up.read()
-        ext = Path(up.filename or "").suffix.lower() or ".bin"
-        key = secrets.token_hex(8)
-        stored_rel = f"images/{pid}/{key}{ext}"
-        (settings.data_dir / stored_rel).write_bytes(raw)
-        thumb_rel = None
-        kind = "image" if ext in IMAGE_EXT else ("datasheet" if ext == ".pdf" else "file")
-        if kind == "image":
-            try:
-                im = Image.open(settings.data_dir / stored_rel)
-                im.thumbnail((THUMB_PX, THUMB_PX))
-                if im.mode not in ("RGB", "L"):
-                    im = im.convert("RGB")
-                thumb_rel = f"thumbs/{pid}/{key}.jpg"
-                im.save(settings.data_dir / thumb_rel, "JPEG", quality=82)
-            except (UnidentifiedImageError, OSError):
-                kind = "file"
-        a = Attachment(
-            part_id=pid,
-            kind=kind,
-            filename=up.filename or f"file{i}",
-            stored=stored_rel,
-            thumb=thumb_rel,
-            content_type=up.content_type,
-            size=len(raw),
-            sort_order=base_order + i,
-        )
-        db.add(a)
-        made.append(a)
+        made.append(store_attachment(db, pid, up.filename or "file", raw, up.content_type))
     db.flush()
     _refresh_primary(db, part)
     db.commit()

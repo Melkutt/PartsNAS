@@ -6,6 +6,7 @@ import { SuppliersView } from "./suppliers.js";
 import { DesignNotesView } from "./designnotes.js";
 import { initScanner } from "./scan.js";
 import { openImport, openExport } from "./importexport.js";
+import { openSettings } from "./settings.js";
 
 const view = document.getElementById("view");
 const tabs = document.getElementById("tabs");
@@ -94,6 +95,7 @@ async function main() {
 
   document.getElementById("btn-import").addEventListener("click", () => openImport(() => selectTab("parts")));
   document.getElementById("btn-export").addEventListener("click", openExport);
+  document.getElementById("btn-settings").addEventListener("click", openSettings);
   document.addEventListener("partsnas:gototab", (e) => {
     const d = e.detail || {};
     if (d.tab === "notes") {
