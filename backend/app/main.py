@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .core.config import get_settings
-from .core.db import Base, SessionLocal, engine
+from .core.db import Base, SessionLocal, engine, sync_columns
 from .seed import run_all
 
 settings = get_settings()
@@ -24,6 +24,9 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
+    added = sync_columns()  # ADD COLUMN for anything an older DB is missing
+    if added:
+        print(f"[migrate] added columns: {', '.join(added)}")
     with SessionLocal() as db:
         run_all(db)
     yield

@@ -20,6 +20,23 @@ def split_range(s: str | None) -> tuple[str, str] | None:
     return lo, hi
 
 
+_METRIC_PAREN = re.compile(r"^(.*?)\s*\(([^()]*mm[^()]*)\)\s*$", re.I)
+
+
+def metric_first(v: str | None) -> str | None:
+    """Distributors write dims imperial-first: '0.240" L x ... (6.10mm x ...)'.
+    Swap so the mm figure leads: '6.10mm x ... (0.240" L x ...)'."""
+    if not v or '"' not in v:
+        return v
+    m = _METRIC_PAREN.match(v)
+    if not m:
+        return v
+    outer, inner = m.group(1).strip(), m.group(2).strip()
+    if '"' in outer and "mm" not in outer.lower():
+        return f"{inner} ({outer})"
+    return v
+
+
 # Mouser sometimes writes both C0G and NP0; some makers treat them as identical.
 def canon_tempchar(v: str | None) -> str | None:
     if not v:

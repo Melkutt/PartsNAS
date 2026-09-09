@@ -22,7 +22,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from ..core.kv import get_kv, set_kv
-from ..textparse import canon_tempchar
+from ..textparse import canon_tempchar, metric_first
 from .base import PriceBreak, Provider, ProviderError, ProviderResult
 from .safety import UA, cache_get, cache_put, guarded_request
 
@@ -132,7 +132,7 @@ def _parse_product(p: dict, currency: str) -> ProviderResult:
         name = prm.get("ParameterText") or prm.get("Parameter")
         val = prm.get("ValueText") or prm.get("Value")
         if name and val not in (None, "", "-"):
-            attrs[name] = str(val)
+            attrs[name] = metric_first(str(val))
     for k in ("Temperature Coefficient", "Dielectric", "Temperature Characteristics"):
         if k in attrs:
             attrs[k] = canon_tempchar(attrs[k]) or attrs[k]

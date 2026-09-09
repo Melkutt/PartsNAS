@@ -125,8 +125,11 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   mapping in `scripts/translations.py`, never a raw passthrough.
 - Backend money is plain floats + a currency string; quantities are integers.
 - Timestamps are timezone-aware UTC (`datetime.now(timezone.utc)`).
-- SQLite via `Base.metadata.create_all` — no Alembic yet; additive changes only,
-  or delete `data/partsnas.db` in dev.
+- SQLite via `Base.metadata.create_all` + `db.sync_columns()` on startup — a
+  tiny additive migration that `ALTER TABLE … ADD COLUMN`s anything an older DB
+  is missing (nullable / scalar-default only). So new model columns are safe to
+  ship; the user's `data/partsnas.db` self-upgrades. No Alembic. Anything beyond
+  adding a column still needs a hand-written step.
 - New frontend file → it's imported by `app.js` (ES modules). Assets are served
   `Cache-Control: no-store`, so no `?v=` juggling is needed for sub-imports; the
   `?v=N` on the top-level `app.js`/css in `index.html` is belt-and-braces.

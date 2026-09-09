@@ -16,7 +16,7 @@ import re
 from sqlalchemy.orm import Session
 
 from ..core.kv import get_kv
-from ..textparse import canon_tempchar
+from ..textparse import canon_tempchar, metric_first
 from .base import PriceBreak, Provider, ProviderError, ProviderResult
 from .safety import cache_get, cache_put, guarded_request
 
@@ -128,7 +128,7 @@ def _parse_part(p: dict) -> ProviderResult:
     for a in p.get("ProductAttributes") or []:
         n, v = a.get("AttributeName"), a.get("AttributeValue")
         if n and v:
-            attrs[n] = v
+            attrs[n] = metric_first(v)
     _augment_from_description(attrs, p.get("Description") or "")
     for k in ("Dielectric", "Temperature Coefficient", "Temperature Characteristics"):
         if k in attrs:

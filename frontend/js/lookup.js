@@ -1,6 +1,6 @@
 // "Look up" on a part: query a supplier API, then copy chosen fields onto the part.
 import { api } from "./api.js";
-import { el, modal, toast, spinner, withBusy } from "./ui.js";
+import { el, modal, toast, spinner, withBusy, treeOptions } from "./ui.js";
 import { formatValue, valueKind } from "./units.js";
 
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -83,7 +83,11 @@ function rangeBaseFor(attrName, fields) {
 
 export async function openLookup(part, classFields, onApplied) {
   const cls = part.part_class;
-  const provs = (await api("/api/lookup/providers")).filter((p) => p.configured);
+  const [provsAll, catOpts] = await Promise.all([
+    api("/api/lookup/providers"),
+    treeOptions("/api/categories", { includeBlank: "— pick a category —" }),
+  ]);
+  const provs = provsAll.filter((p) => p.configured);
   const provSel = el("select");
   if (!provs.length) provSel.append(el("option", {}, "— no API keys set (Settings) —"));
   else provs.forEach((p) => provSel.append(el("option", { value: p.name }, p.label)));
@@ -186,14 +190,25 @@ export async function openLookup(part, classFields, onApplied) {
       ["supplier", `Add ${r.provider} as supplier`, r.sku || r.unit_price],
       ["lifecycle", "Mark discontinued if EOL", r.lifecycle],
     ];
-    if (r.category_match) {
-      flags.category = true;
-      flags.category_id = r.category_match.id;
-      fchecks.append(el("label", { class: "facet-opt" },
-        el("input", { type: "checkbox", checked: "checked", onchange: (e) => (flags.category = e.target.checked) }),
-        ` Category → ${r.category_match.path}`));
-    } else {
-      flags.category = false;
+    // Category — always offer a control. Auto-matched -> preselected; otherwise
+    // the raw supplier text is shown and you pick from the tree yourself.
+    {
+      const sel = el("select", { onchange: (e) => {
+        flags.category_id = Number(e.target.value) || null;
+        flags.category = !!flags.category_id;
+      } });
+      sel.append(...catOpts.map((o) => o.cloneNode(true)));
+      sel.value = r.category_match ? String(r.category_match.id) : "";
+      flags.category = !!r.category_match;
+      flags.category_id = r.category_match ? r.category_match.id : null;
+      outHost.append(el("div", { class: "row", style: "margin:4px 0" },
+        el("label", {}, "Category"),
+        sel,
+        el("span", { style: "color:var(--text-faint);font-size:12px" },
+          r.category_hint
+            ? (r.category_match ? `matched from “${r.category_hint}”` : `supplier: “${r.category_hint}” — no auto-match`)
+            : ""),
+      ));
     }
     if (r.mount_guess) {
       flags.mount = true;
