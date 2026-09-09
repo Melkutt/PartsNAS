@@ -195,13 +195,27 @@ RULES: list[tuple[frozenset[str], str]] = [
 
 
 # strong signals that live in the *attributes*, not the category string
-# (e.g. Digi-Key gives "Capacitors" generic but "Mounting Type: MLCC" pins it)
+# (e.g. Digi-Key gives "Capacitors" generic but "Mounting Type: MLCC" pins it,
+#  or a Series / FET-Type value tells you exactly what it is). First match wins,
+#  so keep the specific patterns above the broad ones.
 ATTR_RULES: list[tuple[re.Pattern, str]] = [
+    # transistors
+    (re.compile(r"\bN[-\s]?channel\b", re.I), "MOSFET N-ch"),
+    (re.compile(r"\bP[-\s]?channel\b", re.I), "MOSFET P-ch"),
+    # connector series
+    (re.compile(r"\bpicoblade\b", re.I), "PicoBlade"),
+    (re.compile(r"\bmicro[-\s]?fit\b", re.I), "Micro-Fit"),
+    (re.compile(r"\bKK[-\s]?254\b", re.I), "KK 254"),
+    (re.compile(r"\bKK[-\s]?396\b", re.I), "KK 396"),
+    # MCU families (Series / part-family fields)
+    (re.compile(r"\bAT(?:tiny|mega|xmega|sam)\b|\bAVR\b|\bPIC\d|\bSTM32|\bESP32|\bRP2040\b|\bnRF5", re.I),
+     "MCU / Microcontroller"),
+    # capacitor tech / series
     (re.compile(r"\bMLCC\b|multilayer ceramic", re.I), "Ceramic"),
-    (re.compile(r"\btantalum\b", re.I), "Tantalum"),
-    (re.compile(r"alumin[iu]{1,2}m\s+electrolytic", re.I), "Electrolytic (Al)"),
-    (re.compile(r"supercap|\bEDLC\b|double.?layer", re.I), "Supercapacitor"),
-    (re.compile(r"\b(?:film|polyester|polypropylene|PPS|PEN)\s+cap", re.I), "Film"),
+    (re.compile(r"\btantalum\b|\bWCAP-(?:CT|PT)", re.I), "Tantalum"),
+    (re.compile(r"alumin[iu]{1,2}m\s+electrolytic|\bWCAP-AT[GLPS]", re.I), "Electrolytic (Al)"),
+    (re.compile(r"supercap|\bEDLC\b|double.?layer|\bWCAP-STSC\b", re.I), "Supercapacitor"),
+    (re.compile(r"\b(?:film|polyester|polypropylene|PPS|PEN)\s+cap|\bWCAP-FT", re.I), "Film"),
 ]
 
 
