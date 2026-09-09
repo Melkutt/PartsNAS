@@ -68,6 +68,7 @@ def _part_record(db: Session, p: Part, paths: dict[int, str]) -> dict:
         "datasheet_url": p.datasheet_url,
         "min_stock": p.min_stock,
         "notes": p.notes,
+        "design_doc": p.design_doc,
         "octopart_id": p.octopart_id,
         "attributes": p.attributes or {},
         "tags": [t.name for t in p.tags],
@@ -283,7 +284,7 @@ async def import_backup(
         p.name = rec.get("name") or p.name or rec.get("mpn") or "part"
         p.mpn = rec.get("mpn") or p.mpn
         for k in ("manufacturer", "description", "mount", "footprint_raw", "kicad_symbol",
-                  "kicad_footprint", "datasheet_url", "notes", "octopart_id",
+                  "kicad_footprint", "datasheet_url", "notes", "design_doc", "octopart_id",
                   "replacement_mpn", "replacement_sku", "replacement_source"):
             if rec.get(k) is not None:
                 setattr(p, k, rec[k])
@@ -346,7 +347,9 @@ async def import_backup(
                 except KeyError:
                     s["warnings"].append(f"image missing in zip: {im['filename']}")
                     continue
-                store_attachment(db, p.id, im["filename"], blob, im.get("content_type"))
+                a = store_attachment(db, p.id, im["filename"], blob, im.get("content_type"))
+                if im.get("kind"):
+                    a.kind = im["kind"]
                 s["images"] += 1
             db.flush()
             _refresh_primary(db, p)

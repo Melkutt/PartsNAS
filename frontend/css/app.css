@@ -640,3 +640,27 @@ table.parts-table {
   .mini-table th, .mini-table td { border-color: #999 !important; }
   #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
 }
+
+/* Design-tab paste/drop zone */
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: text;
+  outline: none;
+}
+.dropzone.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.design-doc {
+  width: 100%;
+  min-height: 200px;
+  font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  resize: vertical;
+}

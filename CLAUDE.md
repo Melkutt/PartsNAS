@@ -98,8 +98,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - **Supplier** — master list; 6 built-ins seeded (Digi-Key, Mouser, RS, Farnell,
   TME, Electrokit), user adds more. **PartSupplier** — part↔supplier link:
   `sku`, `url`, `unit_price` (EX VAT) + `vat_percent`, `active`, `preferred`.
-- **Attachment** — `kind` (image|datasheet|file), `stored`/`thumb` paths under
-  DATA_DIR, served at `/media/<stored>`. Part.image_path caches the primary thumb.
+- **Attachment** — `kind` (image|datasheet|file|**design**), `stored`/`thumb`
+  paths under DATA_DIR, served at `/media/<stored>`. Part.image_path caches the
+  first `kind="image"` thumb (design images never become the primary).
+- **Part.design_doc** (Text) + `kind="design"` attachments = the **Design**
+  sub-tab: a per-part scratchpad, monospace textarea + paste (Ctrl+V) / drag-drop
+  image zone. `POST /api/parts/{id}/design/images`. In the full backup.
 - **DesignNote** + **DesignNoteLink** — a hint anchored to a part ("for Vout=5V
   use R1/R2…"); links point at companion parts (or an unresolved MPN).
 - Prices are stored **ex VAT** everywhere; `app/money.py` derives `inc_vat`

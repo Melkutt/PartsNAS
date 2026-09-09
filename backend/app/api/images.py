@@ -135,6 +135,25 @@ async def upload_images(
     return [_row(a) for a in made]
 
 
+@router.post("/api/parts/{pid}/design/images", status_code=201)
+async def upload_design_images(
+    pid: str, files: list[UploadFile] = File(...), db: Session = Depends(get_db)
+):
+    """Images for the part's Design scratchpad — kept out of the primary/product
+    image pool (kind='design')."""
+    part = _need_part(db, pid)
+    made = []
+    for i, up in enumerate(files, 1):
+        raw = await up.read()
+        a = store_attachment(db, pid, up.filename or f"design-{i}.png", raw, up.content_type)
+        a.kind = "design"
+        made.append(a)
+    db.flush()
+    _refresh_primary(db, part)
+    db.commit()
+    return [_row(a) for a in made]
+
+
 @router.patch("/api/parts/{pid}/images/{aid}")
 def patch_image(pid: str, aid: int, body: AttachPatch, db: Session = Depends(get_db)):
     a = db.get(Attachment, aid)

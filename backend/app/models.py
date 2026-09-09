@@ -139,6 +139,7 @@ class Part(Base):
 
     # free-form
     notes: Mapped[str | None] = mapped_column(Text)
+    design_doc: Mapped[str | None] = mapped_column(Text)  # "Design" tab scratchpad
     octopart_id: Mapped[str | None] = mapped_column(String(60))
 
     attributes: Mapped[dict] = mapped_column(JSON, default=dict)  # per-class fields

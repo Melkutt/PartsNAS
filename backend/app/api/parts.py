@@ -71,6 +71,7 @@ class PartPatch(BaseModel):
     datasheet_url: str | None = None
     min_stock: int | None = None
     notes: str | None = None
+    design_doc: str | None = None
     attributes: dict | None = None
     tags: list[str] | None = None
     discontinued: bool | None = None
@@ -371,6 +372,7 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "image_path": p.image_path,
         "min_stock": p.min_stock,
         "notes": p.notes,
+        "design_doc": p.design_doc,
         "attributes": p.attributes or {},
         "tags": [t.name for t in p.tags],
         "on_hand": on_hand_map(db, [p.id]).get(p.id, 0),

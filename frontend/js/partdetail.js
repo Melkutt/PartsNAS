@@ -33,13 +33,21 @@ export class PartDetail {
     this.panel = el("div", { class: "detail-panel" });
     document.body.append(this.back, this.panel);
     document.addEventListener("keydown", this._esc);
+    document.addEventListener("paste", this._onPaste);
     this._render();
   }
 
   close = () => {
     document.removeEventListener("keydown", this._esc);
+    document.removeEventListener("paste", this._onPaste);
     this.back?.remove();
     this.panel?.remove();
+  };
+  _onPaste = (e) => {
+    if (this.tab !== "design" || e.target?.tagName === "TEXTAREA") return;
+    const files = [...(e.clipboardData?.items || [])]
+      .filter((it) => it.type.startsWith("image/")).map((it) => it.getAsFile()).filter(Boolean);
+    if (files.length) { e.preventDefault(); this._uploadDesign(files); }
   };
   _esc = (e) => {
     if (e.key === "Escape" && !document.querySelector(".modal-back")) this.close();
@@ -95,6 +103,7 @@ export class PartDetail {
       ["details", "Details"],
       ["stock", "Stock"],
       ["suppliers", `Suppliers (${this.suppliers ? p.suppliers.length : 0})`],
+      ["design", `Design${this._designCount() ? " (" + this._designCount() + ")" : ""}`],
       ["notes", `Notes (${p.design_note_count})`],
     ];
     for (const [key, label] of defs) {
@@ -115,8 +124,16 @@ export class PartDetail {
       details: () => this._details(body),
       stock: () => this._stock(body),
       suppliers: () => this._suppliersTab(body),
+      design: () => this._design(body),
       notes: () => this._notes(body),
     })[this.tab]();
+  }
+
+  _designAssets() {
+    return (this.p.images || []).filter((a) => a.kind === "design");
+  }
+  _designCount() {
+    return this._designAssets().length + (this.p.design_doc ? 1 : 0);
   }
 
   _replLabel() {
@@ -309,7 +326,7 @@ export class PartDetail {
   _imagesSection() {
     const wrap = el("div");
     const grid = el("div", { class: "img-grid" });
-    (this.p.images || []).forEach((im, i) => {
+    (this.p.images || []).filter((im) => im.kind !== "design").forEach((im, i) => {
       const cell = el("div", { class: "cell" + (i === 0 && im.kind === "image" ? " primary" : "") });
       const mat = el("div", { class: "img-mat" });
       if (im.thumb_url || im.kind === "image") mat.append(el("img", { src: im.thumb_url || im.url, title: im.filename }));
@@ -337,6 +354,60 @@ export class PartDetail {
   }
   async _delImage(aid) {
     await api(`/api/parts/${this.id}/images/${aid}`, { method: "DELETE" });
+    await this._reload();
+  }
+
+  // ---------- Design scratchpad ----------
+  _design(body) {
+    const p = this.p;
+    body.append(el("div", { class: "section-title" }, "Notes"));
+    const ta = el("textarea", { class: "design-doc",
+      placeholder: "Paste datasheet snippets, pin-outs, app-circuit values, reminders…",
+      onchange: (e) => this._saveDesignDoc(e.target.value) });
+    ta.value = p.design_doc || "";
+    body.append(ta);
+
+    body.append(el("div", { class: "section-title" }, "Images"));
+    const zone = el("div", { class: "dropzone", tabindex: "0" },
+      "Paste an image (Ctrl+V here) or drop image files");
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("drag"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault(); zone.classList.remove("drag");
+      const imgs = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+      if (imgs.length) this._uploadDesign(imgs);
+    });
+    // paste is handled at the document level (_onPaste) while this tab is open
+    body.append(zone);
+
+    const grid = el("div", { class: "img-grid", style: "margin-top:10px" });
+    for (const im of this._designAssets()) {
+      const cell = el("div", { class: "cell" });
+      const mat = el("div", { class: "img-mat" });
+      if (im.thumb_url || im.kind === "design")
+        mat.append(el("a", { href: im.url, target: "_blank" }, el("img", { src: im.thumb_url || im.url, title: im.filename })));
+      else mat.append(el("a", { href: im.url, target: "_blank" }, im.filename));
+      cell.append(mat, el("button", { class: "x", title: "delete", onclick: () => this._delImage(im.id) }, "✕"));
+      grid.append(cell);
+    }
+    body.append(grid);
+    const file = el("input", { type: "file", accept: "image/*", multiple: "multiple",
+      onchange: (e) => this._uploadDesign([...e.target.files]) });
+    body.append(el("div", { style: "margin-top:8px" }, file));
+  }
+
+  async _saveDesignDoc(v) {
+    await api(`/api/parts/${this.id}`, { method: "PATCH", body: { design_doc: v.trim() || null } });
+    this.p.design_doc = v.trim() || null;
+    toast("Saved");
+  }
+  async _uploadDesign(files) {
+    if (!files || !files.length) return;
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    const res = await fetch(`/api/parts/${this.id}/design/images`, { method: "POST", body: fd });
+    if (!res.ok) return toast("Upload failed");
+    toast(`Added ${files.length} image(s)`);
     await this._reload();
   }
   async _primaryImage(aid) {
