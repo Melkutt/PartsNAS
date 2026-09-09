@@ -22,7 +22,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
-from ..models import Part, StockEntry, Tag
+from ..models import Category, Part, StockEntry, Tag
 from ..partschema import fields_for, part_class_schema
 from ..services import (
     category_class_map,
@@ -94,6 +94,7 @@ class PartFilter:
     in_stock: str | None = None  # "yes" | "no"
     attrs: list[str] = field(default_factory=list)  # "key:value"
     low_stock: bool = False
+    no_category: bool = False
 
     def attr_groups(self) -> dict[str, list[str]]:
         groups: dict[str, list[str]] = {}
@@ -118,6 +119,9 @@ def _query(db: Session, f: PartFilter, *, exclude: str | None = None):
     if f.category_id is not None:
         ids = descendant_category_ids(db, f.category_id) if f.with_subcats else {f.category_id}
         stmt = stmt.where(Part.category_id.in_(ids))
+    if f.no_category:
+        unsorted = db.scalar(select(Category.id).where(Category.is_unsorted.is_(True)))
+        stmt = stmt.where(or_(Part.category_id.is_(None), Part.category_id == unsorted))
     if f.mounts and exclude != "mount":
         stmt = stmt.where(Part.mount.in_(f.mounts))
     if f.footprints and exclude != "footprint":
@@ -171,12 +175,13 @@ def _filter_params(
     in_stock: str | None = None,
     attr: list[str] = Query(default=[]),
     low_stock: bool = False,
+    no_category: bool = False,
 ) -> PartFilter:
     return PartFilter(
         q=q, category_id=category_id, with_subcats=with_subcats,
         location_ids=location_id, mounts=mount, footprints=footprint,
         manufacturers=manufacturer, tags=tag, in_stock=in_stock, attrs=attr,
-        low_stock=low_stock,
+        low_stock=low_stock, no_category=no_category,
     )
 
 

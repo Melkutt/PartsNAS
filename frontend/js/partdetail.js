@@ -2,7 +2,7 @@
 import { api } from "./api.js";
 import { el, modal, toast, treeOptions, partSearch } from "./ui.js";
 import { openLookup } from "./lookup.js";
-import { formatValue, valueKind, parseNum } from "./units.js";
+import { formatValue, valueKind, parseNum, awgToMm2, isAwg } from "./units.js";
 
 let CLASSES = null; // cached /api/meta/part-classes
 async function partClasses() {
@@ -206,7 +206,18 @@ export class PartDetail {
               }
               draft.attributes[f.key] = e.target.value;
             } });
-          node = el("span", { style: "display:flex;gap:0" }, box, dl);
+          if (f.key === "cross_section") this._xsecBox = box;
+          const awgBtn = el("button", { class: "ghost", title: "AWG → mm² into Cross section",
+            style: isAwg(val) ? "" : "display:none",
+            onclick: () => {
+              const mm2 = awgToMm2(box.value);
+              if (!mm2) return toast("not an AWG value");
+              draft.attributes.cross_section = mm2;
+              if (this._xsecBox) this._xsecBox.value = mm2;
+              toast(`${box.value.trim()} → ${mm2} mm²`);
+            } }, "→mm²");
+          box.addEventListener("input", () => (awgBtn.style.display = isAwg(box.value) ? "" : "none"));
+          node = el("span", { style: "display:flex;gap:4px" }, box, awgBtn, dl);
         }
         pg.append(el("label", { title: f.comment || "" }, f.label + (f.unit ? ` (${f.unit})` : "")), node);
       }
@@ -223,11 +234,20 @@ export class PartDetail {
       const extras = Object.keys(draft.attributes).filter((k) => !schemaKeys.has(k)).sort();
       for (const k of extras) {
         const inp = el("input", { type: "text", value: draft.attributes[k] ?? "", style: "flex:1",
-          oninput: (e) => (draft.attributes[k] = e.target.value),
+          oninput: (e) => { draft.attributes[k] = e.target.value; awgB.style.display = isAwg(e.target.value) ? "" : "none"; },
           onchange: (e) => { e.target.value = commaFix(e.target.value); draft.attributes[k] = e.target.value; } });
+        const awgB = el("button", { class: "ghost", title: "AWG → mm² into Cross section",
+          style: isAwg(draft.attributes[k]) ? "" : "display:none",
+          onclick: () => {
+            const mm2 = awgToMm2(inp.value);
+            if (!mm2) return toast("not an AWG value");
+            draft.attributes.cross_section = mm2;
+            if (this._xsecBox) this._xsecBox.value = mm2;
+            toast(`${inp.value.trim()} → ${mm2} mm²`);
+          } }, "→mm²");
         og.append(
           el("label", { title: k }, k),
-          el("span", { style: "display:flex;gap:4px" }, inp,
+          el("span", { style: "display:flex;gap:4px" }, inp, awgB,
             el("button", { class: "ghost", title: "remove", onclick: () => { delete draft.attributes[k]; renderExtra(); } }, "✕")),
         );
       }

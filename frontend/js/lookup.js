@@ -1,7 +1,7 @@
 // "Look up" on a part: query a supplier API, then copy chosen fields onto the part.
 import { api } from "./api.js";
 import { el, modal, toast, spinner, withBusy, treeOptions } from "./ui.js";
-import { formatValue, valueKind } from "./units.js";
+import { formatValue, valueKind, awgToMm2, isAwg } from "./units.js";
 
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const slug = (s) => norm(s).slice(0, 40) || "attr";
@@ -88,9 +88,14 @@ export async function openLookup(part, classFields, onApplied) {
     treeOptions("/api/categories", { includeBlank: "— pick a category —" }),
   ]);
   const provs = provsAll.filter((p) => p.configured);
-  const provSel = el("select");
+  const provSel = el("select", {
+    onchange: () => localStorage.setItem("partsnas.lookupProvider", provSel.value),
+  });
   if (!provs.length) provSel.append(el("option", {}, "— no API keys set (Settings) —"));
   else provs.forEach((p) => provSel.append(el("option", { value: p.name }, p.label)));
+  const rememberedProv = localStorage.getItem("partsnas.lookupProvider");
+  if (rememberedProv && [...provSel.options].some((o) => o.value === rememberedProv))
+    provSel.value = rememberedProv;
 
   const mpnInput = el("input", { type: "text", value: part.mpn || part.name || "", style: "flex:1" });
   const searchBtn = el("button", { class: "primary", onclick: search }, "Search");
@@ -112,6 +117,7 @@ export async function openLookup(part, classFields, onApplied) {
     outHost.append(spinner(`Searching ${provSel.selectedOptions[0].text}…`));
     try {
       await withBusy(searchBtn, async () => {
+        localStorage.setItem("partsnas.lookupProvider", provSel.value);
         const res = await api("/api/lookup", { method: "POST", body: { provider: provSel.value, mpn: mpnInput.value.trim() } });
         render(res.results);
       });
@@ -144,6 +150,14 @@ export async function openLookup(part, classFields, onApplied) {
         rows.push(lo, hi, { ...mkRow(name, raw), include: false }); // keep the raw range, unchecked
       } else {
         rows.push(mkRow(name, raw));
+        if (isAwg(raw)) {
+          const mm2 = awgToMm2(raw);
+          if (mm2) {
+            const extra = mkRow(name + " (mm²)", mm2);
+            extra.field = classFields.some((f) => f.key === "cross_section") ? "cross_section" : "";
+            rows.push(extra);
+          }
+        }
       }
     }
   }

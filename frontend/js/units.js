@@ -74,3 +74,16 @@ export function parseNum(s) {
   const n = parseFloat(String(s).replace(",", ".").replace(/\s/g, ""));
   return isNaN(n) ? null : n;
 }
+
+// "24 AWG" / "AWG 24" / "24AWG" -> conductor cross-section in mm² (3 sig figs).
+// d(mm) = 0.127 · 92^((36−AWG)/39) ; area = π/4 · d²
+export function awgToMm2(v) {
+  const m = String(v).match(/awg\s*(\d{1,2})|(\d{1,2})\s*awg/i);
+  if (!m) return null;
+  const awg = parseInt(m[1] || m[2], 10);
+  if (isNaN(awg) || awg < 0 || awg > 50) return null;
+  const d = 0.127 * Math.pow(92, (36 - awg) / 39);
+  const area = (Math.PI / 4) * d * d;
+  return Number(area.toPrecision(3)).toString();
+}
+export const isAwg = (v) => /\bawg\s*\d{1,2}\b|\b\d{1,2}\s*awg\b/i.test(String(v || ""));

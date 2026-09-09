@@ -19,6 +19,7 @@ export class PartsView {
     this.selected = new Set(); // bulk selection
     this.q = "";
     this.low = false;
+    this.noCat = false;
     this.scanSelect = false;
     this.rail = { mode: "categories", id: null };
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
@@ -80,12 +81,15 @@ export class PartsView {
       oninput: () => { this.q = this.qInput.value.trim(); this._debounced(); } });
     const lowL = el("label", {}, (this.lowChk = el("input", { type: "checkbox",
       onchange: (e) => { this.low = e.target.checked; this.reload(); } })), " Low stock");
+    const noCatL = el("label", { title: "parts with no category / in Unsorted — for triage" },
+      (this.noCatChk = el("input", { type: "checkbox",
+        onchange: (e) => { this.noCat = e.target.checked; this.reload(); } })), " Uncategorized");
     const scanL = el("label", { title: "Scanned codes tick the row instead of opening it" },
       el("input", { type: "checkbox", onchange: (e) => (this.scanSelect = e.target.checked) }), " Scan→select");
     this.orderSel = el("select", { onchange: () => this._renderTable() },
       el("option", { value: "name" }, "Sort: name"), el("option", { value: "stock" }, "Sort: stock"));
     this.countTag = el("span", { class: "count-tag" });
-    bar.append(this.qInput, lowL, scanL, this.orderSel, el("span", { class: "grow" }), this.countTag);
+    bar.append(this.qInput, lowL, noCatL, scanL, this.orderSel, el("span", { class: "grow" }), this.countTag);
     return bar;
   }
 
@@ -98,6 +102,7 @@ export class PartsView {
     const p = new URLSearchParams();
     if (this.q) p.set("q", this.q);
     if (this.low) p.set("low_stock", "true");
+    if (this.noCat) p.set("no_category", "true");
     if (this.rail.mode === "categories" && this.rail.id) p.set("category_id", this.rail.id);
     if (this.rail.mode === "locations" && this.rail.id) p.append("location_id", this.rail.id);
     for (const v of this.facetSel.mount) p.append("mount", v);

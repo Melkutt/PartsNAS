@@ -56,6 +56,7 @@ def _target_ids(db: Session, body: BulkBody) -> list[str]:
             tags=_aslist(d.get("tag")),
             in_stock=d.get("in_stock"),
             attrs=_aslist(d.get("attr")),
+            no_category=bool(d.get("no_category")),
         )
         return list(db.scalars(_query(db, f)).all())
     raise HTTPException(400, "provide ids or filter")
