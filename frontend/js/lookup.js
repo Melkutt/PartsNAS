@@ -6,25 +6,43 @@ import { formatValue, valueKind } from "./units.js";
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const slug = (s) => norm(s).slice(0, 40) || "attr";
 const ALIAS = {
-  value: ["resistance", "capacitance", "inductance", "value", "frequency"],
-  voltage: ["voltagerating", "voltage", "voltagedc", "ratedvoltage", "dcvoltagerating"],
+  value: ["resistance", "capacitance", "inductance", "value", "frequency", "currentrating"],
+  voltage: ["voltagerating", "voltage", "voltagedc", "ratedvoltage", "dcvoltagerating", "workingvoltage"],
   tolerance: ["tolerance"],
   power: ["powerrating", "power", "powerw"],
-  tempchar: ["temperaturecoefficient", "tempchar"],
+  tempchar: ["temperaturecoefficient", "tempchar", "dielectric"],
   dielectric: ["dielectric", "dielectricmaterial", "dielectriccharacteristic"],
-  mounting: ["mountingstyle", "mounting", "packagingtype", "termination", "mountingtype"],
+  mounting: ["mountingstyle", "mounting", "packagingtype", "terminationstyle", "mountingtype"],
   pitch: ["pitch", "leadpitch", "leadspacing"],
   pincount: ["numberofpins", "pincount", "pins", "numberofcontacts", "numberofpositions"],
-  current_rating: ["currentrating", "currentcontinuous", "ratedcurrent"],
+  current_rating: ["currentrating", "currentcontinuous", "ratedcurrent", "current"],
+  esr: ["esr", "equivalentseriesresistance", "dcr", "dcresistance"],
+  ripple_current: ["ripplecurrent", "ripple"],
+  series: ["series", "productseries", "family"],
+  lifetime_hours: ["lifetime", "loadlife", "usefullife"],
+  breaking_capacity: ["breakingcapacity", "interruptingrating"],
+  fuse_type: ["fusetype", "response", "blowcharacteristic", "speed"],
+  operating_temp_min: ["operatingtemperaturemin", "mintemp", "minimumoperatingtemperature", "tmin"],
+  operating_temp_max: ["operatingtemperaturemax", "maxtemp", "maximumoperatingtemperature", "tmax"],
+  maxtemp: ["maxtemp", "maximumoperatingtemperature", "tmax"],
+  body_diameter: ["diameter", "bodydiameter"],
+  body_length: ["length", "bodylength", "height"],
 };
 
 function guessField(attrName, fields) {
   const a = norm(attrName);
   for (const f of fields) if (norm(f.label) === a || norm(f.key) === a) return f.key;
+  for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a === al)) return f.key;
   for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a.includes(al) || al.includes(a))) return f.key;
   for (const f of fields) if (norm(f.label) && (a.includes(norm(f.label)) || norm(f.label).includes(a))) return f.key;
   return "";
 }
+
+function splitRange(v) {
+  const m = String(v).match(/(-?\d+(?:\.\d+)?)\s*°?\s*C?\s*(?:~|to|\.\.\.?|–|—|-)\s*(\+?-?\d+(?:\.\d+)?)/i);
+  return m ? [m[1].replace("+", ""), m[2].replace("+", "")] : null;
+}
+const TEMP_RANGE_ATTR = /operating temp|temperature range|temp\.? range|working temp/i;
 
 export async function openLookup(part, classFields, onApplied) {
   const cls = part.part_class;
@@ -44,7 +62,7 @@ export async function openLookup(part, classFields, onApplied) {
 
   const m = modal({ title: `Look up “${part.name}”`, wide: true, body, confirmText: "Close", onConfirm: () => {} });
   let chosen = null;
-  const flags = { manufacturer: true, description: true, datasheet: true, image: true, supplier: true, lifecycle: true, category: false, category_id: null };
+  const flags = { manufacturer: true, description: true, datasheet: true, image: true, supplier: true, lifecycle: true, category: false, category_id: null, mount: false, mount_value: null };
   let rows = []; // [{name, raw, field, converted, include}]
 
   async function search() {
@@ -62,12 +80,31 @@ export async function openLookup(part, classFields, onApplied) {
     }
   }
 
+  function mkRow(name, raw) {
+    const field = guessField(name, classFields);
+    const kind = field ? valueKind(cls, field) : "num";
+    let converted = field ? formatValue(raw, kind) : String(raw);
+    if (field === "tempchar" && /np0|c0g|npo/i.test(String(raw))) converted = "C0G (NP0)";
+    return { name, raw, field, kind, converted, include: true };
+  }
+
   function buildRows(r) {
-    rows = Object.entries(r.attributes || {}).map(([name, raw]) => {
-      const field = guessField(name, classFields);
-      const kind = field ? valueKind(cls, field) : "num";
-      return { name, raw, field, kind, converted: field ? formatValue(raw, kind) : String(raw), include: true };
-    });
+    rows = [];
+    for (const [name, raw] of Object.entries(r.attributes || {})) {
+      const rng = TEMP_RANGE_ATTR.test(name) && splitRange(raw);
+      if (rng) {
+        rows.push(mkRow(name + " (min)", rng[0]));
+        rows.push(mkRow(name + " (max)", rng[1]));
+        rows[rows.length - 2].field = pickKey("operating_temp_min", classFields);
+        rows[rows.length - 1].field = pickKey("operating_temp_max", classFields);
+        rows.push({ ...mkRow(name, raw), include: false }); // keep the raw range too, unchecked
+      } else {
+        rows.push(mkRow(name, raw));
+      }
+    }
+  }
+  function pickKey(key, fields) {
+    return fields.some((f) => f.key === key) ? key : "";
   }
 
   function render(results) {
@@ -76,8 +113,8 @@ export async function openLookup(part, classFields, onApplied) {
     chosen = results[0];
     if (results.length > 1) {
       const pick = el("select", { onchange: (e) => { chosen = results[+e.target.value]; buildRows(chosen); paint(results); } });
-      results.forEach((x, i) => pick.append(el("option", { value: i }, `${x.mpn} — ${x.manufacturer || ""}`)));
-      outHost.append(el("div", { class: "row" }, el("label", {}, "Match"), pick));
+      results.forEach((x, i) => pick.append(el("option", { value: i }, `${x.mpn} — ${x.manufacturer || ""}  (${x.attr_count} params)`)));
+      outHost.append(el("div", { class: "row" }, el("label", {}, `Match (${results.length})`), pick));
     }
     buildRows(chosen);
     paint(results);
@@ -120,6 +157,15 @@ export async function openLookup(part, classFields, onApplied) {
         ` Category → ${r.category_match.path}`));
     } else {
       flags.category = false;
+    }
+    if (r.mount_guess) {
+      flags.mount = true;
+      flags.mount_value = r.mount_guess;
+      fchecks.append(el("label", { class: "facet-opt" },
+        el("input", { type: "checkbox", checked: "checked", onchange: (e) => (flags.mount = e.target.checked) }),
+        ` Mount → ${r.mount_guess.toUpperCase()}`));
+    } else {
+      flags.mount = false;
     }
     for (const [k, lbl, avail] of items) {
       if (!avail) { flags[k] = false; continue; }

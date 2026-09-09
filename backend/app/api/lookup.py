@@ -40,7 +40,26 @@ class ApplyBlock(BaseModel):
     lifecycle: bool = False  # copy discontinued flag from the provider lifecycle
     category: bool = False
     category_id: int | None = None
+    mount: bool = False
+    mount_value: str | None = None  # smd | tht | other
     attributes: dict[str, str] = Field(default_factory=dict)  # our_field_key -> value
+
+
+_SMD_CASES = {"0201", "0402", "0603", "0805", "1206", "1210", "1812", "2010", "2220", "2512"}
+
+
+def mount_guess(attrs: dict) -> str | None:
+    for k in ("Mounting Style", "Termination Style", "Mounting Type", "Mounting", "Package Type"):
+        v = (attrs.get(k) or "").lower()
+        if "surface" in v or "smd" in v or "smt" in v:
+            return "smd"
+        if "through" in v or "tht" in v or "radial" in v or "axial" in v:
+            return "tht"
+    for k in ("Package / Case", "Case Code - in", "Case/Package", "Case Code"):
+        v = (attrs.get(k) or "").strip()
+        if any(c in v for c in _SMD_CASES):
+            return "smd"
+    return None
 
 
 class ApplyBody(BaseModel):
@@ -69,11 +88,16 @@ def do_lookup(body: LookupBody, db: Session = Depends(get_db)):
         raise HTTPException(429, str(e))
     except ProviderError as e:
         raise HTTPException(400, str(e))
+    want = body.mpn.strip().lower()
     out = []
     for r in results:
         d = r.to_dict()
         d["category_match"] = match_category(db, r.category_hint)
+        d["mount_guess"] = mount_guess(r.attributes)
+        d["attr_count"] = len(r.attributes)
         out.append(d)
+    # exact MPN first, then richest (most attributes) first
+    out.sort(key=lambda x: (0 if (x["mpn"] or "").lower() == want else 1, -x["attr_count"]))
     return {"results": out}
 
 
@@ -139,6 +163,9 @@ def apply_lookup(pid: str, body: ApplyBody, db: Session = Depends(get_db)):
         if db.get(Category, ap.category_id):
             part.category_id = ap.category_id
             changed.append("category")
+    if ap.mount and ap.mount_value in ("smd", "tht", "other"):
+        part.mount = ap.mount_value
+        changed.append(f"mount → {ap.mount_value.upper()}")
     if ap.manufacturer and r.get("manufacturer"):
         part.manufacturer = r["manufacturer"]
         changed.append("manufacturer")

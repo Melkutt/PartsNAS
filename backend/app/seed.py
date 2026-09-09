@@ -58,6 +58,7 @@ CATEGORY_CLASS = {
     "D-Sub": "connector",
     "USB": "connector",
     "Mechanical": "mechanical",
+    "Fuse": "fuse",
 }
 
 

@@ -16,6 +16,7 @@ import re
 from sqlalchemy.orm import Session
 
 from ..core.kv import get_kv
+from ..textparse import canon_tempchar
 from .base import PriceBreak, Provider, ProviderError, ProviderResult
 from .safety import cache_get, cache_put, guarded_request
 
@@ -90,15 +91,22 @@ _DESC_RULES = [
     ("Voltage Rating", re.compile(r"\b(\d+(?:\.\d+)?\s?V(?:DC|AC)?)\b", re.I)),
     ("Tolerance", re.compile(r"(±?\s?\d+(?:\.\d+)?\s?%)")),
     ("Power Rating", re.compile(r"\b(\d+/\d+\s?W|\d+(?:\.\d+)?\s?W)\b", re.I)),
-    ("Dielectric", re.compile(r"\b(X7R|X5R|X6S|X8R|C0G|NP0|Y5V|Z5U)\b", re.I)),
+    ("Dielectric", re.compile(r"\b(X7R|X5R|X6S|X8R|C0G|NP0|NPO|Y5V|Z5U|Z7T)\b", re.I)),
+    ("ESR", re.compile(r"\b(\d+(?:\.\d+)?\s?m?(?:OHM|OHMS|Ω))\s*ESR\b", re.I)),
+    ("Ripple Current", re.compile(r"\b(\d+(?:\.\d+)?\s?m?A)\s*(?:RMS|RIPPLE)\b", re.I)),
     ("Current Rating", re.compile(r"\b(\d+(?:\.\d+)?\s?m?A)\b", re.I)),
+    ("Operating Temperature", re.compile(
+        r"(-?\d+\s?°?C?\s*(?:~|to)\s*\+?\d+\s?°?C)", re.I)),
+    ("Lead Spacing", re.compile(r"\b(\d+(?:\.\d+)?\s?mm)\s*(?:pitch|lead spacing|LS)\b", re.I)),
+    ("Size / Dimension", re.compile(r"(\d+(?:\.\d+)?\s?[xX×]\s?\d+(?:\.\d+)?\s?mm)", re.I)),
     ("Package / Case", re.compile(r"\b(0201|0402|0603|0805|1206|1210|1812|2010|2220|2512)\b")),
+    ("Series", re.compile(r"\bSeries\s*[:=]?\s*([A-Za-z0-9\-]+)\b")),
 ]
 
 
 def _augment_from_description(attrs: dict, desc: str) -> None:
-    """Mouser's ProductAttributes is often a short subset — pull the obvious
-    passives parameters out of the description string to fill the gaps."""
+    """Mouser's ProductAttributes is often a short subset — pull whatever we can
+    out of the description string to fill the gaps. Better too much than too little."""
     if not desc:
         return
     for name, rx in _DESC_RULES:
@@ -122,6 +130,9 @@ def _parse_part(p: dict) -> ProviderResult:
         if n and v:
             attrs[n] = v
     _augment_from_description(attrs, p.get("Description") or "")
+    for k in ("Dielectric", "Temperature Coefficient", "Temperature Characteristics"):
+        if k in attrs:
+            attrs[k] = canon_tempchar(attrs[k]) or attrs[k]
     stock = p.get("AvailabilityInStock")
     return ProviderResult(
         provider="mouser",

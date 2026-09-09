@@ -1,7 +1,17 @@
 {
+  "_shared": [
+    { "key": "series", "label": "Series", "type": "text" },
+    { "key": "operating_temp_min", "label": "Operating temp min", "unit": "°C", "type": "number" },
+    { "key": "operating_temp_max", "label": "Operating temp max", "unit": "°C", "type": "number" }
+  ],
   "capacitor": [
     { "key": "mounting", "label": "Mounting", "type": "enum",
       "options": ["SMD", "Radial", "Axial", "Snap-in", "Screw terminal", "Chassis"] },
+    { "key": "tempchar", "label": "Temperature characteristic", "type": "enum",
+      "options": ["C0G (NP0)", "C0G", "NP0", "X5R", "X6S", "X7R", "X8R", "Y5V", "Z5U", "Z7T"] },
+    { "key": "esr", "label": "ESR", "unit": "Ω", "type": "number" },
+    { "key": "ripple_current", "label": "Ripple current", "unit": "A", "type": "number" },
+    { "key": "lifetime_hours", "label": "Lifetime @ temp", "unit": "h", "type": "number" },
     { "key": "pitch", "label": "Lead pitch", "unit": "mm", "type": "number" },
     { "key": "body_diameter", "label": "Body diameter", "unit": "mm", "type": "number" },
     { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
@@ -20,6 +30,7 @@
   "inductor": [
     { "key": "mounting", "label": "Mounting", "type": "enum",
       "options": ["SMD", "Radial", "Axial", "Toroid", "Chassis"] },
+    { "key": "esr", "label": "DCR / ESR", "unit": "Ω", "type": "number" },
     { "key": "pitch", "label": "Lead pitch", "unit": "mm", "type": "number" },
     { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
     { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
@@ -42,6 +53,7 @@
   ],
   "crystal": [
     { "key": "mounting", "label": "Mounting", "type": "enum", "options": ["SMD", "THT"] },
+    { "key": "esr", "label": "ESR", "unit": "Ω", "type": "number" },
     { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
     { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
     { "key": "body_height", "label": "Body height", "unit": "mm", "type": "number" }
@@ -56,5 +68,16 @@
     { "key": "length", "label": "Length", "unit": "mm", "type": "number" },
     { "key": "width", "label": "Width", "unit": "mm", "type": "number" },
     { "key": "height", "label": "Height", "unit": "mm", "type": "number" }
+  ],
+  "fuse": [
+    { "key": "value", "label": "Current rating", "unit": "A", "type": "number" },
+    { "key": "voltage", "label": "Voltage rating", "unit": "V", "type": "number" },
+    { "key": "breaking_capacity", "label": "Breaking capacity", "unit": "A", "type": "number" },
+    { "key": "fuse_type", "label": "Response", "type": "enum",
+      "options": ["Fast-acting", "Time-lag / Slow", "Medium", "Very fast", "PPTC / Resettable"] },
+    { "key": "mounting", "label": "Mounting", "type": "enum",
+      "options": ["SMD", "THT", "Holder / Cartridge", "Blade", "Chassis"] },
+    { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
+    { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" }
   ]
 }

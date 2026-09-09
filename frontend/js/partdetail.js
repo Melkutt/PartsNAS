@@ -209,6 +209,37 @@ export class PartDetail {
       body.append(pg);
     }
 
+    // Anything stored in attributes that the class schema doesn't cover
+    // (e.g. copied from a supplier lookup) — always visible, always editable.
+    const schemaKeys = new Set((cls?.fields || []).map((f) => f.key));
+    body.append(el("div", { class: "section-title" }, "Additional parameters"));
+    const og = el("div", { class: "form-grid" });
+    const renderExtra = () => {
+      og.innerHTML = "";
+      const extras = Object.keys(draft.attributes).filter((k) => !schemaKeys.has(k)).sort();
+      for (const k of extras) {
+        const inp = el("input", { type: "text", value: draft.attributes[k] ?? "", style: "flex:1",
+          oninput: (e) => (draft.attributes[k] = e.target.value) });
+        og.append(
+          el("label", { title: k }, k),
+          el("span", { style: "display:flex;gap:4px" }, inp,
+            el("button", { class: "ghost", title: "remove", onclick: () => { delete draft.attributes[k]; renderExtra(); } }, "✕")),
+        );
+      }
+      const nk = el("input", { type: "text", placeholder: "name", style: "width:100%" });
+      const nv = el("input", { type: "text", placeholder: "value", style: "flex:1" });
+      og.append(
+        el("label", {}, nk),
+        el("span", { style: "display:flex;gap:4px" }, nv,
+          el("button", { onclick: () => {
+            const key = nk.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+            if (key) { draft.attributes[key] = nv.value.trim(); renderExtra(); }
+          } }, "add")),
+      );
+    };
+    renderExtra();
+    body.append(og);
+
     body.append(el("div", { class: "section-title" }, "Replacement / lifecycle"));
     body.append(this._replacementSection(draft));
 

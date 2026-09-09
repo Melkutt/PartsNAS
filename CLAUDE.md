@@ -152,8 +152,13 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - `/api/parts/{id}/images` upload (Pillow thumbs) / delete / `…/primary`.
 - `/api/design-notes` searchable list + CRUD; `/api/parts/{id}/design-notes`.
 - `/api/meta/part-classes` — field schemas: `seed/part_classes.json` (from the
-  workbook) + `seed/part_classes_extra.json` overlay (hand-kept extra dims —
-  lead pitch, body W/H, radial/axial mounting), merged in `app/partschema.py`.
+  workbook) + `seed/part_classes_extra.json` overlay (extra dims, `series`,
+  `operating_temp_min/max`, ESR, ripple, a `fuse` class, wider `tempchar` enum
+  incl. `C0G (NP0)`). `app/partschema.py` merges — **extra overrides base** on a
+  key collision, and a `_shared` block is appended to every class. The part
+  detail form also shows an **"Additional parameters"** section with every
+  `attributes` key the class schema doesn't cover, so nothing copied from a
+  lookup is ever hidden.
 - `/api/meta/attr-values` — distinct values already used per attribute key, so
   the edit form offers them as a `<datalist>` (recurring params → dropdown).
 - `/api/settings/providers` (GET list + status, PUT `{api_key}`), `/api/lookup/providers`,
