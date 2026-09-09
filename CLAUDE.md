@@ -127,7 +127,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - Timestamps are timezone-aware UTC (`datetime.now(timezone.utc)`).
 - SQLite via `Base.metadata.create_all` — no Alembic yet; additive changes only,
   or delete `data/partsnas.db` in dev.
-- New frontend file → add `<script>/<link>` to `index.html` with `?v=N`, bump on change.
+- New frontend file → it's imported by `app.js` (ES modules). Assets are served
+  `Cache-Control: no-store`, so no `?v=` juggling is needed for sub-imports; the
+  `?v=N` on the top-level `app.js`/css in `index.html` is belt-and-braces.
+- Responsive: `app.css` `@media (max-width: 900px)` (tablet) + `600px` (phone) —
+  wrapping topbar, scrolling tabs, stacked rail, full-screen overlays, single-col
+  forms. Test at ~390px.
 
 ## API surface so far
 
@@ -152,7 +157,10 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - `/api/meta/attr-values` — distinct values already used per attribute key, so
   the edit form offers them as a `<datalist>` (recurring params → dropdown).
 - `/api/settings/providers` (GET list + status, PUT `{api_key}`), `/api/lookup/providers`,
-  `POST /api/lookup` `{mpn, provider}`, `POST /api/parts/{id}/apply-lookup`.
+  `POST /api/lookup` `{mpn, provider}` (each result carries `category_match` from
+  `app/catmatch.py` — keyword rules + token overlap mapping the supplier category
+  string onto our tree), `POST /api/parts/{id}/apply-lookup` (`apply.category` +
+  `category_id`, plus manufacturer/description/datasheet/image/lifecycle/attributes).
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
 
 ### Supplier providers (`app/providers/`)

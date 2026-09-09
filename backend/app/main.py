@@ -37,7 +37,9 @@ async def _no_cache_assets(request, call_next):
     resp = await call_next(request)
     path = request.url.path
     if path == "/" or path.endswith((".html", ".js", ".css")):
-        resp.headers["Cache-Control"] = "no-cache"
+        # no-store: the frontend is unbundled ES modules and iterates fast;
+        # a stale sub-import is worse than re-fetching a few KB on a LAN.
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
 
 

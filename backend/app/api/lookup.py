@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..catmatch import match_category
 from ..core.db import get_db
 from ..models import Part, PartSupplier, Supplier
 from ..providers import all_providers, get_provider
@@ -37,6 +38,8 @@ class ApplyBlock(BaseModel):
     image: bool = False
     supplier: bool = False
     lifecycle: bool = False  # copy discontinued flag from the provider lifecycle
+    category: bool = False
+    category_id: int | None = None
     attributes: dict[str, str] = Field(default_factory=dict)  # our_field_key -> value
 
 
@@ -66,7 +69,12 @@ def do_lookup(body: LookupBody, db: Session = Depends(get_db)):
         raise HTTPException(429, str(e))
     except ProviderError as e:
         raise HTTPException(400, str(e))
-    return {"results": [r.to_dict() for r in results]}
+    out = []
+    for r in results:
+        d = r.to_dict()
+        d["category_match"] = match_category(db, r.category_hint)
+        out.append(d)
+    return {"results": out}
 
 
 _BROWSER_UA = (
@@ -125,6 +133,12 @@ def apply_lookup(pid: str, body: ApplyBody, db: Session = Depends(get_db)):
     r, ap = body.result, body.apply
     changed = []
 
+    if ap.category and ap.category_id and db.get(Part, pid):
+        from ..models import Category
+
+        if db.get(Category, ap.category_id):
+            part.category_id = ap.category_id
+            changed.append("category")
     if ap.manufacturer and r.get("manufacturer"):
         part.manufacturer = r["manufacturer"]
         changed.append("manufacturer")

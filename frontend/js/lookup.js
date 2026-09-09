@@ -44,7 +44,7 @@ export async function openLookup(part, classFields, onApplied) {
 
   const m = modal({ title: `Look up “${part.name}”`, wide: true, body, confirmText: "Close", onConfirm: () => {} });
   let chosen = null;
-  const flags = { manufacturer: true, description: true, datasheet: true, image: true, supplier: true, lifecycle: true };
+  const flags = { manufacturer: true, description: true, datasheet: true, image: true, supplier: true, lifecycle: true, category: false, category_id: null };
   let rows = []; // [{name, raw, field, converted, include}]
 
   async function search() {
@@ -98,18 +98,30 @@ export async function openLookup(part, classFields, onApplied) {
            r.unit_price ? `${r.unit_price.ex_vat} ${r.unit_price.currency} ex VAT · ${r.unit_price.inc_vat_ceil} inc` : null].filter(Boolean).join("  ·  ")),
         el("div", {}, r.datasheet_url ? el("a", { href: r.datasheet_url, target: "_blank" }, "datasheet") : "",
           r.product_url ? el("a", { href: r.product_url, target: "_blank", style: "margin-left:10px" }, "product page") : ""),
+        r.category_hint ? el("div", { style: "color:var(--text-faint);font-size:12px" },
+          `category: ${r.category_hint}` + (r.category_match ? `  →  ${r.category_match.path}` : "  (no tree match)")) : null,
       ),
     ));
 
     const fchecks = el("div", { style: "display:flex;flex-wrap:wrap;gap:14px;margin:6px 0" });
-    for (const [k, lbl, avail] of [
+    const items = [
       ["manufacturer", "Manufacturer", r.manufacturer],
       ["description", "Description", r.description],
       ["datasheet", "Datasheet URL", r.datasheet_url],
       ["image", "Image", r.image_url],
       ["supplier", `Add ${r.provider} as supplier`, r.sku || r.unit_price],
       ["lifecycle", "Mark discontinued if EOL", r.lifecycle],
-    ]) {
+    ];
+    if (r.category_match) {
+      flags.category = true;
+      flags.category_id = r.category_match.id;
+      fchecks.append(el("label", { class: "facet-opt" },
+        el("input", { type: "checkbox", checked: "checked", onchange: (e) => (flags.category = e.target.checked) }),
+        ` Category → ${r.category_match.path}`));
+    } else {
+      flags.category = false;
+    }
+    for (const [k, lbl, avail] of items) {
       if (!avail) { flags[k] = false; continue; }
       flags[k] = true;
       fchecks.append(el("label", { class: "facet-opt" },
@@ -119,6 +131,8 @@ export async function openLookup(part, classFields, onApplied) {
 
     if (rows.length) {
       outHost.append(el("div", { class: "section-title" }, `Parameters (${rows.length}) — all selected by default`));
+      if (rows.length < 4)
+        outHost.append(el("div", { class: "hint" }, "Mouser's API sometimes returns fewer parameters than the website; extra ones parsed from the description are included."));
       const t = el("table", { class: "mini-table" });
       t.append(el("tr", {}, el("th", {}, "✓"), el("th", {}, `${chosen.provider} attribute`), el("th", {}, "Value"),
         el("th", {}, "→ field"), el("th", {}, "Stored as")));

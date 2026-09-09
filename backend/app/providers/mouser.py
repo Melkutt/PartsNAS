@@ -83,6 +83,32 @@ def _num(s: str) -> float | None:
         return None
 
 
+_DESC_RULES = [
+    ("Capacitance", re.compile(r"\b(\d+(?:\.\d+)?\s?[pnuµ]?F)\b", re.I)),
+    ("Resistance", re.compile(r"\b(\d+(?:\.\d+)?\s?[kKMR]?\s?(?:OHM|OHMS|Ω))\b", re.I)),
+    ("Inductance", re.compile(r"\b(\d+(?:\.\d+)?\s?[pnuµm]?H)\b", re.I)),
+    ("Voltage Rating", re.compile(r"\b(\d+(?:\.\d+)?\s?V(?:DC|AC)?)\b", re.I)),
+    ("Tolerance", re.compile(r"(±?\s?\d+(?:\.\d+)?\s?%)")),
+    ("Power Rating", re.compile(r"\b(\d+/\d+\s?W|\d+(?:\.\d+)?\s?W)\b", re.I)),
+    ("Dielectric", re.compile(r"\b(X7R|X5R|X6S|X8R|C0G|NP0|Y5V|Z5U)\b", re.I)),
+    ("Current Rating", re.compile(r"\b(\d+(?:\.\d+)?\s?m?A)\b", re.I)),
+    ("Package / Case", re.compile(r"\b(0201|0402|0603|0805|1206|1210|1812|2010|2220|2512)\b")),
+]
+
+
+def _augment_from_description(attrs: dict, desc: str) -> None:
+    """Mouser's ProductAttributes is often a short subset — pull the obvious
+    passives parameters out of the description string to fill the gaps."""
+    if not desc:
+        return
+    for name, rx in _DESC_RULES:
+        if name in attrs:
+            continue
+        m = rx.search(desc)
+        if m:
+            attrs[name] = m.group(1).strip()
+
+
 def _parse_part(p: dict) -> ProviderResult:
     breaks = []
     for b in p.get("PriceBreaks") or []:
@@ -95,6 +121,7 @@ def _parse_part(p: dict) -> ProviderResult:
         n, v = a.get("AttributeName"), a.get("AttributeValue")
         if n and v:
             attrs[n] = v
+    _augment_from_description(attrs, p.get("Description") or "")
     stock = p.get("AvailabilityInStock")
     return ProviderResult(
         provider="mouser",
