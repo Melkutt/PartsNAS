@@ -102,8 +102,17 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   DATA_DIR, served at `/media/<stored>`. Part.image_path caches the primary thumb.
 - **DesignNote** + **DesignNoteLink** — a hint anchored to a part ("for Vout=5V
   use R1/R2…"); links point at companion parts (or an unresolved MPN).
-- Prices are stored **ex VAT** everywhere; `app/money.py` derives the inc-VAT
-  figure. Input forms take a "price includes VAT" toggle.
+- Prices are stored **ex VAT** everywhere; `app/money.py` derives `inc_vat`
+  (precise) and `inc_vat_ceil` (integer, rounded **up** — the figure shown in the
+  UI). Input forms take a "price includes VAT" toggle and accept `,` or `.`
+  (`units.js parseNum`).
+- `Part.discontinued` + `Part.replaced_by_id` (self-FK) / `replacement_mpn` /
+  `replacement_sku` / `replacement_source`. The detail panel shows a banner when
+  a discontinued / zero-stock part has a replacement; the list shows a `→ x` chip.
+- `frontend/js/units.js`: `formatValue(raw, kind)` — capacitor/inductor/crystal
+  `value` in engineering notation split on 1000 (0.1µF→100nF, 1000pF→1nF),
+  resistor `value` in RKM style (2200→2k2, 4.7→4R7, 1e6→1M). Applied when copying
+  from a provider and on blur of the `value` field.
 - **FootprintAlias** — `canonical`, `aliases` JSON, `group`, `kicad_footprint`.
 - **Project / BomLine / Build** — BOM lines may be unresolved (`unresolved_mpn`);
   a Build turns into negative `StockEntry` rows.
@@ -184,7 +193,10 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
    + backoff + circuit breaker), **Mouser** provider, Settings modal for keys,
    "Look up specs" button → apply attributes / price / datasheet / image /
    supplier link. TODO: TME (HMAC), Digi-Key (OAuth2), Farnell.
-8. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
+8. **Quotes / invoice basis** — pick parts + qty → a per-customer list of what
+   was pulled and what it cost, with a markup (default **50%**, editable) and
+   **static** price snapshots (only a new API search updates the source).
+9. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
    server-side offline) + printable label view.
 9. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
 10. Projects / builds / shortage report; min-stock warnings; theme sync.

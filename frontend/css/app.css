@@ -536,6 +536,31 @@ table.parts-table {
 }
 .img-grid .cell.primary .img-mat { outline: 2px solid var(--accent); }
 
+/* spinner */
+.spin {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+.spin.lg { width: 22px; height: 22px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.busy-row { display: flex; align-items: center; gap: 8px; color: var(--text-muted); padding: 10px 2px; }
+
+.repl-banner {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  margin: 0 16px 8px;
+}
+.repl-banner b { color: var(--warn); }
+
 /* toast */
 .toast {
   position: fixed;

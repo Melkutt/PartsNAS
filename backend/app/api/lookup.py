@@ -36,6 +36,7 @@ class ApplyBlock(BaseModel):
     datasheet: bool = False
     image: bool = False
     supplier: bool = False
+    lifecycle: bool = False  # copy discontinued flag from the provider lifecycle
     attributes: dict[str, str] = Field(default_factory=dict)  # our_field_key -> value
 
 
@@ -68,20 +69,52 @@ def do_lookup(body: LookupBody, db: Session = Depends(get_db)):
     return {"results": [r.to_dict() for r in results]}
 
 
-def _fetch_image(url: str) -> tuple[bytes, str, str] | None:
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+_MAGIC = {
+    b"\x89PNG": ("image/png", ".png"),
+    b"\xff\xd8\xff": ("image/jpeg", ".jpg"),
+    b"GIF8": ("image/gif", ".gif"),
+    b"RIFF": ("image/webp", ".webp"),  # RIFF....WEBP
+}
+
+
+def _sniff(data: bytes) -> tuple[str, str] | None:
+    for magic, ct_ext in _MAGIC.items():
+        if data.startswith(magic):
+            if magic == b"RIFF" and data[8:12] != b"WEBP":
+                continue
+            return ct_ext
+    return None
+
+
+def _fetch_image(url: str, referer: str | None) -> tuple:
+    """-> (bytes, filename, content_type, None) or (None, None, None, reason)."""
+    headers = {
+        "User-Agent": _BROWSER_UA,
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": referer or "https://www.mouser.com/",
+    }
     try:
-        with httpx.Client(timeout=10.0, follow_redirects=True) as c:
-            r = c.get(url, headers={"User-Agent": UA})
-        if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/"):
-            return None
-        if len(r.content) > 6_000_000:
-            return None
-        ct = r.headers["content-type"].split(";")[0]
+        with httpx.Client(timeout=12.0, follow_redirects=True) as c:
+            r = c.get(url if url.startswith("http") else "https:" + url, headers=headers)
+    except httpx.HTTPError as e:
+        return None, None, None, f"network error: {e}"
+    if r.status_code != 200:
+        return None, None, None, f"HTTP {r.status_code}"
+    if len(r.content) > 6_000_000:
+        return None, None, None, "image too large"
+    ct = r.headers.get("content-type", "").split(";")[0].strip()
+    sniff = _sniff(r.content[:16])
+    if ct.startswith("image/"):
         ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
-               "image/gif": ".gif"}.get(ct, ".img")
-        return r.content, f"mouser-image{ext}", ct
-    except httpx.HTTPError:
-        return None
+               "image/gif": ".gif"}.get(ct, sniff[1] if sniff else ".img")
+        return r.content, f"lookup-image{ext}", ct, None
+    if sniff:
+        return r.content, f"lookup-image{sniff[1]}", sniff[0], None
+    return None, None, None, f"not an image (content-type {ct or 'none'})"
 
 
 @router.post("/api/parts/{pid}/apply-lookup")
@@ -107,15 +140,21 @@ def apply_lookup(pid: str, body: ApplyBody, db: Session = Depends(get_db)):
         part.attributes = attrs
         changed.append(f"{len(ap.attributes)} attribute(s)")
 
+    if ap.lifecycle and r.get("lifecycle"):
+        lc = r["lifecycle"].lower()
+        if any(s in lc for s in ("obsolete", "discontinued", "eol", "not recommended", "last time buy")):
+            part.discontinued = True
+            changed.append("marked discontinued")
+
     if ap.image and r.get("image_url"):
-        got = _fetch_image(r["image_url"])
-        if got:
-            store_attachment(db, pid, got[1], got[0], got[2])
+        data, fname, ct, reason = _fetch_image(r["image_url"], r.get("product_url"))
+        if data:
+            store_attachment(db, pid, fname, data, ct)
             db.flush()
             _refresh_primary(db, part)
             changed.append("image")
         else:
-            changed.append("image (fetch failed)")
+            changed.append(f"image skipped ({reason})")
 
     if ap.supplier:
         sup = db.scalar(

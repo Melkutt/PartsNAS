@@ -234,9 +234,12 @@ export class PartsView {
     const checked = this.selected.has(p.id);
     const cb = el("input", { type: "checkbox", checked: checked ? "checked" : null,
       onclick: (e) => { e.stopPropagation(); e.target.checked ? this.selected.add(p.id) : this.selected.delete(p.id); tr.classList.toggle("sel", e.target.checked); this._renderBulk(); } });
+    const nameCell = el("td", { class: "name" }, p.name);
+    if (p.replacement)
+      nameCell.append(el("span", { class: "chip", style: "border-color:var(--warn);color:var(--warn)", title: "discontinued" }, "→ " + p.replacement));
     const tr = el("tr", { class: checked ? "sel" : "", onclick: () => this.openDetail(p.id) },
       el("td", {}, cb),
-      el("td", { class: "name" }, p.name),
+      nameCell,
       el("td", {}, p.mpn || ""),
       el("td", {}, p.category || el("span", { class: "zero" }, "—")),
       el("td", {}, p.footprint || ""),

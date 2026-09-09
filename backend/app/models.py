@@ -128,6 +128,15 @@ class Part(Base):
     # stock helpers (ledger is the source of truth; this is just a warning level)
     min_stock: Mapped[int] = mapped_column(Integer, default=0)
 
+    # lifecycle / replacement
+    discontinued: Mapped[bool] = mapped_column(default=False)
+    replaced_by_id: Mapped[str | None] = mapped_column(
+        ForeignKey("part.id", ondelete="SET NULL")
+    )
+    replacement_mpn: Mapped[str | None] = mapped_column(String(120))  # if not a Part yet
+    replacement_sku: Mapped[str | None] = mapped_column(String(80))
+    replacement_source: Mapped[str | None] = mapped_column(String(60))  # "Mouser 2026-09-09"
+
     # free-form
     notes: Mapped[str | None] = mapped_column(Text)
     octopart_id: Mapped[str | None] = mapped_column(String(60))
@@ -142,6 +151,9 @@ class Part(Base):
 
     category: Mapped["Category | None"] = relationship(back_populates="parts")
     footprint: Mapped["FootprintAlias | None"] = relationship()
+    replaced_by: Mapped["Part | None"] = relationship(
+        remote_side="Part.id", foreign_keys=[replaced_by_id]
+    )
     stock_entries: Mapped[list["StockEntry"]] = relationship(
         back_populates="part", cascade="all, delete-orphan"
     )

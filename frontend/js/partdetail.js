@@ -1,7 +1,8 @@
 // Part detail panel: Details (edit) / Stock / Suppliers / Notes, in a right-side overlay.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions } from "./ui.js";
+import { el, modal, toast, treeOptions, partSearch } from "./ui.js";
 import { openLookup } from "./lookup.js";
+import { formatValue, valueKind, parseNum } from "./units.js";
 
 let CLASSES = null; // cached /api/meta/part-classes
 async function partClasses() {
@@ -68,13 +69,24 @@ export class PartDetail {
         el(
           "div",
           { style: "flex:1" },
-          el("h3", {}, p.name),
+          el("h3", {}, p.discontinued ? p.name + "  ⚠" : p.name),
           el("div", { class: "sub" }, [p.mpn, p.manufacturer, p.category].filter(Boolean).join("  ·  ") || "—"),
           el("div", { class: "on-hand" }, `On hand: ${p.on_hand}`),
         ),
         el("button", { class: "ghost", onclick: () => this.close() }, "✕"),
       ),
     );
+    const repl = this._replLabel();
+    if (repl && (p.discontinued || p.on_hand <= 0)) {
+      this.panel.append(
+        el("div", { class: "repl-banner" },
+          el("b", {}, p.on_hand <= 0 ? "Out of stock — discontinued. " : "Discontinued. "),
+          `Replaced by ${repl}. `,
+          p.replaced_by
+            ? el("a", { href: "#", onclick: (e) => { e.preventDefault(); this.close(); new PartDetail(p.replaced_by.id, { onChange: this.onChange }).open(); } }, "Open replacement")
+            : null),
+      );
+    }
     const tabs = el("div", { class: "detail-tabs" });
     const defs = [
       ["details", "Details"],
@@ -104,6 +116,15 @@ export class PartDetail {
     })[this.tab]();
   }
 
+  _replLabel() {
+    const p = this.p;
+    if (p.replaced_by)
+      return `${p.replaced_by.name}${p.replaced_by.mpn && p.replaced_by.mpn !== p.replaced_by.name ? " (" + p.replaced_by.mpn + ")" : ""}`;
+    if (p.replacement_mpn)
+      return `${p.replacement_mpn}${p.replacement_sku ? " · " + p.replacement_sku : ""}`;
+    return null;
+  }
+
   // ---------- Details (edit) ----------
   async _details(body) {
     const p = this.p;
@@ -115,6 +136,10 @@ export class PartDetail {
       min_stock: p.min_stock, description: p.description || "", notes: p.notes || "",
       tags: p.tags.join(", "),
       attributes: { ...(p.attributes || {}) },
+      discontinued: !!p.discontinued,
+      replaced_by_id: p.replaced_by ? p.replaced_by.id : null,
+      replacement_mpn: p.replacement_mpn || "",
+      replacement_sku: p.replacement_sku || "",
     };
     const g = el("div", { class: "form-grid" });
     const field = (label, node) => g.append(el("label", {}, label), node);
@@ -165,17 +190,27 @@ export class PartDetail {
           const listId = `dl-${f.key}`;
           const seen = this.attrVals[f.key] || [];
           const dl = el("datalist", { id: listId }, ...seen.map((v) => el("option", { value: v })));
-          node = el("span", { style: "display:flex;gap:0" },
-            el("input", { type: "text", value: val, list: listId,
-              inputmode: f.type === "number" ? "decimal" : null,
-              style: "flex:1",
-              oninput: (e) => (draft.attributes[f.key] = e.target.value) }),
-            dl);
+          const kind = valueKind(p.part_class, f.key); // ohms/farads/henries/hertz/num
+          const box = el("input", { type: "text", value: val, list: listId,
+            inputmode: f.type === "number" ? "decimal" : null,
+            title: kind !== "num" ? "1000pF = 1nF · 2200 = 2k2 — normalised on blur" : "",
+            style: "flex:1",
+            oninput: (e) => (draft.attributes[f.key] = e.target.value),
+            onchange: (e) => {
+              if (f.key === "value" && kind !== "num" && e.target.value.trim()) {
+                e.target.value = formatValue(e.target.value, kind);
+                draft.attributes[f.key] = e.target.value;
+              }
+            } });
+          node = el("span", { style: "display:flex;gap:0" }, box, dl);
         }
         pg.append(el("label", { title: f.comment || "" }, f.label + (f.unit ? ` (${f.unit})` : "")), node);
       }
       body.append(pg);
     }
+
+    body.append(el("div", { class: "section-title" }, "Replacement / lifecycle"));
+    body.append(this._replacementSection(draft));
 
     body.append(el("div", { class: "section-title" }, "Images & files"));
     body.append(this._imagesSection());
@@ -191,6 +226,28 @@ export class PartDetail {
       el("button", { class: "primary", onclick: () => this._saveDetails(draft) }, "Save"),
     );
     body.append(saveBar);
+  }
+
+  _replacementSection(draft) {
+    const g = el("div", { class: "form-grid" });
+    const disc = el("input", { type: "checkbox", checked: draft.discontinued ? "checked" : null,
+      onchange: (e) => (draft.discontinued = e.target.checked) });
+    g.append(el("label", {}, "Discontinued"), disc);
+
+    const ps = partSearch({ placeholder: "replacement part in the DB…", onPick: (x) => (draft.replaced_by_id = x.id) });
+    if (this.p.replaced_by) ps.set({ id: this.p.replaced_by.id, name: this.p.replaced_by.name });
+    const clr = el("button", { class: "ghost", onclick: () => { draft.replaced_by_id = null; ps.set(null); } }, "clear");
+    g.append(el("label", {}, "Replaced by (part)"), el("span", { style: "display:flex;gap:6px" }, ps.el, clr));
+
+    const mpn = el("input", { type: "text", value: draft.replacement_mpn, placeholder: "or the new MPN",
+      oninput: (e) => (draft.replacement_mpn = e.target.value) });
+    const sku = el("input", { type: "text", value: draft.replacement_sku, placeholder: "supplier art. no. of the new one",
+      oninput: (e) => (draft.replacement_sku = e.target.value) });
+    g.append(el("label", {}, "…or replacement MPN"), mpn);
+    g.append(el("label", {}, "Replacement SKU"), sku);
+    g.append(el("span", { class: "full hint" },
+      "When this part hits zero on hand, the panel shows a banner pointing at the replacement."));
+    return g;
   }
 
   _imagesSection() {
@@ -248,6 +305,11 @@ export class PartDetail {
       notes: draft.notes.trim() || null,
       tags: draft.tags.split(",").map((s) => s.trim()).filter(Boolean),
       attributes: draft.attributes,
+      discontinued: draft.discontinued,
+      replaced_by_id: draft.replaced_by_id || null,
+      set_replaced_by: true,
+      replacement_mpn: draft.replacement_mpn.trim() || null,
+      replacement_sku: draft.replacement_sku.trim() || null,
     };
     await api(`/api/parts/${this.id}`, { method: "PATCH", body: patch });
     await attrValues(true); // new parameter values become datalist suggestions
@@ -279,7 +341,7 @@ export class PartDetail {
     const t2 = el("table", { class: "mini-table" });
     t2.append(el("tr", {}, el("th", {}, "When"), el("th", {}, "Kind"), el("th", {}, "Location"), el("th", { class: "num" }, "Δ"), el("th", {}, "Price ex/inc"), el("th", {}, "Supplier")));
     for (const e of s.entries.slice(0, 40)) {
-      const px = e.price.ex_vat != null ? `${e.price.ex_vat} / ${e.price.inc_vat}` : "";
+      const px = e.price.ex_vat != null ? `${e.price.ex_vat} / ${e.price.inc_vat_ceil}` : "";
       t2.append(
         el("tr", {},
           el("td", {}, (e.created_at || "").slice(0, 10)),
@@ -360,9 +422,9 @@ export class PartDetail {
           };
           if (kind === "add") {
             Object.assign(b, {
-              unit_price: price.value ? Number(price.value) : null,
+              unit_price: parseNum(price.value),
               price_includes_vat: incVat.checked,
-              vat_percent: Number(vat.value) || 25,
+              vat_percent: parseNum(vat.value) || 25,
               supplier_id: sup.value ? Number(sup.value) : null,
               supplier_sku: sku.value || null,
             });
@@ -416,7 +478,7 @@ export class PartDetail {
           el("td", {}, l.supplier + (l.active ? "" : " (inactive)")),
           el("td", {}, l.url ? el("a", { href: l.url, target: "_blank" }, l.sku || "link") : (l.sku || "—")),
           el("td", { class: "num" }, l.price.ex_vat ?? "—"),
-          el("td", { class: "num" }, l.price.inc_vat ?? "—"),
+          el("td", { class: "num" }, l.price.inc_vat_ceil ?? "—"),
           el("td", {}, el("button", { class: "ghost", onclick: () => this._linkDialog(l) }, "edit")),
           el("td", {}, el("button", { class: "ghost", onclick: () => this._delLink(l.id) }, "✕")),
         ),
@@ -450,8 +512,8 @@ export class PartDetail {
         if (!existing && !sup.value) throw new Error("pick a supplier");
         const payload = {
           sku: sku.value.trim() || null, url: url.value.trim() || null,
-          price: price.value ? Number(price.value) : null,
-          price_includes_vat: incVat.checked, vat_percent: Number(vat.value) || 25,
+          price: parseNum(price.value),
+          price_includes_vat: incVat.checked, vat_percent: parseNum(vat.value) || 25,
           active: active.checked, preferred: pref.checked,
         };
         if (existing) await api(`/api/parts/${this.id}/suppliers/${existing.id}`, { method: "PATCH", body: payload });

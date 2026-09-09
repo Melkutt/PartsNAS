@@ -73,6 +73,12 @@ class PartPatch(BaseModel):
     notes: str | None = None
     attributes: dict | None = None
     tags: list[str] | None = None
+    discontinued: bool | None = None
+    replaced_by_id: str | None = None
+    set_replaced_by: bool = False
+    replacement_mpn: str | None = None
+    replacement_sku: str | None = None
+    replacement_source: str | None = None
 
 
 @dataclass
@@ -203,6 +209,10 @@ def list_parts(
             "locations": locs.get(p.id, []),
             "tags": [t.name for t in p.tags],
             "image_path": p.image_path,
+            "discontinued": p.discontinued,
+            "replacement": (
+                p.replaced_by.name if p.replaced_by else (p.replacement_mpn or None)
+            ),
         }
         for p in rows
     ]
@@ -347,6 +357,20 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "suppliers": [_link_row(x) for x in p.suppliers],
         "images": [image_row(a) for a in p.attachments],
         "design_note_count": len(p.design_notes),
+        "discontinued": p.discontinued,
+        "replaced_by": (
+            {
+                "id": p.replaced_by.id,
+                "name": p.replaced_by.name,
+                "mpn": p.replaced_by.mpn,
+                "on_hand": on_hand_map(db, [p.replaced_by.id]).get(p.replaced_by.id, 0),
+            }
+            if p.replaced_by
+            else None
+        ),
+        "replacement_mpn": p.replacement_mpn,
+        "replacement_sku": p.replacement_sku,
+        "replacement_source": p.replacement_source,
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -396,10 +420,16 @@ def patch_part(part_id: str, body: PartPatch, db: Session = Depends(get_db)):
         raise HTTPException(404, "part not found")
     data = body.model_dump(exclude_unset=True)
     data.pop("set_category", None)
+    data.pop("set_replaced_by", None)
     if "tags" in data:
         p.tags = _resolve_tags(db, data.pop("tags") or [])
     if "category_id" in data or body.set_category:
         p.category_id = data.pop("category_id", None)
+    if "replaced_by_id" in data or body.set_replaced_by:
+        rid = data.pop("replaced_by_id", None)
+        if rid == part_id:
+            raise HTTPException(400, "a part cannot replace itself")
+        p.replaced_by_id = rid
     for k, v in data.items():
         setattr(p, k, v)
     db.commit()

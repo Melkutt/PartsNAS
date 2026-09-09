@@ -51,6 +51,24 @@ export function modal({ title, body, confirmText = "OK", onConfirm, wide }) {
   return { close, box, okBtn: ok };
 }
 
+export function spinner(text, big) {
+  return el("div", { class: "busy-row" }, el("span", { class: "spin" + (big ? " lg" : "") }), text || "Working…");
+}
+
+// disable a button and show a spinner inside it while `fn` runs
+export async function withBusy(btn, fn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = "";
+  btn.append(el("span", { class: "spin" }), " " + label);
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
 export function toast(text, { actionText, onAction, timeout = 6000 } = {}) {
   document.querySelectorAll(".toast").forEach((t) => t.remove());
   const t = el("div", { class: "toast" }, el("span", {}, text));
