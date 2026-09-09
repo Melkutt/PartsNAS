@@ -8,9 +8,11 @@ images under /media, and the static vanilla-JS frontend at /.
 """
 from __future__ import annotations
 
+import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
@@ -33,6 +35,14 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="PartsNAS", version=__version__, lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def _json_errors(request: Request, exc: Exception):
+    # Single-user LAN app: return the message as JSON so the frontend can show
+    # something useful instead of choking on a plain-text "Internal Server Error".
+    traceback.print_exc()
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
 
 
 @app.middleware("http")

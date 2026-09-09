@@ -205,6 +205,7 @@ ATTR_RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bP[-\s]?channel\b", re.I), "MOSFET P-ch"),
     # a "Fuse …" spec means it's a fuse
     (re.compile(r"\bfuse\b", re.I), "Fuse"),
+    (re.compile(r"\btoroid", re.I), "Toroid"),
     # connector series
     (re.compile(r"\bpicoblade\b", re.I), "PicoBlade"),
     (re.compile(r"\bmicro[-\s]?fit\b", re.I), "Micro-Fit"),

@@ -131,17 +131,31 @@ _OG = re.compile(
 )
 
 
+def _ascii_url(u: str | None) -> str:
+    """HTTP header values must be ASCII; distributor product URLs sometimes carry
+    a raw non-ASCII manufacturer slug (…/würth-elektronik/…)."""
+    if not u:
+        return "https://www.mouser.com/"
+    try:
+        u.encode("ascii")
+        return u
+    except UnicodeEncodeError:
+        from urllib.parse import quote
+
+        return quote(u, safe="/:?#[]@!$&'()*+,;=~._-%")
+
+
 def _try_one(url: str, referer: str | None) -> tuple:
     headers = {
         "User-Agent": _BROWSER_UA,
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Referer": referer or "https://www.mouser.com/",
+        "Referer": _ascii_url(referer),
     }
     try:
         with httpx.Client(timeout=12.0, follow_redirects=True) as c:
             r = c.get(url if url.startswith("http") else "https:" + url, headers=headers)
-    except httpx.HTTPError as e:
-        return None, None, None, f"network error: {e}"
+    except Exception as e:  # httpx errors + header/encoding issues before the request
+        return None, None, None, f"fetch error: {e}"
     if r.status_code != 200:
         return None, None, None, f"HTTP {r.status_code}"
     if len(r.content) > 6_000_000:
