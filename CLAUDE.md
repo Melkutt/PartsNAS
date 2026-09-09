@@ -161,6 +161,11 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   `app/catmatch.py` — keyword rules + token overlap mapping the supplier category
   string onto our tree), `POST /api/parts/{id}/apply-lookup` (`apply.category` +
   `category_id`, plus manufacturer/description/datasheet/image/lifecycle/attributes).
+- `/api/quotes` CRUD + `/lines` (+ `/lines/bulk` from a parts selection) +
+  `/export.csv` — the invoice basis. `snapshot_cost()` freezes the ex-VAT unit
+  cost at add time (preferred supplier price → any supplier price → last purchase
+  → 0) with a `cost_source` label; `markup_percent` (default 50) gives the sell
+  price; totals round inc-VAT **up**. Static — only re-adding / a fresh lookup moves a price.
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
 
 ### Supplier providers (`app/providers/`)
@@ -201,9 +206,8 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
    + backoff + circuit breaker), **Mouser** provider, Settings modal for keys,
    "Look up specs" button → apply attributes / price / datasheet / image /
    supplier link. TODO: TME (HMAC), Digi-Key (OAuth2), Farnell.
-8. **Quotes / invoice basis** — pick parts + qty → a per-customer list of what
-   was pulled and what it cost, with a markup (default **50%**, editable) and
-   **static** price snapshots (only a new API search updates the source).
+8. **done** — Quotes / invoice basis (`js/quotes.js` tab, markup default 50 %,
+   static cost snapshots + source, print + CSV, "Add to quote…" bulk action).
 9. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
    server-side offline) + printable label view.
 9. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.

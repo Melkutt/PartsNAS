@@ -392,6 +392,50 @@ class DesignNoteLink(Base):
     part: Mapped["Part | None"] = relationship()
 
 
+class Quote(Base):
+    """An invoice basis / "fakturaunderlag": parts pulled for a customer job, with
+    a markup on the (static, snapshotted) cost."""
+
+    __tablename__ = "quote"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer: Mapped[str | None] = mapped_column(String(160))
+    title: Mapped[str | None] = mapped_column(String(200))
+    note: Mapped[str | None] = mapped_column(Text)
+    markup_percent: Mapped[float] = mapped_column(Float, default=50.0)
+    vat_percent: Mapped[float] = mapped_column(Float, default=25.0)
+    status: Mapped[str] = mapped_column(String(12), default="draft")  # draft | done
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+    lines: Mapped[list["QuoteLine"]] = relationship(
+        back_populates="quote",
+        cascade="all, delete-orphan",
+        order_by="QuoteLine.sort_order, QuoteLine.id",
+    )
+
+
+class QuoteLine(Base):
+    __tablename__ = "quote_line"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quote_id: Mapped[int] = mapped_column(ForeignKey("quote.id", ondelete="CASCADE"), index=True)
+    part_id: Mapped[str | None] = mapped_column(ForeignKey("part.id", ondelete="SET NULL"))
+    description: Mapped[str] = mapped_column(String(200))  # snapshot of the part name
+    mpn: Mapped[str | None] = mapped_column(String(120))   # snapshot
+    qty: Mapped[float] = mapped_column(Float, default=1)
+    unit_cost: Mapped[float] = mapped_column(Float, default=0)  # EX VAT, STATIC snapshot
+    currency: Mapped[str] = mapped_column(String(3), default="SEK")
+    cost_source: Mapped[str | None] = mapped_column(String(80))  # "Mouser 2026-09-09" / ...
+    note: Mapped[str | None] = mapped_column(Text)  # "replaced R12", etc.
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    quote: Mapped["Quote"] = relationship(back_populates="lines")
+    part: Mapped["Part | None"] = relationship()
+
+
 class Setting(Base):
     __tablename__ = "setting"
 

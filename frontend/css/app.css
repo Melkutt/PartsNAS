@@ -626,3 +626,17 @@ table.parts-table {
   button, .seg button, .tabs button { min-height: 34px; }
   .parts-table th, .parts-table td { padding: 8px 10px; }
 }
+
+/* ============ print (quotes) ============ */
+.print-only { display: none; }
+@media print {
+  header.topbar, .detail-back, .detail-panel, .modal-back, .toast, .no-print { display: none !important; }
+  .print-only { display: block; }
+  body, .app, main.body, .panel { background: #fff !important; color: #000 !important; box-shadow: none !important; border: 0 !important; }
+  .app { display: block; height: auto; }
+  main.body { overflow: visible; padding: 0; }
+  .panel { max-width: none; }
+  #quote-print, #quote-print * { color: #000 !important; }
+  .mini-table th, .mini-table td { border-color: #999 !important; }
+  #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
+}

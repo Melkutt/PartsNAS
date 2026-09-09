@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
 import { PartDetail } from "./partdetail.js";
 import { CatRail } from "./catrail.js";
+import { addPartsToQuote } from "./quotes.js";
 
 const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
@@ -262,6 +263,7 @@ export class PartsView {
     bar.append(
       el("button", { onclick: () => this._bulkMoveCategory() }, "Move to category…"),
       el("button", { onclick: () => this._bulkMoveStock() }, "Move stock to location…"),
+      el("button", { onclick: () => addPartsToQuote(this._ids()) }, "Add to quote…"),
       el("button", { onclick: () => this._bulkTag() }, "Add tag…"),
       el("button", { onclick: () => this._bulkMinStock() }, "Set min stock…"),
       el("button", { class: "ghost", onclick: () => this._bulkDelete() }, "Delete"),

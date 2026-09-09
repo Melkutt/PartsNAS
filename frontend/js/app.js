@@ -4,6 +4,7 @@ import { Tree } from "./tree.js";
 import { PartsView } from "./parts.js";
 import { SuppliersView } from "./suppliers.js";
 import { DesignNotesView } from "./designnotes.js";
+import { QuotesView } from "./quotes.js";
 import { initScanner } from "./scan.js";
 import { openImport, openExport } from "./importexport.js";
 import { openSettings } from "./settings.js";
@@ -25,6 +26,7 @@ const TABS = {
       gotoPartsFiltered({ location_id: node.id }),
     ),
   notes: mountNotes,
+  quotes: mountQuotes,
   suppliers: mountSuppliers,
 };
 
@@ -53,6 +55,13 @@ async function mountNotes() {
   clearView();
   const v = new DesignNotesView({ q: pendingNoteQuery });
   pendingNoteQuery = "";
+  activeObj = v;
+  await v.mount(view);
+}
+
+async function mountQuotes() {
+  clearView();
+  const v = new QuotesView({});
   activeObj = v;
   await v.mount(view);
 }
