@@ -8,10 +8,11 @@ from an explicit user action (the "Look up" button), never in bulk or on a timer
 from __future__ import annotations
 
 from .base import Provider, ProviderBlocked, ProviderError, ProviderResult
+from .digikey import DigiKeyProvider
 from .mouser import MouserProvider
 
 _REGISTRY: dict[str, Provider] = {
-    p.name: p for p in [MouserProvider()]
+    p.name: p for p in [MouserProvider(), DigiKeyProvider()]
 }
 
 

@@ -70,10 +70,11 @@ class Provider(ABC):
     name: str
     label: str
     website: str
+    cred_fields: list[str] = ["api_key"]  # e.g. ["client_id", "client_secret"]
 
     @abstractmethod
     def configured(self, db: Session) -> bool:
-        """True when an API key is available (env var or Setting)."""
+        """True when all credentials are available (env vars or Setting)."""
 
     @abstractmethod
     def search(self, db: Session, mpn: str) -> list[ProviderResult]:

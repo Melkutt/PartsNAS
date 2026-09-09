@@ -32,11 +32,11 @@ const ALIAS = {
   vcc_min: ["voltagesupplymin", "supplyvoltagemin", "vccmin", "vsmin"],
   vcc_max: ["voltagesupplymax", "supplyvoltagemax", "vccmax", "vsmax"],
   icc: ["currentsupply", "supplycurrent", "icc", "quiescentcurrent", "iq"],
-  frequency: ["frequency", "clockfrequency", "speed", "maxoperatingfrequency", "bandwidth"],
-  flash: ["memorysize", "flashsize", "programmemorysize"],
-  ram: ["ramsize", "sramsize", "datamemorysize"],
-  interface: ["interface"],
-  function: ["function", "type", "amplifiertype", "regulatortopology"],
+  frequency: ["frequency", "clockfrequency", "speed", "maxoperatingfrequency", "bandwidth", "coresize"],
+  flash: ["memorysize", "flashsize", "programmemorysize", "programmemory"],
+  ram: ["ramsize", "sramsize", "datamemorysize", "ram"],
+  interface: ["interface", "connectivity", "peripherals"],
+  function: ["function", "type", "amplifiertype", "regulatortopology", "coreprocessor"],
   vds: ["vdss", "drainsourcevoltage", "vds"],
   vgsth: ["vgsth", "gatethresholdvoltage"],
   rdson: ["rdson", "drainsourceonresistance"],
@@ -52,7 +52,7 @@ const ALIAS = {
 // has <base>_min and <base>_max), matched loosely.
 const RANGE_BASES = {
   operating_temp: ["operatingtemperature", "temperaturerange", "temprange", "workingtemperature"],
-  vcc: ["voltagesupply", "supplyvoltage"],
+  vcc: ["voltagesupply", "supplyvoltage", "voltagesupplyvccvdd"],
 };
 
 function guessField(attrName, fields) {

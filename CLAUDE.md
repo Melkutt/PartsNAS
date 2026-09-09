@@ -161,7 +161,8 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   lookup is ever hidden.
 - `/api/meta/attr-values` — distinct values already used per attribute key, so
   the edit form offers them as a `<datalist>` (recurring params → dropdown).
-- `/api/settings/providers` (GET list + status, PUT `{api_key}`), `/api/lookup/providers`,
+- `/api/settings/providers` (GET list incl. `cred_fields` + status, PUT
+  `{creds:{field:value}}`), `/api/lookup/providers`,
   `POST /api/lookup` `{mpn, provider}` (each result carries `category_match` from
   `app/catmatch.py` — keyword rules + token overlap mapping the supplier category
   string onto our tree), `POST /api/parts/{id}/apply-lookup` (`apply.category` +
@@ -181,7 +182,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 
 ### Supplier providers (`app/providers/`)
 
-`base.py` (Provider ABC + `ProviderResult`), `mouser.py` (Search API v1),
+`base.py` (Provider ABC + `ProviderResult`; `cred_fields` lists the credential
+inputs), `mouser.py` (Search API v1 — price/stock/datasheet only, its
+`ProductAttributes` is packaging-only for ICs), `digikey.py` (Product Information
+**V4** — real `Parameters[]`; 2-legged OAuth `client_credentials`, token cached in
+`Setting provider:digikey:token`; creds `client_id`+`client_secret` from env
+`PARTSNAS_DIGIKEY_CLIENT_ID/_SECRET` or Setting; locale SE/SEK/en).
 `safety.py` — every outbound call goes through `guarded_request()`:
 per-minute token bucket + per-day quota (persisted in `Setting` under
 `provider:<name>:state`), disk cache at `data/providers/<name>/<sha1(mpn)>.json`
@@ -213,10 +219,11 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
 6. **done** — two-pane Parts view (left rail + faceted dynamic filters incl.
    class parameters over subcategories), expanded per-class dimensions
    (`part_classes_extra.json`), parameter datalists from prior values.
-7. **partly done** — `app/providers/` framework (rate limit + quota + disk cache
-   + backoff + circuit breaker), **Mouser** provider, Settings modal for keys,
-   "Look up specs" button → apply attributes / price / datasheet / image /
-   supplier link. TODO: TME (HMAC), Digi-Key (OAuth2), Farnell.
+7. **mostly done** — `app/providers/` framework (rate limit + quota + disk cache
+   + backoff + circuit breaker); **Mouser** (Search v1 — price/stock/datasheet)
+   and **Digi-Key** (Product Info V4 — real parameters). Settings modal takes
+   per-field creds. "Look up specs" applies attributes / category / mount / price
+   / datasheet / image / supplier link. TODO: TME (HMAC), Farnell (element14 key).
 8. **done** — Quotes / invoice basis (`js/quotes.js` tab, markup default 50 %,
    static cost snapshots + source, print + CSV, "Add to quote…" bulk action).
 9. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
