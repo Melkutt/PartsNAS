@@ -1,9 +1,13 @@
-// Settings modal: supplier API credentials + live rate-limit / breaker status.
+// Settings modal: supplier API credentials + auto-categorisation rules.
 import { api } from "./api.js";
-import { el, modal, toast } from "./ui.js";
+import { el, modal, toast, treeOptions } from "./ui.js";
 
 export async function openSettings() {
-  const rows = await api("/api/settings/providers");
+  const [rows, ruleData, catOpts] = await Promise.all([
+    api("/api/settings/providers"),
+    api("/api/meta/attr-rules"),
+    treeOptions("/api/categories", { includeBlank: "— category —" }),
+  ]);
   const body = el("div", { class: "modal-body" });
   body.append(
     el("p", { style: "color:var(--text-muted);margin:0" },
@@ -37,8 +41,41 @@ export async function openSettings() {
     body.append(block);
   }
 
+  // ---- auto-categorisation rules ----
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Auto-categorisation rules"));
+  body.append(el("div", { class: "repl-banner" },
+    el("b", {}, "⚠ Handle with care. "),
+    "These run first when you press Look up. If a rule's text appears anywhere in a " +
+    "part's attributes, it forces that category. A broad word (“Capacitor”, “SMD”, “Chip”) " +
+    "will mis-file lots of parts — use a distinctive value: ",
+    el("code", {}, "MLCC"), ", ", el("code", {}, "WCAP-ATG"), ", ", el("code", {}, "N-Channel"),
+    ". Tick “regex” only if you know regular expressions."));
+
+  const ruleHost = el("div");
+  const ruleRows = [];
+  const mkRuleRow = (r = {}) => {
+    const pat = el("input", { type: "text", value: r.pattern || "", placeholder: "attribute text, e.g. WCAP-ATG", style: "flex:1;min-width:120px" });
+    const rx = el("input", { type: "checkbox", checked: r.regex ? "checked" : null, title: "match as a regular expression" });
+    const cat = el("select", { style: "min-width:150px" });
+    cat.append(...catOpts.map((o) => o.cloneNode(true)));
+    if (r.category_id) cat.value = String(r.category_id);
+    const note = el("input", { type: "text", value: r.note || "", placeholder: "note (optional)", style: "flex:1;min-width:100px" });
+    const row = el("div", { class: "row", style: "flex-wrap:wrap;gap:6px;align-items:center" },
+      pat, el("label", { title: "regex" }, rx, " re"), cat, note,
+      el("button", { class: "ghost", onclick: () => { const i = ruleRows.indexOf(entry); if (i >= 0) ruleRows.splice(i, 1); row.remove(); } }, "✕"));
+    const entry = { row, pat, rx, cat, note };
+    ruleRows.push(entry);
+    ruleHost.append(row);
+  };
+  (ruleData.rules || []).forEach(mkRuleRow);
+  body.append(ruleHost, el("button", { class: "ghost", onclick: () => mkRuleRow() }, "+ add rule"));
+  if (ruleData.builtin?.length)
+    body.append(el("div", { class: "hint" },
+      "Built-in examples (always active, lower priority): " +
+      ruleData.builtin.slice(0, 6).map((b) => `${b.pattern.replace(/\\b|\(\?i\)/g, "")} → ${b.category}`).join(" · ") + " …"));
+
   modal({
-    title: "Settings — supplier APIs",
+    title: "Settings",
     body,
     confirmText: "Save",
     onConfirm: async () => {
@@ -48,15 +85,16 @@ export async function openSettings() {
         for (const [fld, inp] of Object.entries(o.fields)) {
           if (!inp.disabled && inp.value.trim()) creds[fld] = inp.value.trim();
         }
-        const body = {};
-        if (Object.keys(creds).length) body.creds = creds;
-        if (o.priceChk.checked !== o.priceWas) body.price_enabled = o.priceChk.checked;
-        if (Object.keys(body).length) {
-          await api(`/api/settings/providers/${name}`, { method: "PUT", body });
-          n++;
-        }
+        const b = {};
+        if (Object.keys(creds).length) b.creds = creds;
+        if (o.priceChk.checked !== o.priceWas) b.price_enabled = o.priceChk.checked;
+        if (Object.keys(b).length) { await api(`/api/settings/providers/${name}`, { method: "PUT", body: b }); n++; }
       }
-      toast(n ? `Saved ${n} provider(s)` : "No changes");
+      const rules = ruleRows
+        .filter((e) => e.pat.value.trim() && e.cat.value)
+        .map((e) => ({ pattern: e.pat.value.trim(), regex: e.rx.checked, category_id: Number(e.cat.value), note: e.note.value.trim() }));
+      const res = await api("/api/meta/attr-rules", { method: "PUT", body: { rules } });
+      toast(`Saved ${n} provider(s), ${res.count} rule(s)`);
     },
   });
 }

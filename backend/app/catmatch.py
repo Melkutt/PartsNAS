@@ -11,6 +11,7 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .core.kv import get_kv
 from .models import Category
 from .services import category_path_map
 
@@ -219,6 +220,16 @@ ATTR_RULES: list[tuple[re.Pattern, str]] = [
 ]
 
 
+def builtin_attr_rules() -> list[dict]:
+    return [{"pattern": rx.pattern, "category": target} for rx, target in ATTR_RULES]
+
+
+def custom_attr_rules(db: Session) -> list[dict]:
+    """User-defined attribute->category rules from Setting `catmatch:attr_rules`.
+    Each: {pattern, regex: bool, category_id, category_path, note}."""
+    return get_kv(db, "catmatch:attr_rules", []) or []
+
+
 def match_category(db: Session, hint: str | None, attrs: dict | None = None) -> dict | None:
     paths = category_path_map(db)
     by_name: dict[str, list[int]] = {}
@@ -230,14 +241,33 @@ def match_category(db: Session, hint: str | None, attrs: dict | None = None) -> 
             return {"id": cid, "path": paths.get(cid, target), "score": score}
         return None
 
-    # attribute-based override first — a specific spec beats a vague category string
     if attrs:
         blob = " ".join(f"{k} {v}" for k, v in attrs.items())
+        low = blob.lower()
+
+        # user rules run first — they win by design (Settings shows a warning)
+        for rule in custom_attr_rules(db):
+            pat = rule.get("pattern") or ""
+            cid = rule.get("category_id")
+            if not pat or not cid:
+                continue
+            try:
+                hit = (
+                    re.search(pat, blob, re.I)
+                    if rule.get("regex")
+                    else pat.lower() in low
+                )
+            except re.error:
+                continue
+            if hit and cid in paths:
+                return {"id": cid, "path": paths[cid], "score": 0.97, "source": "custom"}
+
+        # built-in attribute rules — a specific spec beats a vague category string
         for rx, target in ATTR_RULES:
             if rx.search(blob):
-                hit = resolve(target, 0.95)
-                if hit:
-                    return hit
+                got = resolve(target, 0.95)
+                if got:
+                    return got
 
     if not hint or not hint.strip():
         return None

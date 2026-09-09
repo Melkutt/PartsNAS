@@ -164,6 +164,11 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   lookup is ever hidden.
 - `/api/meta/attr-values` — distinct values already used per attribute key, so
   the edit form offers them as a `<datalist>` (recurring params → dropdown).
+- `/api/meta/attr-rules` (GET + PUT) — user-defined "attribute text → category"
+  rules, stored in `Setting catmatch:attr_rules` `[{pattern, regex, category_id,
+  note}]`. `catmatch.match_category` checks these **first** (score 0.97, before
+  the built-in `ATTR_RULES`). Edited in the Settings modal with a warning; PUT
+  validates the category id and (if `regex`) compiles the pattern.
 - `/api/settings/providers` (GET list incl. `cred_fields` + status, PUT
   `{creds:{field:value}}`), `/api/lookup/providers`,
   `POST /api/lookup` `{mpn, provider}` (each result carries `category_match` from
