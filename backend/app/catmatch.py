@@ -194,16 +194,42 @@ RULES: list[tuple[frozenset[str], str]] = [
 ]
 
 
-def match_category(db: Session, hint: str | None) -> dict | None:
+# strong signals that live in the *attributes*, not the category string
+# (e.g. Digi-Key gives "Capacitors" generic but "Mounting Type: MLCC" pins it)
+ATTR_RULES: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\bMLCC\b|multilayer ceramic", re.I), "Ceramic"),
+    (re.compile(r"\btantalum\b", re.I), "Tantalum"),
+    (re.compile(r"alumin[iu]{1,2}m\s+electrolytic", re.I), "Electrolytic (Al)"),
+    (re.compile(r"supercap|\bEDLC\b|double.?layer", re.I), "Supercapacitor"),
+    (re.compile(r"\b(?:film|polyester|polypropylene|PPS|PEN)\s+cap", re.I), "Film"),
+]
+
+
+def match_category(db: Session, hint: str | None, attrs: dict | None = None) -> dict | None:
+    paths = category_path_map(db)
+    by_name: dict[str, list[int]] = {}
+    for cid, name in db.execute(select(Category.id, Category.name)).all():
+        by_name.setdefault(name.lower(), []).append(cid)
+
+    def resolve(target: str, score: float):
+        for cid in by_name.get(target.lower(), []):
+            return {"id": cid, "path": paths.get(cid, target), "score": score}
+        return None
+
+    # attribute-based override first — a specific spec beats a vague category string
+    if attrs:
+        blob = " ".join(f"{k} {v}" for k, v in attrs.items())
+        for rx, target in ATTR_RULES:
+            if rx.search(blob):
+                hit = resolve(target, 0.95)
+                if hit:
+                    return hit
+
     if not hint or not hint.strip():
         return None
     toks = set(_tokens(hint))
     if not toks:
         return None
-    paths = category_path_map(db)
-    by_name: dict[str, list[int]] = {}
-    for cid, name in db.execute(select(Category.id, Category.name)).all():
-        by_name.setdefault(name.lower(), []).append(cid)
 
     # rule pass — pick the most specific (largest) satisfied rule
     best_rule: tuple[int, str] | None = None

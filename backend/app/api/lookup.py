@@ -94,7 +94,7 @@ def do_lookup(body: LookupBody, db: Session = Depends(get_db)):
     out = []
     for r in results:
         d = r.to_dict()
-        d["category_match"] = match_category(db, r.category_hint)
+        d["category_match"] = match_category(db, r.category_hint, r.attributes)
         d["mount_guess"] = mount_guess(r.attributes)
         d["attr_count"] = len(r.attributes)
         out.append(d)
