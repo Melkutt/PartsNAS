@@ -75,15 +75,31 @@ export function parseNum(s) {
   return isNaN(n) ? null : n;
 }
 
-// "24 AWG" / "AWG 24" / "24AWG" -> conductor cross-section in mm² (3 sig figs).
+// AWG -> conductor cross-section in mm² (3 sig figs).
+//   "24 AWG" / "AWG 24" / "24AWG"      -> "0.205"
+//   "26-28 AWG" / "AWG 26 to 28"       -> "0.081 - 0.129"  (ascending mm²)
 // d(mm) = 0.127 · 92^((36−AWG)/39) ; area = π/4 · d²
-export function awgToMm2(v) {
-  const m = String(v).match(/awg\s*(\d{1,2})|(\d{1,2})\s*awg/i);
-  if (!m) return null;
-  const awg = parseInt(m[1] || m[2], 10);
+function _awgArea(awg) {
   if (isNaN(awg) || awg < 0 || awg > 50) return null;
   const d = 0.127 * Math.pow(92, (36 - awg) / 39);
-  const area = (Math.PI / 4) * d * d;
-  return Number(area.toPrecision(3)).toString();
+  return (Math.PI / 4) * d * d;
+}
+const _sig3 = (x) => Number(x.toPrecision(3)).toString();
+
+export function awgToMm2(v) {
+  const s = String(v);
+  const rng = s.match(
+    /(\d{1,2})\s*(?:-|–|—|~|to)\s*(\d{1,2})\s*awg|awg\s*(\d{1,2})\s*(?:-|–|—|~|to)\s*(\d{1,2})/i,
+  );
+  if (rng) {
+    const a = _awgArea(parseInt(rng[1] || rng[3], 10));
+    const b = _awgArea(parseInt(rng[2] || rng[4], 10));
+    if (a == null || b == null) return null;
+    return `${_sig3(Math.min(a, b))} - ${_sig3(Math.max(a, b))}`;
+  }
+  const m = s.match(/awg\s*(\d{1,2})|(\d{1,2})\s*awg/i);
+  if (!m) return null;
+  const area = _awgArea(parseInt(m[1] || m[2], 10));
+  return area == null ? null : _sig3(area);
 }
 export const isAwg = (v) => /\bawg\s*\d{1,2}\b|\b\d{1,2}\s*awg\b/i.test(String(v || ""));
