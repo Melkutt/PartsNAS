@@ -216,7 +216,7 @@ export class QuotesView {
         priceSel.value = String(co.auto_link_id);
         priceRow.append(
           el("div", { class: "row" }, el("label", {}, "Price from"), priceSel),
-          el("div", { class: "hint" }, "No preferred supplier set — auto-picks the cheapest. Set ★ on the Suppliers tab to skip this."),
+          el("div", { class: "hint" }, "No ★ preferred supplier — defaults to the dearest. Set ★ on the Suppliers tab to skip this."),
         );
       },
     });

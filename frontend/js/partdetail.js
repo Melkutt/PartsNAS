@@ -1,6 +1,6 @@
 // Part detail panel: Details (edit) / Stock / Suppliers / Notes, in a right-side overlay.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions, partSearch } from "./ui.js";
+import { el, modal, toast, treeOptions, partSearch, withBusy } from "./ui.js";
 import { openLookup } from "./lookup.js";
 import { formatValue, valueKind, parseNum, awgToMm2, isAwg } from "./units.js";
 
@@ -521,8 +521,22 @@ export class PartDetail {
 
   // ---------- Suppliers ----------
   _suppliersTab(body) {
-    body.append(el("button", { class: "primary", onclick: () => this._linkDialog() }, "Add supplier link"));
-    body.append(el("div", { class: "hint" }, "★ = the price used in quotes for this part. Click a star to set it."));
+    body.append(el("div", { style: "display:flex;gap:8px;flex-wrap:wrap" },
+      el("button", { class: "primary", onclick: () => this._linkDialog() }, "Add supplier link"),
+      el("button", {
+        onclick: async (e) => {
+          if (!this.p.mpn) return toast("part has no MPN");
+          await withBusy(e.target, async () => {
+            const r = await api(`/api/parts/${this.id}/refresh-prices`, { method: "POST" });
+            const got = r.updated.map((u) => `${u.provider} ${u.price} ${u.currency}`).join(", ");
+            const bad = r.errors.map((x) => `${x.provider}: ${x.error}`).join("; ");
+            toast(got ? `Prices: ${got}` + (bad ? ` — ${bad}` : "") : bad || "no prices");
+            await this._reload();
+          });
+        },
+      }, "Fetch prices from all APIs")));
+    body.append(el("div", { class: "hint" },
+      "★ = the price used in quotes. Not set → the quote uses the dearest. Fetch prices to compare providers."));
     const t = el("table", { class: "mini-table", style: "margin-top:6px" });
     t.append(el("tr", {}, el("th", { title: "price shown in quotes" }, "★"), el("th", {}, "Supplier"), el("th", {}, "Article no."),
       el("th", { class: "num" }, "ex VAT"), el("th", { class: "num" }, "inc VAT"), el("th", {}, ""), el("th", {}, "")));

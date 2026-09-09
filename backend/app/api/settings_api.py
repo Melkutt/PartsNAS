@@ -28,6 +28,7 @@ _LIMITS = {"mouser": (10, 1000), "digikey": (20, 1000)}
 class CredsBody(BaseModel):
     creds: dict[str, str] = Field(default_factory=dict)
     api_key: str | None = None  # back-compat: mapped to creds["api_key"]
+    price_enabled: bool | None = None  # include this provider in "refresh prices from all"
 
 
 def _limits(name: str) -> tuple[int, int]:
@@ -54,6 +55,7 @@ def list_providers(db: Session = Depends(get_db)):
             "label": p.label,
             "website": p.website,
             "configured": p.configured(db),
+            "price_enabled": bool(get_kv(db, f"provider:{p.name}:price_enabled", True)),
             "cred_fields": fields,
             **st,
         })
@@ -69,6 +71,7 @@ def set_creds(name: str, body: CredsBody, db: Session = Depends(get_db)):
     if body.api_key is not None:
         incoming.setdefault("api_key", body.api_key)
     cfg = get_kv(db, f"provider:{name}:config", {}) or {}
+    changed_cred = False
     for fld, val in incoming.items():
         if fld not in p.cred_fields:
             continue
@@ -77,7 +80,10 @@ def set_creds(name: str, body: CredsBody, db: Session = Depends(get_db)):
             cfg[fld] = val
         else:
             cfg.pop(fld, None)
-    set_kv(db, f"provider:{name}:config", cfg)
-    # a credential change invalidates any cached OAuth token
-    set_kv(db, f"provider:{name}:token", {})
+        changed_cred = True
+    if changed_cred:
+        set_kv(db, f"provider:{name}:config", cfg)
+        set_kv(db, f"provider:{name}:token", {})  # invalidate cached OAuth token
+    if body.price_enabled is not None:
+        set_kv(db, f"provider:{name}:price_enabled", bool(body.price_enabled))
     return {"ok": True, "configured": p.configured(db)}

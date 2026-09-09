@@ -189,10 +189,16 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   locale). `/api/import/backup` (multipart `file`=zip, `mode`=merge|update|replace,
   `dry_run`) — matches parts by `id` then `mpn`, creates categories / locations by
   path, links suppliers by name, restores `secrets.json` if present. `merge` never doubles.
+- `POST /api/parts/{id}/refresh-prices` — query every configured +
+  `price_enabled` provider for the MPN and upsert one supplier link per
+  provider (uses the disk cache; explicit-action only). Button on the Suppliers
+  tab.
 - `/api/parts/{id}/cost` — supplier price options for a quote line
-  (`auto_link_id` = preferred, else cheapest). `POST /api/quotes/{id}/lines`
+  (`auto_link_id` = ★ preferred, else the **dearest**). `POST /api/quotes/{id}/lines`
   takes `supplier_link_id` to pin the price; the ★ on the Suppliers tab
   (`PartSupplier.preferred`) is the price source and skips the picker.
+- Settings: per-provider `price_enabled` (Setting `provider:<name>:price_enabled`,
+  default true) — the "search prices from here" checkbox; gates `refresh-prices`.
 
 ### Supplier providers (`app/providers/`)
 

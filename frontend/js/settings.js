@@ -10,9 +10,9 @@ export async function openSettings() {
       "Credentials are stored on the NAS (single-user). Lookups only run when you press ‘Look up’ on a part — never in bulk. Each provider is rate-limited, disk-cached and auto-paused if it returns a block."),
   );
 
-  const inputs = {}; // name -> { field -> input }
+  const inputs = {}; // name -> { fields:{}, priceChk, priceWas }
   for (const p of rows) {
-    inputs[p.name] = {};
+    inputs[p.name] = { fields: {}, priceWas: p.price_enabled };
     const status = p.blocked_until
       ? el("span", { style: "color:var(--warn)" }, `paused until ${new Date(p.blocked_until * 1000).toLocaleTimeString()}`)
       : el("span", { style: "color:var(--text-faint)" }, p.configured ? `ready · ${p.used_today}/${p.quota_day} today · ${p.per_min}/min` : "not configured");
@@ -25,10 +25,15 @@ export async function openSettings() {
       const inp = el("input", { type: "password", style: "flex:1",
         placeholder: f.from_env ? "(set via environment)" : f.stored ? "•••••• stored — type to replace" : "paste " + f.name,
         disabled: f.from_env ? "disabled" : null });
-      inputs[p.name][f.name] = inp;
+      inputs[p.name].fields[f.name] = inp;
       block.append(el("div", { class: "row", style: "margin-top:6px" },
         el("label", { style: "min-width:100px" }, f.name.replace(/_/g, " ")), inp));
     }
+    const priceChk = el("input", { type: "checkbox", checked: p.price_enabled ? "checked" : null });
+    inputs[p.name].priceChk = priceChk;
+    block.append(el("label", { class: "facet-opt", style: "margin-top:6px",
+      title: "included when you press ‘Fetch prices from all APIs’ on a part" },
+      priceChk, " search prices from here"));
     body.append(block);
   }
 
@@ -38,17 +43,20 @@ export async function openSettings() {
     confirmText: "Save",
     onConfirm: async () => {
       let n = 0;
-      for (const [name, fields] of Object.entries(inputs)) {
+      for (const [name, o] of Object.entries(inputs)) {
         const creds = {};
-        for (const [fld, inp] of Object.entries(fields)) {
+        for (const [fld, inp] of Object.entries(o.fields)) {
           if (!inp.disabled && inp.value.trim()) creds[fld] = inp.value.trim();
         }
-        if (Object.keys(creds).length) {
-          await api(`/api/settings/providers/${name}`, { method: "PUT", body: { creds } });
+        const body = {};
+        if (Object.keys(creds).length) body.creds = creds;
+        if (o.priceChk.checked !== o.priceWas) body.price_enabled = o.priceChk.checked;
+        if (Object.keys(body).length) {
+          await api(`/api/settings/providers/${name}`, { method: "PUT", body });
           n++;
         }
       }
-      toast(n ? `Saved credentials for ${n} provider(s)` : "No changes");
+      toast(n ? `Saved ${n} provider(s)` : "No changes");
     },
   });
 }

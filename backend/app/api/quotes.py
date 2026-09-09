@@ -95,9 +95,8 @@ def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str]:
         )
     ).all()
     if links:
-        best = min(
-            links, key=lambda x: (0 if x.preferred else 1, x.unit_price or 1e9)
-        )
+        # the ★ preferred link wins; otherwise the DEAREST price (quote conservatively)
+        best = max(links, key=lambda x: (x.preferred, x.unit_price or 0))
         when = best.updated_at.strftime("%Y-%m-%d") if best.updated_at else ""
         return best.unit_price, best.currency, f"{best.supplier.name} {when}".strip()
     entry = db.scalar(

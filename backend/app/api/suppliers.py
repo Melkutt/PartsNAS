@@ -14,8 +14,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
+from ..core.kv import get_kv
 from ..models import Part, PartSupplier, StockEntry, Supplier
 from ..money import price_block, strip_vat
+from ..providers import all_providers
+from ..providers.base import ProviderBlocked, ProviderError
 
 router = APIRouter(tags=["suppliers"])
 
@@ -148,7 +151,7 @@ def _link_row(link: PartSupplier) -> dict:
 @router.get("/api/parts/{pid}/cost")
 def cost_options(pid: str, db: Session = Depends(get_db)):
     """Which supplier prices could feed a quote line. `auto_link_id` is what the
-    quote would pick if you don't choose (preferred link, else the cheapest)."""
+    quote picks if you don't choose: the ★ preferred link, else the DEAREST."""
     _need_part(db, pid)
     links = db.scalars(
         select(PartSupplier).where(
@@ -169,10 +172,52 @@ def cost_options(pid: str, db: Session = Depends(get_db)):
     has_pref = any(o["preferred"] for o in opts)
     auto = None
     if opts:
-        auto = min(
-            links, key=lambda x: (0 if x.preferred else 1, x.unit_price or 1e9)
-        ).id
+        auto = max(links, key=lambda x: (x.preferred, x.unit_price or 0)).id
     return {"options": opts, "auto_link_id": auto, "has_preferred": has_pref}
+
+
+@router.post("/api/parts/{pid}/refresh-prices")
+def refresh_prices(pid: str, db: Session = Depends(get_db)):
+    """Query every configured + price-enabled provider for this part's MPN and
+    upsert one supplier link per provider. Uses the disk cache, so a recent
+    lookup costs no request. Explicit user action only."""
+    part = _need_part(db, pid)
+    if not part.mpn:
+        raise HTTPException(400, "part has no MPN to look up")
+    updated: list[dict] = []
+    errors: list[dict] = []
+    for prov in all_providers():
+        if not prov.configured(db):
+            continue
+        if not get_kv(db, f"provider:{prov.name}:price_enabled", True):
+            continue
+        try:
+            results = prov.search(db, part.mpn)
+        except (ProviderBlocked, ProviderError) as e:
+            errors.append({"provider": prov.label, "error": str(e)})
+            continue
+        up = results[0].unit_price() if results else None
+        if up is None:
+            errors.append({"provider": prov.label, "error": "no match" if not results else "no price"})
+            continue
+        r = results[0]
+        sup = db.scalar(select(Supplier).where(func.lower(Supplier.name) == prov.label.lower()))
+        if sup is None:
+            sup = Supplier(name=prov.label, sort_order=100)
+            db.add(sup)
+            db.flush()
+        link = db.scalar(select(PartSupplier).where(
+            PartSupplier.part_id == pid, PartSupplier.supplier_id == sup.id))
+        if link is None:
+            link = PartSupplier(part_id=pid, supplier_id=sup.id)
+            db.add(link)
+        link.sku = r.sku or link.sku
+        link.url = r.product_url or link.url
+        link.unit_price = up.ex_vat
+        link.currency = up.currency
+        updated.append({"provider": prov.label, "price": up.ex_vat, "currency": up.currency})
+    db.commit()
+    return {"updated": updated, "errors": errors}
 
 
 @router.get("/api/parts/{pid}/suppliers")
