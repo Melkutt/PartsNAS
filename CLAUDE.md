@@ -166,11 +166,17 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   `app/catmatch.py` — keyword rules + token overlap mapping the supplier category
   string onto our tree), `POST /api/parts/{id}/apply-lookup` (`apply.category` +
   `category_id`, plus manufacturer/description/datasheet/image/lifecycle/attributes).
-- `/api/quotes` CRUD + `/lines` (+ `/lines/bulk` from a parts selection) +
-  `/export.csv` — the invoice basis. `snapshot_cost()` freezes the ex-VAT unit
-  cost at add time (preferred supplier price → any supplier price → last purchase
-  → 0) with a `cost_source` label; `markup_percent` (default 50) gives the sell
-  price; totals round inc-VAT **up**. Static — only re-adding / a fresh lookup moves a price.
+- `/api/quotes` CRUD (`?status=open|invoiced`) + `/lines` (+ `/lines/bulk`) +
+  `/export.{csv,xlsx}` + `/commit-stock` / `/uncommit-stock` / `/invoice` /
+  `/unarchive` — the invoice basis. `snapshot_cost()` freezes the ex-VAT unit
+  cost at add time (preferred supplier → any supplier → last purchase → 0) with a
+  `cost_source` label; `Quote.markup_percent` (default 50) or a per-line
+  `QuoteLine.markup_percent` gives the sell price; totals round inc-VAT **up**.
+  `commit-stock` writes `kind="build"` `StockEntry` rows (`move_group=quote-<id>`,
+  largest location first, shortfall as a negative at NULL); `uncommit-stock`
+  writes compensating rows. `invoice` sets `status="invoiced"` (auto-commits
+  stock), hiding the quote from the default list; `unarchive` reverses it. All
+  reversible.
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
 
 ### Supplier providers (`app/providers/`)

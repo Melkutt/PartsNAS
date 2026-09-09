@@ -1,5 +1,7 @@
 // Quotes tab — invoice basis. Pick parts + qty for a customer; cost is a static
-// snapshot, a markup (default 50%) gives the sell price, inc-VAT total rounds up.
+// snapshot, a markup (default 50%, overridable per line) gives the sell price,
+// inc-VAT total rounds up. Tick "Stock" to deduct qty from inventory (reversible);
+// tick "Invoiced" to archive it to the Invoices list (reversible).
 import { api } from "./api.js";
 import { el, modal, toast, partSearch } from "./ui.js";
 import { parseNum } from "./units.js";
@@ -8,6 +10,7 @@ export class QuotesView {
   constructor({ openId } = {}) {
     this.el = el("div", { class: "parts" });
     this.openId = openId;
+    this.tab = "open"; // open | invoiced
   }
 
   async mount(container) {
@@ -18,12 +21,16 @@ export class QuotesView {
 
   async list() {
     this.el.innerHTML = "";
-    const rows = await api("/api/quotes");
-    const panel = el("div", { class: "panel" });
+    const rows = await api(`/api/quotes?status=${this.tab}`);
+    const panel = el("div", { class: "panel", style: "max-width:960px" });
+    const seg = el("div", { class: "seg", style: "margin:10px 0 0 12px" });
+    for (const t of ["open", "invoiced"])
+      seg.append(el("button", { class: this.tab === t ? "active" : "",
+        onclick: () => { this.tab = t; this.list(); } }, t === "open" ? "Quotes" : "Invoices"));
     panel.append(
-      el("h2", {}, "Quotes / invoice basis"),
-      el("div", { class: "panel-body" },
-        el("button", { class: "primary", onclick: () => this.newQuote() }, "+ New quote"),
+      el("h2", {}, this.tab === "open" ? "Quotes / invoice basis" : "Invoices"),
+      el("div", { class: "panel-body" }, seg,
+        this.tab === "open" ? el("button", { class: "primary", style: "margin:10px 0 0 6px", onclick: () => this.newQuote() }, "+ New quote") : null,
         this._table(rows)),
     );
     this.el.append(panel);
@@ -31,19 +38,39 @@ export class QuotesView {
 
   _table(rows) {
     const t = el("table", { class: "mini-table", style: "margin-top:12px" });
-    t.append(el("tr", {}, el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, "Lines"),
-      el("th", { class: "num" }, "Sell ex VAT"), el("th", { class: "num" }, "Inc VAT"), el("th", {}, "Status"), el("th", {}, "")));
+    t.append(el("tr", {},
+      el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, "Lines"),
+      el("th", { class: "num" }, "Sell ex"), el("th", { class: "num" }, "Inc VAT"),
+      el("th", {}, "Stock"), el("th", {}, this.tab === "open" ? "Invoiced" : "Re-open"), el("th", {}, "")));
     for (const q of rows) {
+      const stockCb = el("input", { type: "checkbox", checked: q.stock_committed ? "checked" : null,
+        title: "deduct line quantities from inventory",
+        onclick: async (e) => {
+          e.stopPropagation();
+          const ep = e.target.checked ? "commit-stock" : "uncommit-stock";
+          await api(`/api/quotes/${q.id}/${ep}`, { method: "POST" });
+          toast(e.target.checked ? "Stock deducted" : "Stock restored");
+          this.list();
+        } });
+      const invCb = el("input", { type: "checkbox", checked: this.tab === "invoiced" ? "checked" : null,
+        title: this.tab === "open" ? "archive to Invoices (also deducts stock)" : "move back to Quotes",
+        onclick: async (e) => {
+          e.stopPropagation();
+          await api(`/api/quotes/${q.id}/${this.tab === "open" ? "invoice" : "unarchive"}`, { method: "POST" });
+          toast(this.tab === "open" ? "Invoiced" : "Re-opened");
+          this.list();
+        } });
       t.append(el("tr", { style: "cursor:pointer", onclick: () => this.openQuote(q.id) },
         el("td", {}, q.customer || "—"),
         el("td", {}, q.title || `#${q.id}`),
         el("td", {}, String(q.line_count)),
         el("td", { class: "num" }, q.totals.sell_ex_vat),
         el("td", { class: "num" }, q.totals.inc_vat_ceil),
-        el("td", { class: q.status === "done" ? "pill-ok" : "pill-off" }, q.status),
+        el("td", {}, stockCb),
+        el("td", {}, invCb),
         el("td", {}, el("button", { class: "ghost", onclick: (e) => { e.stopPropagation(); this._del(q.id); } }, "✕"))));
     }
-    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "7", class: "pill-off" }, "no quotes yet")));
+    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "8", class: "pill-off" }, this.tab === "open" ? "no open quotes" : "no invoices")));
     return t;
   }
 
@@ -80,7 +107,7 @@ export class QuotesView {
   _renderQuote() {
     const q = this.q;
     this.el.innerHTML = "";
-    const panel = el("div", { class: "panel", style: "max-width:900px" });
+    const panel = el("div", { class: "panel", style: "max-width:940px" });
     const head = el("div", { class: "panel-body", id: "quote-print" });
 
     const cust = el("input", { type: "text", value: q.customer || "", placeholder: "customer",
@@ -91,39 +118,41 @@ export class QuotesView {
       onchange: (e) => this._patch({ markup_percent: parseNum(e.target.value) ?? 50 }) });
     const vat = el("input", { type: "text", value: q.vat_percent, style: "width:70px",
       onchange: (e) => this._patch({ vat_percent: parseNum(e.target.value) ?? 25 }) });
-    const status = el("select", { onchange: (e) => this._patch({ status: e.target.value }) },
-      el("option", { value: "draft" }, "draft"), el("option", { value: "done" }, "done"));
-    status.value = q.status;
 
-    head.append(
+    head.append(...[
       el("div", { class: "no-print", style: "display:flex;gap:8px;margin-bottom:10px" },
         el("button", { class: "ghost", onclick: () => this.list() }, "← all quotes"),
         el("span", { style: "flex:1" }),
         el("button", { onclick: () => window.print() }, "Print"),
-        el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.csv`) }, "CSV")),
+        el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.csv`) }, "CSV"),
+        el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.xlsx`) }, "Excel")),
       el("h2", { style: "border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:18px" },
         q.title || `Quote #${q.id}`),
+      q.stock_committed ? el("div", { class: "repl-banner no-print" },
+        el("b", {}, "Stock deducted for this quote. "),
+        el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
       el("div", { class: "form-grid no-print", style: "max-width:520px;margin:8px 0" },
         el("label", {}, "Customer"), cust,
         el("label", {}, "Title"), title,
         el("label", {}, "Markup %"), markup,
-        el("label", {}, "VAT %"), vat,
-        el("label", {}, "Status"), status),
+        el("label", {}, "VAT %"), vat),
       el("div", { class: "print-only", style: "margin:6px 0;color:#000" },
         `Customer: ${q.customer || "—"}    Markup: ${q.markup_percent}%    VAT: ${q.vat_percent}%`),
-    );
+    ].filter(Boolean));
 
-    // lines
     const t = el("table", { class: "mini-table", style: "margin-top:8px" });
     t.append(el("tr", {}, el("th", {}, "MPN"), el("th", {}, "Description"), el("th", { class: "num" }, "Qty"),
-      el("th", { class: "num" }, "Unit cost"), el("th", {}, "Source"), el("th", { class: "num" }, "Sell/u ex"),
-      el("th", { class: "num" }, "Line ex"), el("th", { class: "no-print" }, "")));
+      el("th", { class: "num" }, "Unit cost"), el("th", { class: "num" }, "Markup %"), el("th", {}, "Source"),
+      el("th", { class: "num" }, "Sell/u ex"), el("th", { class: "num" }, "Line ex"), el("th", { class: "no-print" }, "")));
     for (const ln of q.lines) {
       const qtyI = el("input", { type: "text", value: ln.qty, style: "width:56px",
         onchange: (e) => this._patchLine(ln.id, { qty: parseNum(e.target.value) ?? 1 }) });
       const costI = el("input", { type: "text", value: ln.unit_cost, style: "width:80px",
         title: "static snapshot — edit to override",
         onchange: (e) => this._patchLine(ln.id, { unit_cost: parseNum(e.target.value) ?? 0 }) });
+      const mkI = el("input", { type: "text", value: ln.markup_percent ?? "", placeholder: String(q.markup_percent), style: "width:60px",
+        title: "blank = use the quote markup",
+        onchange: (e) => this._patchLine(ln.id, { markup_percent: e.target.value.trim() === "" ? null : parseNum(e.target.value) }) });
       const noteI = el("input", { type: "text", value: ln.note || "", placeholder: "note (e.g. replaced R12)",
         style: "width:100%", onchange: (e) => this._patchLine(ln.id, { note: e.target.value }) });
       t.append(el("tr", {},
@@ -131,6 +160,7 @@ export class QuotesView {
         el("td", {}, el("div", {}, ln.description), noteI),
         el("td", { class: "num" }, qtyI),
         el("td", { class: "num" }, costI),
+        el("td", { class: "num" }, mkI),
         el("td", { style: "color:var(--text-faint);font-size:11px" }, ln.cost_source || ""),
         el("td", { class: "num" }, ln.sell_unit_ex),
         el("td", { class: "num" }, ln.line_ex),
@@ -206,7 +236,7 @@ export class QuotesView {
 
 // pick or create a quote, then add the given part ids (qty 1). Used by the Parts bulk bar.
 export async function addPartsToQuote(partIds) {
-  const quotes = await api("/api/quotes");
+  const quotes = await api("/api/quotes?status=open");
   const sel = el("select");
   sel.append(el("option", { value: "__new__" }, "+ New quote…"),
     ...quotes.map((q) => el("option", { value: q.id }, `${q.title || "#" + q.id}${q.customer ? " — " + q.customer : ""}`)));

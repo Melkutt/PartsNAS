@@ -404,7 +404,8 @@ class Quote(Base):
     note: Mapped[str | None] = mapped_column(Text)
     markup_percent: Mapped[float] = mapped_column(Float, default=50.0)
     vat_percent: Mapped[float] = mapped_column(Float, default=25.0)
-    status: Mapped[str] = mapped_column(String(12), default="draft")  # draft | done
+    status: Mapped[str] = mapped_column(String(12), default="open")  # open | invoiced
+    stock_committed: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
@@ -427,6 +428,7 @@ class QuoteLine(Base):
     mpn: Mapped[str | None] = mapped_column(String(120))   # snapshot
     qty: Mapped[float] = mapped_column(Float, default=1)
     unit_cost: Mapped[float] = mapped_column(Float, default=0)  # EX VAT, STATIC snapshot
+    markup_percent: Mapped[float | None] = mapped_column(Float)  # None -> use the quote's
     currency: Mapped[str] = mapped_column(String(3), default="SEK")
     cost_source: Mapped[str | None] = mapped_column(String(80))  # "Mouser 2026-09-09" / ...
     note: Mapped[str | None] = mapped_column(Text)  # "replaced R12", etc.

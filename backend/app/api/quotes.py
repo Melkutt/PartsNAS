@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from ..core.db import get_db
 from ..models import Part, PartSupplier, Quote, QuoteLine, StockEntry
+from ..services import location_breakdown
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -60,6 +61,7 @@ class LinePatch(BaseModel):
     description: str | None = None
     qty: float | None = None
     unit_cost: float | None = None
+    markup_percent: float | None = None  # explicit null clears -> use quote markup
     note: str | None = None
 
 
@@ -104,7 +106,8 @@ def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str]:
     return 0.0, "SEK", "no price on file"
 
 
-def _line_row(ln: QuoteLine, markup: float, vat: float) -> dict:
+def _line_row(ln: QuoteLine, quote_markup: float) -> dict:
+    markup = ln.markup_percent if ln.markup_percent is not None else quote_markup
     sell_ex = round(ln.unit_cost * (1 + markup / 100), 4)
     return {
         "id": ln.id,
@@ -113,6 +116,8 @@ def _line_row(ln: QuoteLine, markup: float, vat: float) -> dict:
         "mpn": ln.mpn,
         "qty": ln.qty,
         "unit_cost": ln.unit_cost,
+        "markup_percent": ln.markup_percent,   # None => inherits the quote's
+        "effective_markup": markup,
         "currency": ln.currency,
         "cost_source": ln.cost_source,
         "note": ln.note,
@@ -122,7 +127,7 @@ def _line_row(ln: QuoteLine, markup: float, vat: float) -> dict:
 
 
 def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
-    lines = [_line_row(ln, q.markup_percent, q.vat_percent) for ln in q.lines]
+    lines = [_line_row(ln, q.markup_percent) for ln in q.lines]
     cost_total = round(sum(ln.unit_cost * ln.qty for ln in q.lines), 2)
     sell_ex_total = round(sum(x["line_ex"] for x in lines), 2)
     vat_amount = round(sell_ex_total * q.vat_percent / 100, 2)
@@ -135,6 +140,7 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
         "markup_percent": q.markup_percent,
         "vat_percent": q.vat_percent,
         "status": q.status,
+        "stock_committed": q.stock_committed,
         "line_count": len(q.lines),
         "created_at": q.created_at.isoformat() if q.created_at else None,
         "totals": {
@@ -152,8 +158,11 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
 
 
 @router.get("")
-def list_quotes(db: Session = Depends(get_db)):
-    qs = db.scalars(select(Quote).order_by(Quote.id.desc())).all()
+def list_quotes(status: str = "open", db: Session = Depends(get_db)):
+    stmt = select(Quote).order_by(Quote.id.desc())
+    if status in ("open", "invoiced"):
+        stmt = stmt.where(Quote.status == status)
+    qs = db.scalars(stmt).all()
     return [_quote_dict(db, q, full=False) for q in qs]
 
 
@@ -259,6 +268,112 @@ def delete_line(qid: int, lid: int, db: Session = Depends(get_db)):
     db.delete(ln)
     db.commit()
     return {"ok": True}
+
+
+# ---- stock commit / invoice archive (both reversible) ----
+def _mg(qid: int) -> str:
+    return f"quote-{qid}"
+
+
+@router.post("/{qid}/commit-stock")
+def commit_stock(qid: int, db: Session = Depends(get_db)):
+    q = _need(db, qid)
+    if q.stock_committed:
+        return {"ok": True, "already": True}
+    grp = _mg(qid)
+    moved = 0
+    for ln in q.lines:
+        if not ln.part_id or ln.qty <= 0:
+            continue
+        need = int(round(ln.qty))
+        for r in location_breakdown(db, ln.part_id):  # largest first
+            if need <= 0:
+                break
+            take = min(need, r["qty"])
+            db.add(StockEntry(part_id=ln.part_id, location_id=r["location_id"],
+                              delta=-take, kind="build", move_group=grp,
+                              note=f"quote #{qid}"))
+            need -= take
+        if need > 0:  # not enough on hand — record the shortfall as a negative
+            db.add(StockEntry(part_id=ln.part_id, location_id=None, delta=-need,
+                              kind="build", move_group=grp, note=f"quote #{qid} (shortfall)"))
+        moved += 1
+    q.stock_committed = True
+    db.commit()
+    return {"ok": True, "lines": moved}
+
+
+@router.post("/{qid}/uncommit-stock")
+def uncommit_stock(qid: int, db: Session = Depends(get_db)):
+    q = _need(db, qid)
+    if not q.stock_committed:
+        return {"ok": True, "already": True}
+    grp = _mg(qid)
+    for e in db.scalars(select(StockEntry).where(StockEntry.move_group == grp)).all():
+        db.add(StockEntry(part_id=e.part_id, location_id=e.location_id, delta=-e.delta,
+                          kind="correction", move_group=f"undo-{grp}",
+                          note=f"undo quote #{qid}"))
+    q.stock_committed = False
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{qid}/invoice")
+def invoice(qid: int, commit_stock_too: bool = True, db: Session = Depends(get_db)):
+    q = _need(db, qid)
+    if commit_stock_too and not q.stock_committed:
+        commit_stock(qid, db)
+        q = _need(db, qid)
+    q.status = "invoiced"
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{qid}/unarchive")
+def unarchive(qid: int, db: Session = Depends(get_db)):
+    q = _need(db, qid)
+    q.status = "open"
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/{qid}/export.xlsx")
+def export_xlsx(qid: int, db: Session = Depends(get_db)):
+    import openpyxl
+
+    q = _need(db, qid)
+    d = _quote_dict(db, q, full=True)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Quote"
+    ws.append([q.title or f"Quote #{q.id}"])
+    ws.append(["Customer", q.customer or ""])
+    ws.append(["Markup %", q.markup_percent, "VAT %", q.vat_percent, "Status", q.status])
+    ws.append([])
+    head = ["MPN", "Description", "Qty", "Unit cost ex VAT", "Markup %",
+            "Source", "Sell unit ex VAT", "Line ex VAT", "Note"]
+    ws.append(head)
+    for ln in d["lines"]:
+        ws.append([ln["mpn"] or "", ln["description"], ln["qty"], ln["unit_cost"],
+                   ln["effective_markup"], ln["cost_source"] or "",
+                   ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""])
+    t = d["totals"]
+    ws.append([])
+    for label, val in [("Cost", t["cost"]), ("Markup", t["markup"]),
+                       ("Sell ex VAT", t["sell_ex_vat"]),
+                       (f"VAT {q.vat_percent}%", t["vat"]),
+                       ("Total inc VAT", t["inc_vat_ceil"])]:
+        ws.append(["", "", "", "", "", "", label, val])
+    for i, colw in enumerate([16, 40, 6, 16, 10, 22, 16, 14, 24], 1):
+        ws.column_dimensions[chr(64 + i)].width = colw
+    bio = io.BytesIO()
+    wb.save(bio)
+    fn = f"quote-{q.id}-{datetime.now():%Y%m%d}.xlsx"
+    return StreamingResponse(
+        iter([bio.getvalue()]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
 
 
 @router.get("/{qid}/export.csv")
