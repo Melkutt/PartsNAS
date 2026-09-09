@@ -182,12 +182,17 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   stock), hiding the quote from the default list; `unarchive` reverses it. All
   reversible.
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
-- `/api/export/backup.zip?only_with_supplier=&category_id=&q=` — a full,
-  re-importable backup: `parts.json` (attributes, tags, suppliers, stock,
-  replacement links, design notes) + `images/<part_id>/<file>`.
-  `/api/import/backup` (multipart `file`=zip, `mode`=merge|update|replace,
-  `dry_run`) — matches existing parts by `id` then `mpn`, creates categories /
-  locations by path, links suppliers by name. `merge` never doubles.
+- `/api/export/backup.zip?only_with_supplier=&category_id=&q=&include_secrets=` —
+  a full, re-importable backup: `parts.json` (attributes, tags, suppliers, stock,
+  replacement links, design notes) + `images/<part_id>/<file>`, and with
+  `include_secrets` a `secrets.json` (Mouser key, Digi-Key client id/secret,
+  locale). `/api/import/backup` (multipart `file`=zip, `mode`=merge|update|replace,
+  `dry_run`) — matches parts by `id` then `mpn`, creates categories / locations by
+  path, links suppliers by name, restores `secrets.json` if present. `merge` never doubles.
+- `/api/parts/{id}/cost` — supplier price options for a quote line
+  (`auto_link_id` = preferred, else cheapest). `POST /api/quotes/{id}/lines`
+  takes `supplier_link_id` to pin the price; the ★ on the Suppliers tab
+  (`PartSupplier.preferred`) is the price source and skips the picker.
 
 ### Supplier providers (`app/providers/`)
 

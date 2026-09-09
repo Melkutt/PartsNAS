@@ -193,18 +193,47 @@ export class QuotesView {
   async _delLine(lid) { await api(`/api/quotes/${this.q.id}/lines/${lid}`, { method: "DELETE" }); this.openQuote(this.q.id); }
 
   _addLine() {
-    const ps = partSearch({ placeholder: "search part…" });
+    const priceRow = el("div");
+    let priceSel = null;
+    const ps = partSearch({
+      placeholder: "search part…",
+      onPick: async (p) => {
+        priceRow.innerHTML = "";
+        priceSel = null;
+        const co = await api(`/api/parts/${p.id}/cost`).catch(() => null);
+        if (!co || co.options.length < 2 || co.has_preferred) {
+          if (co && co.has_preferred) {
+            const pref = co.options.find((o) => o.preferred);
+            priceRow.append(el("div", { class: "row" }, el("label", {}, "Price"),
+              el("span", { style: "color:var(--text-muted)" }, `${pref.supplier} ${pref.unit_price} ${pref.currency} (preferred)`)));
+          }
+          return;
+        }
+        priceSel = el("select");
+        for (const o of co.options)
+          priceSel.append(el("option", { value: o.link_id },
+            `${o.supplier}${o.sku ? " " + o.sku : ""} — ${o.unit_price} ${o.currency}`));
+        priceSel.value = String(co.auto_link_id);
+        priceRow.append(
+          el("div", { class: "row" }, el("label", {}, "Price from"), priceSel),
+          el("div", { class: "hint" }, "No preferred supplier set — auto-picks the cheapest. Set ★ on the Suppliers tab to skip this."),
+        );
+      },
+    });
     const qty = el("input", { type: "text", value: "1", style: "width:70px" });
     modal({
       title: "Add part to quote",
       body: el("div", { class: "modal-body" },
         el("div", { class: "row" }, el("label", {}, "Part"), ps.el),
-        el("div", { class: "row" }, el("label", {}, "Qty"), qty)),
+        el("div", { class: "row" }, el("label", {}, "Qty"), qty),
+        priceRow),
       confirmText: "Add",
       onConfirm: async () => {
         const p = ps.get();
         if (!p) throw new Error("pick a part");
-        await api(`/api/quotes/${this.q.id}/lines`, { method: "POST", body: { part_id: p.id, qty: parseNum(qty.value) ?? 1 } });
+        const body = { part_id: p.id, qty: parseNum(qty.value) ?? 1 };
+        if (priceSel && priceSel.value) body.supplier_link_id = Number(priceSel.value);
+        await api(`/api/quotes/${this.q.id}/lines`, { method: "POST", body });
         toast("Added");
         this.openQuote(this.q.id);
       },

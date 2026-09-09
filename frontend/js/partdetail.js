@@ -522,12 +522,13 @@ export class PartDetail {
   // ---------- Suppliers ----------
   _suppliersTab(body) {
     body.append(el("button", { class: "primary", onclick: () => this._linkDialog() }, "Add supplier link"));
-    const t = el("table", { class: "mini-table", style: "margin-top:10px" });
-    t.append(el("tr", {}, el("th", {}, ""), el("th", {}, "Supplier"), el("th", {}, "Article no."),
+    body.append(el("div", { class: "hint" }, "★ = the price used in quotes for this part. Click a star to set it."));
+    const t = el("table", { class: "mini-table", style: "margin-top:6px" });
+    t.append(el("tr", {}, el("th", { title: "price shown in quotes" }, "★"), el("th", {}, "Supplier"), el("th", {}, "Article no."),
       el("th", { class: "num" }, "ex VAT"), el("th", { class: "num" }, "inc VAT"), el("th", {}, ""), el("th", {}, "")));
     for (const l of this.p.suppliers) {
-      const star = el("span", { class: "star" + (l.preferred ? " on" : ""), title: "preferred",
-        onclick: () => this._patchLink(l.id, { preferred: true }) }, "★");
+      const star = el("span", { class: "star" + (l.preferred ? " on" : ""), title: l.preferred ? "price source for quotes" : "use this price in quotes",
+        onclick: () => this._patchLink(l.id, { preferred: !l.preferred }) }, "★");
       t.append(
         el("tr", {},
           el("td", {}, star),

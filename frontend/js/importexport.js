@@ -95,6 +95,7 @@ export function openImport(onDone) {
       `supplier links:     ${d.supplier_links}`,
       `images:             ${d.images}`,
       `design notes:       ${d.design_notes}`,
+      `API creds restored: ${(d.creds_restored || []).join(", ") || "none"}`,
     ];
     if (d.warnings?.length) lines.push("", "warnings:", ...d.warnings.map((w) => "  - " + w));
     return lines.join("\n");
@@ -103,6 +104,7 @@ export function openImport(onDone) {
 
 export function openExport() {
   const onlySup = el("input", { type: "checkbox" });
+  const withKeys = el("input", { type: "checkbox" });
   const body = el("div", { class: "modal-body" },
     el("div", {}, el("b", {}, "Spreadsheet"), " — flat parts list (on-hand + per-location + tags)."),
     el("div", { class: "row" },
@@ -111,8 +113,15 @@ export function openExport() {
     el("div", { style: "margin-top:12px" }, el("b", {}, "Full backup (.zip)"),
       " — everything: attributes, tags, suppliers, images, stock, design notes. Re-importable."),
     el("label", { class: "facet-opt" }, onlySup, " only parts that have a supplier link"),
+    el("label", { class: "facet-opt", title: "Mouser key, Digi-Key client id/secret — keep the file private" },
+      withKeys, " include supplier API keys ⚠"),
     el("div", { class: "row" },
-      el("button", { class: "primary", onclick: () => go(`/api/export/backup.zip${onlySup.checked ? "?only_with_supplier=true" : ""}`) }, "Backup — ZIP")),
+      el("button", { class: "primary", onclick: () => {
+        const p = new URLSearchParams();
+        if (onlySup.checked) p.set("only_with_supplier", "true");
+        if (withKeys.checked) p.set("include_secrets", "true");
+        go(`/api/export/backup.zip${p.toString() ? "?" + p : ""}`);
+      } }, "Backup — ZIP")),
   );
   const m = modal({ title: "Export", body, confirmText: "Close", onConfirm: () => {} });
   function go(url) {

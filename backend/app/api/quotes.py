@@ -54,6 +54,7 @@ class LineIn(BaseModel):
     mpn: str | None = None
     qty: float = 1
     unit_cost: float | None = None  # override the snapshot
+    supplier_link_id: int | None = None  # pin the price to this PartSupplier row
     note: str | None = None
 
 
@@ -75,6 +76,15 @@ def _need(db: Session, qid: int) -> Quote:
     if q is None:
         raise HTTPException(404, "quote not found")
     return q
+
+
+def snapshot_from_link(db: Session, link_id: int) -> tuple[float, str, str] | None:
+    link = db.get(PartSupplier, link_id)
+    if link is None or link.unit_price is None:
+        return None
+    when = link.updated_at.strftime("%Y-%m-%d") if link.updated_at else ""
+    name = link.supplier.name if link.supplier else "supplier"
+    return link.unit_price, link.currency, f"{name} {when}".strip()
 
 
 def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str]:
@@ -195,7 +205,8 @@ def delete_quote(qid: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, note):
+def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, note,
+              supplier_link_id=None):
     order = (
         db.scalar(
             select(QuoteLine.sort_order)
@@ -212,6 +223,10 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
             raise HTTPException(400, f"unknown part_id {part_id}")
         description = description or p.name
         mpn = mpn or p.mpn
+        if unit_cost is None and supplier_link_id:
+            picked = snapshot_from_link(db, supplier_link_id)
+            if picked:
+                unit_cost, cur, src = picked
         if unit_cost is None:
             unit_cost, cur, src = snapshot_cost(db, part_id)
     if unit_cost is None:
@@ -233,7 +248,7 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
 def add_line(qid: int, body: LineIn, db: Session = Depends(get_db)):
     q = _need(db, qid)
     ln = _add_line(db, q, body.part_id, body.description, body.mpn, body.qty,
-                   body.unit_cost, body.note)
+                   body.unit_cost, body.note, body.supplier_link_id)
     db.commit()
     return {"id": ln.id}
 

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from .. import __version__
 from ..core.config import get_settings
 from ..core.db import get_db
+from ..core.kv import get_kv, set_kv
 from ..models import (
     Attachment,
     Category,
@@ -32,11 +33,13 @@ from ..models import (
     DesignNoteLink,
     Part,
     PartSupplier,
+    Setting,
     StockEntry,
     StorageLocation,
     Supplier,
     Tag,
 )
+from ..providers import all_providers
 from ..services import category_path_map, location_breakdown
 from .images import _refresh_primary, store_attachment
 from .parts import PartFilter, _query
@@ -114,6 +117,7 @@ def export_backup(
     only_with_supplier: bool = False,
     category_id: int | None = None,
     q: str | None = None,
+    include_secrets: bool = False,
 ):
     f = PartFilter(q=q, category_id=category_id)
     ids = list(db.scalars(_query(db, f)).all())
@@ -136,6 +140,14 @@ def export_backup(
             "parts": len(records), "only_with_supplier": only_with_supplier,
         }, indent=2))
         z.writestr("parts.json", json.dumps(records, ensure_ascii=False, indent=2))
+        if include_secrets:
+            secrets = {}
+            for prov in all_providers():
+                cfg = get_kv(db, f"provider:{prov.name}:config", {}) or {}
+                loc = get_kv(db, f"provider:{prov.name}:locale", {}) or {}
+                if cfg or loc:
+                    secrets[prov.name] = {"config": cfg, "locale": loc}
+            z.writestr("secrets.json", json.dumps({"providers": secrets}, indent=2))
         for p in parts:
             for a in p.attachments:
                 src = settings.data_dir / a.stored
@@ -228,7 +240,19 @@ async def import_backup(
         raise HTTPException(400, "parts.json missing — not a PartsNAS backup")
 
     s: dict = {"created": 0, "updated": 0, "skipped": 0, "images": 0,
-               "supplier_links": 0, "design_notes": 0, "warnings": []}
+               "supplier_links": 0, "design_notes": 0, "creds_restored": [],
+               "warnings": []}
+
+    if "secrets.json" in zf.namelist():
+        sec = json.loads(zf.read("secrets.json")).get("providers", {})
+        for name, blob in sec.items():
+            if blob.get("config"):
+                if not dry_run:
+                    set_kv(db, f"provider:{name}:config", blob["config"])
+                    set_kv(db, f"provider:{name}:token", {})
+                s["creds_restored"].append(name)
+            if blob.get("locale") and not dry_run:
+                set_kv(db, f"provider:{name}:locale", blob["locale"])
     ccache: dict = {}
     lcache: dict = {}
     id_by_mpn = {

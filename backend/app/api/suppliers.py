@@ -145,6 +145,36 @@ def _link_row(link: PartSupplier) -> dict:
     }
 
 
+@router.get("/api/parts/{pid}/cost")
+def cost_options(pid: str, db: Session = Depends(get_db)):
+    """Which supplier prices could feed a quote line. `auto_link_id` is what the
+    quote would pick if you don't choose (preferred link, else the cheapest)."""
+    _need_part(db, pid)
+    links = db.scalars(
+        select(PartSupplier).where(
+            PartSupplier.part_id == pid, PartSupplier.unit_price.is_not(None)
+        )
+    ).all()
+    opts = [
+        {
+            "link_id": x.id,
+            "supplier": x.supplier.name if x.supplier else "?",
+            "sku": x.sku,
+            "unit_price": x.unit_price,
+            "currency": x.currency,
+            "preferred": x.preferred,
+        }
+        for x in links
+    ]
+    has_pref = any(o["preferred"] for o in opts)
+    auto = None
+    if opts:
+        auto = min(
+            links, key=lambda x: (0 if x.preferred else 1, x.unit_price or 1e9)
+        ).id
+    return {"options": opts, "auto_link_id": auto, "has_preferred": has_pref}
+
+
 @router.get("/api/parts/{pid}/suppliers")
 def part_suppliers(pid: str, db: Session = Depends(get_db)):
     _need_part(db, pid)
