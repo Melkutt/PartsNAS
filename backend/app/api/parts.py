@@ -12,6 +12,10 @@
 """
 from __future__ import annotations
 
+import re
+from collections import Counter
+from dataclasses import dataclass, field
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
@@ -19,7 +23,9 @@ from sqlalchemy.orm import Session
 
 from ..core.db import get_db
 from ..models import Part, StockEntry, Tag
+from ..partschema import fields_for, part_class_schema
 from ..services import (
+    category_class_map,
     category_path,
     category_path_map,
     descendant_category_ids,
@@ -30,6 +36,8 @@ from ..services import (
 )
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
+
+_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
 
 class PartIn(BaseModel):
@@ -67,122 +75,223 @@ class PartPatch(BaseModel):
     tags: list[str] | None = None
 
 
-def _filtered_query(
-    db: Session,
-    q: str | None,
-    category_id: int | None,
-    with_subcats: bool,
-    location_id: int | None,
-    tag: str | None,
-    mount: str | None,
-):
+@dataclass
+class PartFilter:
+    q: str | None = None
+    category_id: int | None = None
+    with_subcats: bool = True
+    location_ids: list[int] = field(default_factory=list)
+    mounts: list[str] = field(default_factory=list)
+    footprints: list[str] = field(default_factory=list)
+    manufacturers: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    in_stock: str | None = None  # "yes" | "no"
+    attrs: list[str] = field(default_factory=list)  # "key:value"
+    low_stock: bool = False
+
+    def attr_groups(self) -> dict[str, list[str]]:
+        groups: dict[str, list[str]] = {}
+        for raw in self.attrs:
+            if ":" not in raw:
+                continue
+            k, v = raw.split(":", 1)
+            if _KEY_RE.match(k):
+                groups.setdefault(k, []).append(v)
+        return groups
+
+
+def _query(db: Session, f: PartFilter, *, exclude: str | None = None):
+    """Ids matching the filter. `exclude` drops one dimension so a facet group
+    doesn't shrink its own counts."""
     stmt = select(Part.id)
-    if q:
-        like = f"%{q.strip()}%"
+    if f.q:
+        like = f"%{f.q.strip()}%"
         stmt = stmt.where(
             or_(Part.name.ilike(like), Part.mpn.ilike(like), Part.description.ilike(like))
         )
-    if category_id is not None:
-        ids = descendant_category_ids(db, category_id) if with_subcats else {category_id}
+    if f.category_id is not None:
+        ids = descendant_category_ids(db, f.category_id) if f.with_subcats else {f.category_id}
         stmt = stmt.where(Part.category_id.in_(ids))
-    if mount:
-        stmt = stmt.where(Part.mount == mount)
-    if tag:
-        stmt = stmt.where(Part.tags.any(Tag.name == tag))
-    if location_id is not None:
+    if f.mounts and exclude != "mount":
+        stmt = stmt.where(Part.mount.in_(f.mounts))
+    if f.footprints and exclude != "footprint":
+        stmt = stmt.where(Part.footprint_raw.in_(f.footprints))
+    if f.manufacturers and exclude != "manufacturer":
+        stmt = stmt.where(Part.manufacturer.in_(f.manufacturers))
+    if f.tags and exclude != "tags":
+        for t in f.tags:
+            stmt = stmt.where(Part.tags.any(Tag.name == t))
+    if f.location_ids and exclude != "location":
         sub = (
             select(StockEntry.part_id)
-            .where(StockEntry.location_id == location_id)
+            .where(StockEntry.location_id.in_(f.location_ids))
             .group_by(StockEntry.part_id)
             .having(func.coalesce(func.sum(StockEntry.delta), 0) > 0)
         )
         stmt = stmt.where(Part.id.in_(sub))
+    if f.in_stock and exclude != "in_stock":
+        sub = (
+            select(StockEntry.part_id)
+            .group_by(StockEntry.part_id)
+            .having(func.coalesce(func.sum(StockEntry.delta), 0) > 0)
+        )
+        stmt = stmt.where(Part.id.in_(sub) if f.in_stock == "yes" else Part.id.not_in(sub))
+    for key, values in f.attr_groups().items():
+        if exclude == f"attr:{key}":
+            continue
+        col = func.json_extract(Part.attributes, f'$."{key}"')
+        stmt = stmt.where(or_(*[col == v for v in values]))
     return stmt
 
 
-def _matching_ids(db: Session, **kw) -> list[str]:
-    return list(db.scalars(_filtered_query(db, **kw)).all())
+def _matching_ids(db: Session, f: PartFilter) -> list[str]:
+    ids = list(db.scalars(_query(db, f)).all())
+    if f.low_stock:
+        onhand = on_hand_map(db, ids)
+        mins = dict(db.execute(select(Part.id, Part.min_stock).where(Part.id.in_(ids))).all())
+        ids = [i for i in ids if mins.get(i, 0) > 0 and onhand.get(i, 0) <= mins.get(i, 0)]
+    return ids
+
+
+def _filter_params(
+    q: str | None = None,
+    category_id: int | None = None,
+    with_subcats: bool = True,
+    location_id: list[int] = Query(default=[]),
+    mount: list[str] = Query(default=[]),
+    footprint: list[str] = Query(default=[]),
+    manufacturer: list[str] = Query(default=[]),
+    tag: list[str] = Query(default=[]),
+    in_stock: str | None = None,
+    attr: list[str] = Query(default=[]),
+    low_stock: bool = False,
+) -> PartFilter:
+    return PartFilter(
+        q=q, category_id=category_id, with_subcats=with_subcats,
+        location_ids=location_id, mounts=mount, footprints=footprint,
+        manufacturers=manufacturer, tags=tag, in_stock=in_stock, attrs=attr,
+        low_stock=low_stock,
+    )
 
 
 @router.get("")
 def list_parts(
     db: Session = Depends(get_db),
-    q: str | None = None,
-    category_id: int | None = None,
-    with_subcats: bool = True,
-    location_id: int | None = None,
-    tag: str | None = None,
-    mount: str | None = None,
-    low_stock: bool = False,
+    f: PartFilter = Depends(_filter_params),
     limit: int = Query(200, le=2000),
     offset: int = 0,
     order: str = "name",
 ):
-    ids = _matching_ids(
-        db,
-        q=q,
-        category_id=category_id,
-        with_subcats=with_subcats,
-        location_id=location_id,
-        tag=tag,
-        mount=mount,
-    )
+    ids = _matching_ids(db, f)
     onhand = on_hand_map(db, ids)
-    if low_stock:
-        mins = dict(db.execute(select(Part.id, Part.min_stock).where(Part.id.in_(ids))).all())
-        ids = [i for i in ids if mins.get(i, 0) > 0 and onhand.get(i, 0) <= mins.get(i, 0)]
-
     total = len(ids)
-    rows = (
-        db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
-    )
+    rows = db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
     paths = category_path_map(db)
     locs = location_breakdown_bulk(db, ids)
-    out = []
-    for p in rows:
-        out.append(
-            {
-                "id": p.id,
-                "name": p.name,
-                "mpn": p.mpn,
-                "manufacturer": p.manufacturer,
-                "category_id": p.category_id,
-                "category": paths.get(p.category_id, ""),
-                "mount": p.mount,
-                "footprint": p.footprint_raw,
-                "min_stock": p.min_stock,
-                "on_hand": onhand.get(p.id, 0),
-                "locations": locs.get(p.id, []),
-                "tags": [t.name for t in p.tags],
-                "image_path": p.image_path,
-            }
-        )
+    out = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "mpn": p.mpn,
+            "manufacturer": p.manufacturer,
+            "category_id": p.category_id,
+            "category": paths.get(p.category_id, ""),
+            "mount": p.mount,
+            "footprint": p.footprint_raw,
+            "min_stock": p.min_stock,
+            "on_hand": onhand.get(p.id, 0),
+            "locations": locs.get(p.id, []),
+            "tags": [t.name for t in p.tags],
+            "image_path": p.image_path,
+        }
+        for p in rows
+    ]
     key = (lambda r: r["on_hand"]) if order == "stock" else (lambda r: (r["name"] or "").lower())
     out.sort(key=key, reverse=(order == "stock"))
     return {"total": total, "count": len(out), "items": out[offset : offset + limit]}
 
 
 @router.get("/ids")
-def list_ids(
-    db: Session = Depends(get_db),
-    q: str | None = None,
-    category_id: int | None = None,
-    with_subcats: bool = True,
-    location_id: int | None = None,
-    tag: str | None = None,
-    mount: str | None = None,
-):
-    return {
-        "ids": _matching_ids(
-            db,
-            q=q,
-            category_id=category_id,
-            with_subcats=with_subcats,
-            location_id=location_id,
-            tag=tag,
-            mount=mount,
-        )
+def list_ids(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params)):
+    return {"ids": _matching_ids(db, f)}
+
+
+@router.get("/facets")
+def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params)):
+    """Available filter values + counts for the current selection. Each group is
+    counted with every *other* active filter applied but not its own, so options
+    stay meaningful while multi-selecting."""
+    cat_class = category_class_map(db)
+    schema = part_class_schema()
+
+    def parts_for(exclude: str | None):
+        ids = list(db.scalars(_query(db, f, exclude=exclude)).all())
+        return db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
+
+    def count(field_get, exclude):
+        c = Counter()
+        for p in parts_for(exclude):
+            v = field_get(p)
+            if v not in (None, ""):
+                c[str(v)] += 1
+        return [{"value": k, "count": n} for k, n in c.most_common()]
+
+    result: dict = {
+        "mount": count(lambda p: p.mount, "mount"),
+        "footprint": count(lambda p: p.footprint_raw, "footprint"),
+        "manufacturer": count(lambda p: p.manufacturer, "manufacturer"),
     }
+
+    # location facet
+    loc_parts = parts_for("location")
+    loc_counts = location_breakdown_bulk(db, [p.id for p in loc_parts])
+    lc = Counter()
+    for rows in loc_counts.values():
+        for r in rows:
+            lc[r["location"]] += 1
+    result["location"] = [{"value": k, "count": n, "id": None} for k, n in lc.most_common()]
+    # attach ids where we can
+    name_id = {r["location"]: r["location_id"] for rows in loc_counts.values() for r in rows}
+    for opt in result["location"]:
+        opt["id"] = name_id.get(opt["value"])
+
+    # tags facet
+    tag_parts = parts_for("tags")
+    tc = Counter()
+    for p in tag_parts:
+        for t in p.tags:
+            tc[t.name] += 1
+    result["tags"] = [{"value": k, "count": n} for k, n in tc.most_common()]
+
+    # in-stock facet
+    isp = parts_for("in_stock")
+    oh = on_hand_map(db, [p.id for p in isp])
+    yes = sum(1 for p in isp if oh.get(p.id, 0) > 0)
+    result["in_stock"] = [
+        {"value": "yes", "count": yes},
+        {"value": "no", "count": len(isp) - yes},
+    ]
+
+    # which classes are in play -> their parameter fields
+    if f.category_id is not None:
+        classes = {resolve_part_class(db, f.category_id)} - {None}
+    else:
+        classes = {cat_class.get(p.category_id) for p in parts_for(None)} - {None}
+    attr_facets: dict = {}
+    for cls in classes:
+        for fdef in schema.get(cls, {}).get("fields", []):
+            key = fdef["key"]
+            if key in attr_facets or not _KEY_RE.match(key) or fdef["type"] == "bool":
+                continue
+            opts = count(lambda p, k=key: (p.attributes or {}).get(k), f"attr:{key}")
+            if opts:
+                attr_facets[key] = {
+                    "label": fdef["label"],
+                    "unit": fdef.get("unit"),
+                    "options": opts,
+                }
+    result["attributes"] = attr_facets
+    return result
 
 
 @router.get("/lookup")

@@ -1,0 +1,60 @@
+{
+  "capacitor": [
+    { "key": "mounting", "label": "Mounting", "type": "enum",
+      "options": ["SMD", "Radial", "Axial", "Snap-in", "Screw terminal", "Chassis"] },
+    { "key": "pitch", "label": "Lead pitch", "unit": "mm", "type": "number" },
+    { "key": "body_diameter", "label": "Body diameter", "unit": "mm", "type": "number" },
+    { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
+    { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
+    { "key": "body_height", "label": "Body height", "unit": "mm", "type": "number" },
+    { "key": "lead_diameter", "label": "Lead diameter", "unit": "mm", "type": "number" }
+  ],
+  "resistor": [
+    { "key": "mounting", "label": "Mounting", "type": "enum",
+      "options": ["SMD", "Axial", "Radial", "Chassis", "Panel"] },
+    { "key": "pitch", "label": "Lead pitch", "unit": "mm", "type": "number" },
+    { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
+    { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
+    { "key": "body_height", "label": "Body height", "unit": "mm", "type": "number" }
+  ],
+  "inductor": [
+    { "key": "mounting", "label": "Mounting", "type": "enum",
+      "options": ["SMD", "Radial", "Axial", "Toroid", "Chassis"] },
+    { "key": "pitch", "label": "Lead pitch", "unit": "mm", "type": "number" },
+    { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
+    { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
+    { "key": "body_height", "label": "Body height", "unit": "mm", "type": "number" }
+  ],
+  "diode": [
+    { "key": "mounting", "label": "Mounting", "type": "enum", "options": ["SMD", "THT"] },
+    { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
+    { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" }
+  ],
+  "transistor_bjt": [
+    { "key": "mounting", "label": "Mounting", "type": "enum", "options": ["SMD", "THT"] }
+  ],
+  "transistor_mosfet": [
+    { "key": "mounting", "label": "Mounting", "type": "enum", "options": ["SMD", "THT"] }
+  ],
+  "ic": [
+    { "key": "mounting", "label": "Mounting", "type": "enum", "options": ["SMD", "THT", "Module"] },
+    { "key": "pitch", "label": "Pin pitch", "unit": "mm", "type": "number" }
+  ],
+  "crystal": [
+    { "key": "mounting", "label": "Mounting", "type": "enum", "options": ["SMD", "THT"] },
+    { "key": "body_length", "label": "Body length", "unit": "mm", "type": "number" },
+    { "key": "body_width", "label": "Body width", "unit": "mm", "type": "number" },
+    { "key": "body_height", "label": "Body height", "unit": "mm", "type": "number" }
+  ],
+  "connector": [
+    { "key": "mounting", "label": "Mounting", "type": "enum",
+      "options": ["SMD", "THT", "Panel", "Cable", "Press-fit"] },
+    { "key": "orientation", "label": "Orientation", "type": "enum",
+      "options": ["Vertical", "Right-angle", "Edge"] }
+  ],
+  "mechanical": [
+    { "key": "length", "label": "Length", "unit": "mm", "type": "number" },
+    { "key": "width", "label": "Width", "unit": "mm", "type": "number" },
+    { "key": "height", "label": "Height", "unit": "mm", "type": "number" }
+  ]
+}

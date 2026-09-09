@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from ..core.db import get_db
 from ..models import BulkOp, Part, StockEntry, StorageLocation, Tag
 from ..services import location_breakdown_bulk
-from .parts import _filtered_query
+from .parts import PartFilter, _query
 
 router = APIRouter(prefix="/api/bulk", tags=["bulk"])
 
@@ -44,11 +44,27 @@ def _target_ids(db: Session, body: BulkBody) -> list[str]:
     if body.ids:
         return list(dict.fromkeys(body.ids))
     if body.filter is not None:
-        allowed = {"q", "category_id", "with_subcats", "location_id", "tag", "mount"}
-        kw = {k: body.filter.get(k) for k in allowed}
-        kw.setdefault("with_subcats", True)
-        return list(db.scalars(_filtered_query(db, **kw)).all())
+        d = body.filter
+        f = PartFilter(
+            q=d.get("q"),
+            category_id=d.get("category_id"),
+            with_subcats=d.get("with_subcats", True),
+            location_ids=_aslist(d.get("location_id")),
+            mounts=_aslist(d.get("mount")),
+            footprints=_aslist(d.get("footprint")),
+            manufacturers=_aslist(d.get("manufacturer")),
+            tags=_aslist(d.get("tag")),
+            in_stock=d.get("in_stock"),
+            attrs=_aslist(d.get("attr")),
+        )
+        return list(db.scalars(_query(db, f)).all())
     raise HTTPException(400, "provide ids or filter")
+
+
+def _aslist(v) -> list:
+    if v is None:
+        return []
+    return v if isinstance(v, list) else [v]
 
 
 def _tag(db: Session, name: str) -> Tag:

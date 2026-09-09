@@ -123,8 +123,13 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 ## API surface so far
 
 - `/api/categories`, `/api/locations` — tree CRUD (see files).
-- `/api/parts` (list+filter), `/api/parts/ids` (select-all-matching),
-  `/api/parts/lookup?code=` (scanner), `/api/parts/{id}` CRUD.
+- `/api/parts` (list), `/api/parts/ids` (select-all-matching),
+  `/api/parts/facets` (available filter values + counts), `/api/parts/lookup?code=`
+  (scanner), `/api/parts/{id}` CRUD. Filters (all repeatable / multi-value):
+  `q`, `category_id` (+subcats), `location_id`, `mount`, `footprint`,
+  `manufacturer`, `tag`, `in_stock=yes|no`, `attr=<key>:<value>`, `low_stock`.
+  `PartFilter` + `_query()` in `api/parts.py`; facets count each group with the
+  *other* filters applied but not its own.
 - `/api/parts/{id}/stock` (+ `/move`) — the ledger for one part; the `add` body
   takes `supplier_id`/`supplier_sku`/`price_includes_vat` and upserts PartSupplier.
 - `/api/bulk` + `/api/bulk/{id}/undo` — move_category / move_stock / add_tag /
@@ -132,14 +137,21 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - `/api/suppliers` CRUD; `/api/parts/{id}/suppliers` link CRUD.
 - `/api/parts/{id}/images` upload (Pillow thumbs) / delete / `…/primary`.
 - `/api/design-notes` searchable list + CRUD; `/api/parts/{id}/design-notes`.
-- `/api/meta/part-classes` — field schemas for the detail form.
+- `/api/meta/part-classes` — field schemas: `seed/part_classes.json` (from the
+  workbook) + `seed/part_classes_extra.json` overlay (hand-kept extra dims —
+  lead pitch, body W/H, radial/axial mounting), merged in `app/partschema.py`.
+- `/api/meta/attr-values` — distinct values already used per attribute key, so
+  the edit form offers them as a `<datalist>` (recurring params → dropdown).
 - `/api/import/partsbox` (multipart, `dry_run`), `/api/export/parts.{csv,xlsx}`.
 
-Frontend: `js/parts.js` (table + bulk bar), `js/partdetail.js` (right-side panel:
-Details edit w/ per-class fields + images, Stock adjust/move, Suppliers ex/inc
-VAT, Notes), `js/suppliers.js` (master list tab), `js/designnotes.js` (search
-tab), `js/importexport.js`, `js/scan.js` (USB keyboard-wedge → `partsnas:scan`).
-Clicking a Category/Location tree node jumps to Parts filtered by it.
+Frontend: `js/parts.js` is a two-pane view — `js/catrail.js` (left: selectable
+Categories/Locations tree) + faceted filter bar (multi-select checkboxes with
+live counts, active-filter chips) + results table + bulk bar. `js/partdetail.js`
+(right-side panel: Details edit w/ per-class fields + `<datalist>` of prior
+values + images, Stock adjust/move, Suppliers ex/inc VAT, Notes),
+`js/suppliers.js`, `js/designnotes.js`, `js/importexport.js`, `js/scan.js`
+(USB keyboard-wedge → `partsnas:scan`). Clicking a Category/Location tree node on
+the *Categories/Locations tabs* also jumps to Parts filtered by it.
 
 ## Roadmap
 
@@ -150,10 +162,17 @@ Clicking a Category/Location tree node jumps to Parts filtered by it.
 4. **done** — part detail panel (edit + per-class fields + images), stock
    adjust/move UI, suppliers + VAT (ex/inc), 6 built-in suppliers + custom,
    supplier SKU, tree→parts linking.
-5. **done** — Design Notes tab (searchable "for part X at condition Y use these
-   parts"), with a part-search picker and a Notes sub-tab on the part panel.
-6. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
+5. **done** — Design Notes tab.
+6. **done** — two-pane Parts view (left rail + faceted dynamic filters incl.
+   class parameters over subcategories), expanded per-class dimensions
+   (`part_classes_extra.json`), parameter datalists from prior values.
+7. **Supplier APIs** (Mouser / TME / Digi-Key / Farnell) — keys in `Setting`,
+   an `app/providers/` package with a shared rate-limited + disk-cached +
+   backoff HTTP client and a per-provider circuit breaker (Celestrak lesson:
+   `is_blocked_until` persisted, daily quota counter, honest UA, fetch only on
+   an explicit user click, never bulk/auto). A "Look up specs" button on the
+   part panel fills attributes / price / datasheet / image from a match.
+8. Review-list stock-split helper; label/QR (`GET /api/label/{id}?fmt=code128|qr`,
    server-side offline) + printable label view.
-7. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
-8. Projects / builds / shortage report; min-stock warnings.
-9. API enrichment (Nexar/Mouser/Digi-Key), theme sync via `Setting`.
+9. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
+10. Projects / builds / shortage report; min-stock warnings; theme sync.

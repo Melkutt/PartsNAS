@@ -7,6 +7,11 @@ async function partClasses() {
   if (!CLASSES) CLASSES = await api("/api/meta/part-classes");
   return CLASSES;
 }
+let ATTR_VALUES = null; // { field_key: [previously used values] }
+async function attrValues(force) {
+  if (!ATTR_VALUES || force) ATTR_VALUES = await api("/api/meta/attr-values");
+  return ATTR_VALUES;
+}
 
 const MOUNTS = ["", "smd", "tht", "other"];
 
@@ -36,11 +41,12 @@ export class PartDetail {
   };
 
   async _load() {
-    [this.p, this.stock, this.suppliers, this.classes] = await Promise.all([
+    [this.p, this.stock, this.suppliers, this.classes, this.attrVals] = await Promise.all([
       api(`/api/parts/${this.id}`),
       api(`/api/parts/${this.id}/stock`),
       api("/api/suppliers"),
       partClasses(),
+      attrValues(),
     ]);
   }
 
@@ -154,9 +160,16 @@ export class PartDetail {
             el("option", { value: "" }, "—"), ...f.options.map((o) => el("option", { value: o }, o)));
           node.value = val;
         } else {
-          node = el("input", { type: "text", value: val,
-            inputmode: f.type === "number" ? "decimal" : null,
-            oninput: (e) => (draft.attributes[f.key] = e.target.value) });
+          // free text/number, but offer values already used for this parameter
+          const listId = `dl-${f.key}`;
+          const seen = this.attrVals[f.key] || [];
+          const dl = el("datalist", { id: listId }, ...seen.map((v) => el("option", { value: v })));
+          node = el("span", { style: "display:flex;gap:0" },
+            el("input", { type: "text", value: val, list: listId,
+              inputmode: f.type === "number" ? "decimal" : null,
+              style: "flex:1",
+              oninput: (e) => (draft.attributes[f.key] = e.target.value) }),
+            dl);
         }
         pg.append(el("label", { title: f.comment || "" }, f.label + (f.unit ? ` (${f.unit})` : "")), node);
       }
@@ -231,6 +244,7 @@ export class PartDetail {
       attributes: draft.attributes,
     };
     await api(`/api/parts/${this.id}`, { method: "PATCH", body: patch });
+    await attrValues(true); // new parameter values become datalist suggestions
     toast("Saved");
     await this._reload();
   }

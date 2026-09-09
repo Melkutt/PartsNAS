@@ -98,6 +98,24 @@ def resolve_part_class(db: Session, cat_id: int | None) -> str | None:
     return None
 
 
+def category_class_map(db: Session) -> dict[int, str | None]:
+    """Every category id -> its resolved part_class (one pass, no recursion cost)."""
+    rows = db.execute(select(Category.id, Category.parent_id, Category.part_class)).all()
+    own = {i: c for i, _p, c in rows}
+    parent = {i: p for i, p, _c in rows}
+
+    def resolve(i: int) -> str | None:
+        seen: set[int] = set()
+        while i is not None and i not in seen:
+            if own.get(i):
+                return own[i]
+            seen.add(i)
+            i = parent.get(i)
+        return None
+
+    return {i: resolve(i) for i in own}
+
+
 def category_path(db: Session, cat_id: int | None) -> str:
     """'Passive > Resistor > Thick film' for one category id."""
     if cat_id is None:
