@@ -133,14 +133,38 @@ def export_backup(
     paths = category_path_map(db)
     records = [_part_record(db, p, paths) for p in parts]
 
+    # full trees so a user-made branch that has no parts yet still round-trips
+    cats = [
+        {"path": paths.get(c.id, c.name), "part_class": c.part_class,
+         "comment": c.comment, "sort_order": c.sort_order, "is_unsorted": c.is_unsorted}
+        for c in db.scalars(select(Category)).all()
+    ]
+    lp = {loc.id: loc for loc in db.scalars(select(StorageLocation)).all()}
+
+    def _loc_path(loc):
+        chain, seen = [], set()
+        while loc and loc.id not in seen:
+            seen.add(loc.id)
+            chain.append(loc.name)
+            loc = lp.get(loc.parent_id)
+        return " > ".join(reversed(chain))
+
+    locs = [
+        {"path": _loc_path(loc), "note": loc.note, "legacy_id": loc.legacy_id}
+        for loc in lp.values()
+    ]
+
     bio = io.BytesIO()
     with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", json.dumps({
             "format": FMT, "version": 1, "app_version": __version__,
             "exported_at": datetime.utcnow().isoformat() + "Z",
-            "parts": len(records), "only_with_supplier": only_with_supplier,
+            "parts": len(records), "categories": len(cats), "locations": len(locs),
+            "only_with_supplier": only_with_supplier,
         }, indent=2))
         z.writestr("parts.json", json.dumps(records, ensure_ascii=False, indent=2))
+        z.writestr("categories.json", json.dumps(cats, ensure_ascii=False, indent=2))
+        z.writestr("locations.json", json.dumps(locs, ensure_ascii=False, indent=2))
         if include_secrets:
             secrets = {}
             for prov in all_providers():
@@ -256,6 +280,30 @@ async def import_backup(
                 set_kv(db, f"provider:{name}:locale", blob["locale"])
     ccache: dict = {}
     lcache: dict = {}
+
+    # recreate the whole category / location tree first — including branches that
+    # have no parts yet — so a round-trip doesn't drop the user's structure
+    if "categories.json" in zf.namelist():
+        for cr in sorted(json.loads(zf.read("categories.json")),
+                         key=lambda r: (r.get("path") or "").count(">")):
+            cid = _resolve_category(db, cr.get("path"), ccache)
+            node = db.get(Category, cid) if cid else None
+            if node:
+                if cr.get("part_class") and not node.part_class:
+                    node.part_class = cr["part_class"]
+                if cr.get("comment") and not node.comment:
+                    node.comment = cr["comment"]
+    if "locations.json" in zf.namelist():
+        for lr in sorted(json.loads(zf.read("locations.json")),
+                         key=lambda r: (r.get("path") or "").count(">")):
+            lid = _resolve_location(db, lr.get("path"), lcache)
+            node = db.get(StorageLocation, lid) if lid else None
+            if node:
+                if lr.get("note") and not node.note:
+                    node.note = lr["note"]
+                if lr.get("legacy_id") and not node.legacy_id:
+                    node.legacy_id = lr["legacy_id"]
+
     id_by_mpn = {
         (m or "").lower(): pid
         for pid, m in db.execute(select(Part.id, Part.mpn)).all() if m
