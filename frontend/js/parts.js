@@ -89,7 +89,8 @@ export class PartsView {
     this.orderSel = el("select", { onchange: () => this._renderTable() },
       el("option", { value: "name" }, "Sort: name"), el("option", { value: "stock" }, "Sort: stock"));
     this.countTag = el("span", { class: "count-tag" });
-    bar.append(this.qInput, lowL, noCatL, scanL, this.orderSel, el("span", { class: "grow" }), this.countTag);
+    const addBtn = el("button", { class: "primary", onclick: () => this._newPart() }, "+ New part");
+    bar.append(this.qInput, lowL, noCatL, scanL, this.orderSel, el("span", { class: "grow" }), addBtn, this.countTag);
     return bar;
   }
 
@@ -349,6 +350,78 @@ export class PartsView {
         await this.reload();
         toast(`Deleted ${n} part(s)`);
       } });
+  }
+
+  _newPart() {
+    const name = el("input", { type: "text", placeholder: "e.g. LM358 or M3x10 screw" });
+    const mpn = el("input", { type: "text", placeholder: "manufacturer part no." });
+    const mfr = el("input", { type: "text" });
+    const desc = el("input", { type: "text" });
+    const cat = el("select");
+    const mount = el("select", {},
+      el("option", { value: "" }, "—"),
+      el("option", { value: "smd" }, "SMD"),
+      el("option", { value: "tht" }, "THT"),
+      el("option", { value: "other" }, "Other"));
+    const fp = el("input", { type: "text", placeholder: "e.g. 0805, SOIC-8, TO-220" });
+    const minStock = el("input", { type: "text", value: "0", inputmode: "numeric", style: "width:6em" });
+    const tags = el("input", { type: "text", placeholder: "comma,separated" });
+    const qty = el("input", { type: "text", value: "0", inputmode: "numeric", style: "width:6em" });
+    const loc = el("select");
+
+    treeOptions("/api/categories", { includeBlank: "—" }).then((o) => {
+      cat.append(...o);
+      if (this.rail.mode === "categories" && this.rail.id) cat.value = String(this.rail.id);
+    });
+    treeOptions("/api/locations", { includeBlank: "— none —" }).then((o) => {
+      loc.append(...o);
+      if (this.rail.mode === "locations" && this.rail.id) loc.value = String(this.rail.id);
+    });
+
+    const row = (label, ...ctl) => el("div", { class: "row" }, el("label", {}, label), ...ctl);
+    modal({
+      title: "New part",
+      wide: true,
+      confirmText: "Create",
+      body: el("div", { class: "modal-body" },
+        row("Name *", name),
+        row("MPN", mpn),
+        row("Manufacturer", mfr),
+        row("Description", desc),
+        row("Category", cat),
+        row("Mount", mount),
+        row("Footprint", fp),
+        row("Min stock", minStock),
+        row("Tags", tags),
+        el("div", { class: "hint" }, "Optional starting stock — you can also add it later on the Stock tab."),
+        row("Initial qty", qty, el("span", { style: "opacity:.7" }, "into"), loc),
+        el("div", { class: "hint" }, "After creating, the part opens so you can add parameters, images, suppliers or run Look up.")),
+      onConfirm: async () => {
+        if (!name.value.trim()) throw new Error("Name is required");
+        const body = {
+          name: name.value.trim(),
+          mpn: mpn.value.trim() || null,
+          manufacturer: mfr.value.trim() || null,
+          description: desc.value.trim() || null,
+          category_id: cat.value ? Number(cat.value) : null,
+          mount: mount.value || null,
+          footprint_raw: fp.value.trim() || null,
+          min_stock: Number(minStock.value) || 0,
+          tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean),
+        };
+        const { id } = await api("/api/parts", { method: "POST", body });
+        const n = Number(qty.value) || 0;
+        if (n > 0) {
+          await api(`/api/parts/${id}/stock`, {
+            method: "POST",
+            body: { delta: n, kind: "add", location_id: loc.value ? Number(loc.value) : null },
+          });
+        }
+        await this.reload();
+        toast(`Created ${body.name}`);
+        this.openDetail(id);
+      },
+    });
   }
 
   async openDetail(id) {
