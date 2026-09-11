@@ -271,6 +271,7 @@ export class PartsView {
       el("button", { onclick: () => this._bulkMoveStock() }, "Move stock to location…"),
       el("button", { onclick: () => addPartsToQuote(this._ids()) }, "Add to quote…"),
       el("button", { onclick: () => this._bulkTag() }, "Add tag…"),
+      el("button", { onclick: () => window.open(`/label.html?ids=${this._ids().map(encodeURIComponent).join(",")}`, "_blank") }, "Print labels…"),
       el("button", { onclick: () => this._bulkMinStock() }, "Set min stock…"),
       el("button", { class: "ghost", onclick: () => this._bulkDelete() }, "Delete"),
     );

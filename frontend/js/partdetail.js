@@ -84,6 +84,9 @@ export class PartDetail {
           el("div", { class: "sub" }, [p.mpn, p.manufacturer, p.category].filter(Boolean).join("  ·  ") || "—"),
           el("div", { class: "on-hand" }, `On hand: ${p.on_hand}`),
         ),
+        el("button", { class: "ghost",
+          onclick: () => window.open(`/label.html?ids=${encodeURIComponent(this.id)}`, "_blank") },
+          "🏷 Label"),
         el("button", { class: "ghost", onclick: () => this.close() }, "✕"),
       ),
     );

@@ -79,6 +79,7 @@ def _mount_routers() -> None:
         exports,
         images,
         imports,
+        labels,
         locations,
         lookup,
         meta,
@@ -96,6 +97,7 @@ def _mount_routers() -> None:
     app.include_router(bulk.router)
     app.include_router(suppliers.router)
     app.include_router(images.router)
+    app.include_router(labels.router)
     app.include_router(design_notes.router)
     app.include_router(meta.router)
     app.include_router(quotes.router)

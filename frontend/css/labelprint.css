@@ -1,0 +1,106 @@
+/* Standalone label-print page. Independent of app.css — this page only ever
+ * needs a toolbar + a sheet of label cards, and the sheet must print white
+ * regardless of the app's Light/Gray/Dark choice. */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 13px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.toolbar {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.toolbar label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.toolbar select,
+.toolbar input {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+}
+.toolbar input[type="number"] { width: 4.5em; }
+.toolbar button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+.toolbar button.primary {
+  margin-left: auto;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+#count { color: var(--text-muted); font-size: 12px; }
+
+.sheet-wrap { padding: 16px; }
+.sheet {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 4), var(--w, 40mm));
+  gap: 4mm;
+  justify-content: start;
+}
+.label-card {
+  width: var(--w, 40mm);
+  background: #fff;
+  color: #000;
+  border: 1px dashed #999;
+  border-radius: 3px;
+  padding: 2mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8mm;
+  break-inside: avoid;
+}
+.label-card.no-cut { border-color: transparent; }
+.label-img { display: block; width: 100%; height: auto; }
+.label-name {
+  font-weight: 600;
+  font-size: 9.5px;
+  text-align: center;
+  line-height: 1.2;
+  word-break: break-word;
+}
+.label-mpn {
+  font-size: 8.5px;
+  color: #333;
+  text-align: center;
+  word-break: break-word;
+}
+.empty { padding: 60px 16px; text-align: center; color: var(--text-muted); }
+
+@media print {
+  .no-print, .toolbar { display: none !important; }
+  body { background: #fff; }
+  .sheet-wrap { padding: 0; }
+  .sheet { gap: 3mm; }
+  .label-card { border-color: #000; }
+  .label-card.no-cut { border-color: transparent; }
+  @page { margin: 8mm; }
+}
