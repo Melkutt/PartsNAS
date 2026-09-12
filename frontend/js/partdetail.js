@@ -750,7 +750,11 @@ export class PartDetail {
 
     const img = el("img", {
       src: `/api/parts/${this.id}/label.png?fmt=${state.fmt}`,
-      style: "max-width:220px;background:#fff;border-radius:6px;padding:10px",
+      // fixed width, auto height — a short code (e.g. "1043") is nearly
+      // square while a long MPN is wide, so if height were left to the
+      // container instead, they'd preview at very different visual sizes;
+      // this way every preview is the same width and just varies in height.
+      style: "width:220px;height:auto;background:#fff;border-radius:6px;padding:10px",
     });
     const fmtSel = el(
       "select",
