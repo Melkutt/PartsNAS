@@ -83,7 +83,15 @@ body {
   break-inside: avoid;
 }
 .label-card.no-cut { border-color: transparent; }
-.label-img { display: block; width: 100%; height: auto; }
+.label-img { display: block; width: 100%; margin: 0 auto; }
+/* QR only encodes data in a square grid of modules — stretching it either
+ * way breaks scanning, so it's sized by width alone. A 1D barcode's data
+ * lives entirely in the horizontal bar-width pattern, so its height is
+ * free to be set independently (--codeh) without touching scannability —
+ * that's what lets a short code (e.g. "1043") render wide-and-short
+ * instead of the near-square shape it'd naturally come out as. */
+.label-img.is-qr { height: auto; object-fit: contain; }
+.label-img.is-barcode { height: var(--codeh, 10mm); object-fit: fill; }
 .label-name {
   font-weight: 600;
   font-size: 9.5px;
@@ -101,28 +109,17 @@ body {
 
 /* "Label printer" mode: one exact-size label per page instead of a laid-out
  * grid — see js/labelcommon.js setPageSize(), which injects the matching
- * @page size right before print. */
+ * @page size right before print. overflow:hidden guards against --codeh
+ * set larger than fits --lh. */
 .label-card.printer-mode {
-  width: var(--lw, 54mm);
+  width: var(--w, 40mm);
   height: var(--lh, 25mm);
   border: none;
   border-radius: 0;
   justify-content: center;
+  overflow: hidden;
   break-after: page;
   page-break-after: always;
-}
-/* Fit the code into the space above the text without distorting it either
- * way. A short code (e.g. "1043") renders nearly square, a long MPN renders
- * wide — object-fit:contain picks whichever of width/height actually binds
- * and scales proportionally either way, so neither gets stretched.
- * height uses calc() against --lh rather than a % : percentage heights
- * inside a column flex item are resolved inconsistently across engines,
- * which is what made this stretch in the first place. */
-.label-card.printer-mode .label-img {
-  width: 100%;
-  height: calc(var(--lh, 25mm) - 8mm);
-  object-fit: contain;
-  margin: 0 auto;
 }
 
 @media print {

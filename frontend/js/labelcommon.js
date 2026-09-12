@@ -42,3 +42,11 @@ export function clearPageSize() {
   const style = document.getElementById(STYLE_ID);
   if (style) style.textContent = "";
 }
+
+// ---- one URL builder so the preview and every print path ask the server
+// for the same PNG, drawn natively at roughly the right proportions rather
+// than stretched after the fact (see backend/app/labels.py).
+export function labelUrl(id, fmt, codeHmm) {
+  const u = `/api/parts/${id}/label.png?fmt=${fmt}`;
+  return fmt === "code128" ? `${u}&h=${codeHmm}` : u;
+}

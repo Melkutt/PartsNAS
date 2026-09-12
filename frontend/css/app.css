@@ -656,7 +656,7 @@ table.parts-table {
   body.printing-labels .app { display: none !important; }
 }
 .label-card {
-  width: 40mm;
+  width: var(--w, 40mm);
   background: #fff;
   color: #000;
   border: 1px dashed #999;
@@ -668,34 +668,33 @@ table.parts-table {
   gap: 0.8mm;
   break-inside: avoid;
 }
-.label-img { display: block; width: 100%; height: auto; }
+.label-img { display: block; width: 100%; margin: 0 auto; }
+/* QR only encodes data in a square grid of modules — stretching it either
+ * way breaks scanning, so it's sized by width alone (object-fit:contain
+ * on an intrinsically-square image just keeps it square). A 1D barcode's
+ * data lives entirely in the horizontal bar-width pattern, so its height
+ * is free to be set independently without touching scannability — that's
+ * what lets a short code (e.g. "1043") render wide-and-short via an
+ * explicit, user-set --codeh instead of the near-square shape it'd
+ * naturally come out as. */
+.label-img.is-qr { height: auto; object-fit: contain; }
+.label-img.is-barcode { height: var(--codeh, 10mm); object-fit: fill; }
 .label-name { font-weight: 600; font-size: 9.5px; text-align: center; line-height: 1.2; word-break: break-word; }
 .label-mpn { font-size: 8.5px; color: #333; text-align: center; word-break: break-word; }
 
 /* "Label printer" mode (DYMO etc.): one label per physical page, sized to
  * exactly match the roll via a dynamically-injected #partsnas-page-size
- * <style> (see js/labelcommon.js) rather than the sheet grid above. */
+ * <style> (see js/labelcommon.js) rather than the sheet grid above.
+ * overflow:hidden guards against a --codeh set larger than fits --lh. */
 .label-card.printer-mode {
-  width: var(--lw, 54mm);
+  width: var(--w, 40mm);
   height: var(--lh, 25mm);
   border: none;
   border-radius: 0;
   justify-content: center;
+  overflow: hidden;
   break-after: page;
   page-break-after: always;
-}
-/* Fit the code into the space above the text without distorting it either
- * way. A short code (e.g. "1043") renders nearly square, a long MPN renders
- * wide — object-fit:contain picks whichever of width/height actually binds
- * and scales proportionally either way, so neither gets stretched.
- * height uses calc() against --lh rather than a % : percentage heights
- * inside a column flex item are resolved inconsistently across engines,
- * which is what made this stretch in the first place. */
-.label-card.printer-mode .label-img {
-  width: 100%;
-  height: calc(var(--lh, 25mm) - 8mm);
-  object-fit: contain;
-  margin: 0 auto;
 }
 
 /* Design-tab paste/drop zone */

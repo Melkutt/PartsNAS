@@ -11,7 +11,7 @@
 import { api } from "./api.js";
 import { el, toast } from "./ui.js";
 import { applyTheme, currentTheme } from "./theme.js";
-import { setPageSize, clearPageSize } from "./labelcommon.js";
+import { setPageSize, clearPageSize, labelUrl } from "./labelcommon.js";
 
 applyTheme(currentTheme());
 
@@ -32,26 +32,30 @@ let ids = (qs.get("ids") || "")
 
 const state = {
   fmt: localStorage.getItem(KEY + "fmt") || "qr",
-  width: Number(localStorage.getItem(KEY + "width")) || 40,
+  lw: Number(localStorage.getItem(KEY + "lw")) || 40,
   cols: Number(localStorage.getItem(KEY + "cols")) || 4,
   copies: Number(localStorage.getItem(KEY + "copies")) || 1,
   cut: localStorage.getItem(KEY + "cut") !== "0",
   printer: localStorage.getItem(KEY + "printer") === "1",
-  lw: Number(localStorage.getItem(KEY + "lw")) || 54,
   lh: Number(localStorage.getItem(KEY + "lh")) || 25,
+  codeH: Number(localStorage.getItem(KEY + "codeH")) || 10,
 };
 
 const fmtSel = el(
   "select",
-  { onchange: (e) => { state.fmt = e.target.value; save("fmt", state.fmt); render(); } },
+  { onchange: (e) => { state.fmt = e.target.value; save("fmt", state.fmt); syncModeVisibility(); render(); } },
   el("option", { value: "qr" }, "QR"),
   el("option", { value: "code128" }, "Barcode (Code128)"),
 );
 fmtSel.value = state.fmt;
 
-const widthInp = el("input", {
-  type: "number", min: 15, max: 100, value: state.width,
-  onchange: (e) => { state.width = Number(e.target.value) || 40; save("width", state.width); render(); },
+const lwInp = el("input", {
+  type: "number", min: 5, max: 300, value: state.lw,
+  onchange: (e) => { state.lw = Number(e.target.value) || 40; save("lw", state.lw); render(); },
+});
+const codeHInp = el("input", {
+  type: "number", min: 2, max: 100, value: state.codeH,
+  onchange: (e) => { state.codeH = Number(e.target.value) || 10; save("codeH", state.codeH); render(); },
 });
 const colsInp = el("input", {
   type: "number", min: 1, max: 10, value: state.cols,
@@ -69,26 +73,22 @@ const printerChk = el("input", {
   type: "checkbox", checked: state.printer ? "checked" : null,
   onchange: (e) => { state.printer = e.target.checked; save("printer", state.printer ? "1" : "0"); syncModeVisibility(); render(); },
 });
-const lwInp = el("input", {
-  type: "number", min: 5, max: 300, value: state.lw,
-  onchange: (e) => { state.lw = Number(e.target.value) || 54; save("lw", state.lw); render(); },
-});
 const lhInp = el("input", {
   type: "number", min: 5, max: 300, value: state.lh,
   onchange: (e) => { state.lh = Number(e.target.value) || 25; save("lh", state.lh); render(); },
 });
 const countTag = el("span", { id: "count" }, "");
 
+const codeHLabel = el("label", {}, "Barcode height (mm)", codeHInp);
 const sheetOnlyLabels = [
-  el("label", {}, "Label width (mm)", widthInp),
   el("label", {}, "Columns", colsInp),
   el("label", {}, cutChk, "Cut lines"),
 ];
 const printerOnlyLabels = [
-  el("label", {}, "Width (mm)", lwInp),
-  el("label", {}, "Height (mm)", lhInp),
+  el("label", {}, "Page height (mm)", lhInp),
 ];
 function syncModeVisibility() {
+  codeHLabel.hidden = state.fmt !== "code128";
   for (const l of sheetOnlyLabels) l.hidden = state.printer;
   for (const l of printerOnlyLabels) l.hidden = !state.printer;
 }
@@ -98,6 +98,8 @@ document.body.append(
     "div",
     { class: "toolbar no-print" },
     el("label", {}, "Format", fmtSel),
+    el("label", {}, "Width (mm)", lwInp),
+    codeHLabel,
     ...sheetOnlyLabels,
     ...printerOnlyLabels,
     el("label", {}, "Copies each", copiesInp),
@@ -144,10 +146,10 @@ window.addEventListener("message", (e) => {
 });
 
 async function render() {
-  sheet.style.setProperty("--w", `${state.width}mm`);
+  sheet.style.setProperty("--w", `${state.lw}mm`);
   sheet.style.setProperty("--cols", state.cols);
-  sheet.style.setProperty("--lw", `${state.lw}mm`);
   sheet.style.setProperty("--lh", `${state.lh}mm`);
+  sheet.style.setProperty("--codeh", `${state.codeH}mm`);
   sheet.classList.toggle("printer-mode", state.printer);
   sheet.innerHTML = "";
 
@@ -169,7 +171,7 @@ async function render() {
         el(
           "div",
           { class: cls },
-          el("img", { class: "label-img", src: `/api/parts/${p.id}/label.png?fmt=${state.fmt}` }),
+          el("img", { class: `label-img ${state.fmt === "qr" ? "is-qr" : "is-barcode"}`, src: labelUrl(p.id, state.fmt, state.codeH) }),
           el("div", { class: "label-name" }, p.name),
           p.mpn && p.mpn !== p.name ? el("div", { class: "label-mpn" }, p.mpn) : null,
         ),

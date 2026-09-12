@@ -3,7 +3,7 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions, partSearch, withBusy } from "./ui.js";
 import { openLookup } from "./lookup.js";
 import { formatValue, valueKind, parseNum, awgToMm2, isAwg } from "./units.js";
-import { addToLabelSheet, setPageSize, clearPageSize } from "./labelcommon.js";
+import { addToLabelSheet, setPageSize, clearPageSize, labelUrl } from "./labelcommon.js";
 
 let CLASSES = null; // cached /api/meta/part-classes
 async function partClasses() {
@@ -744,21 +744,30 @@ export class PartDetail {
       fmt: localStorage.getItem(KEY + "fmt") || "qr",
       copies: Number(localStorage.getItem(KEY + "copies")) || 1,
       printer: localStorage.getItem(KEY + "printer") === "1",
-      lw: Number(localStorage.getItem(KEY + "lw")) || 54,
+      lw: Number(localStorage.getItem(KEY + "lw")) || 40,
       lh: Number(localStorage.getItem(KEY + "lh")) || 25,
+      codeH: Number(localStorage.getItem(KEY + "codeH")) || 10,
     };
 
-    const img = el("img", {
-      src: `/api/parts/${this.id}/label.png?fmt=${state.fmt}`,
-      // fixed width, auto height — a short code (e.g. "1043") is nearly
-      // square while a long MPN is wide, so if height were left to the
-      // container instead, they'd preview at very different visual sizes;
-      // this way every preview is the same width and just varies in height.
-      style: "width:220px;height:auto;background:#fff;border-radius:6px;padding:10px",
-    });
+    const PREVIEW_W = 220; // px — the preview isn't printed, just proportioned to match
+    const img = el("img", { src: labelUrl(this.id, state.fmt, state.codeH) });
+    const refreshPreview = () => {
+      img.src = labelUrl(this.id, state.fmt, state.codeH);
+      const pxPerMm = PREVIEW_W / state.lw;
+      // QR must stay square (distorting it breaks scanning) so it's sized by
+      // width alone; a 1D barcode only encodes data in the horizontal bar
+      // pattern, so its height is free to be set independently — that's
+      // what lets a short code (e.g. "1043") render wide-and-short instead
+      // of the near-square shape it'd naturally come out as.
+      img.style.cssText = state.fmt === "qr"
+        ? `width:${PREVIEW_W}px;height:auto;object-fit:contain;background:#fff;border-radius:6px;padding:10px`
+        : `width:${PREVIEW_W}px;height:${(state.codeH * pxPerMm).toFixed(1)}px;object-fit:fill;background:#fff;border-radius:6px;padding:10px`;
+    };
+    refreshPreview();
+
     const fmtSel = el(
       "select",
-      { onchange: (e) => { state.fmt = e.target.value; save("fmt", state.fmt); img.src = `/api/parts/${this.id}/label.png?fmt=${state.fmt}`; } },
+      { onchange: (e) => { state.fmt = e.target.value; save("fmt", state.fmt); refreshPreview(); codeHRow.hidden = state.fmt !== "code128"; } },
       el("option", { value: "qr" }, "QR"),
       el("option", { value: "code128" }, "Barcode (Code128)"),
     );
@@ -767,15 +776,19 @@ export class PartDetail {
       type: "number", min: 1, max: 50, value: state.copies, style: "width:5em",
       onchange: (e) => { state.copies = Number(e.target.value) || 1; save("copies", state.copies); },
     });
+    const lwInp = el("input", { type: "number", min: 5, max: 300, value: state.lw, style: "width:5em",
+      onchange: (e) => { state.lw = Number(e.target.value) || 40; save("lw", state.lw); refreshPreview(); } });
+    const codeHInp = el("input", { type: "number", min: 2, max: 100, value: state.codeH, style: "width:5em",
+      onchange: (e) => { state.codeH = Number(e.target.value) || 10; save("codeH", state.codeH); refreshPreview(); } });
+    const codeHRow = el("div", { class: "row", hidden: state.fmt === "code128" ? null : "hidden" },
+      el("label", {}, "Barcode height (mm)"), codeHInp);
 
     const printerChk = el("input", { type: "checkbox", checked: state.printer ? "checked" : null,
-      onchange: (e) => { state.printer = e.target.checked; save("printer", state.printer ? "1" : "0"); sizeRow.hidden = !state.printer; } });
-    const lwInp = el("input", { type: "number", min: 5, max: 300, value: state.lw, style: "width:5em",
-      onchange: (e) => { state.lw = Number(e.target.value) || 54; save("lw", state.lw); } });
+      onchange: (e) => { state.printer = e.target.checked; save("printer", state.printer ? "1" : "0"); lhRow.hidden = !state.printer; } });
     const lhInp = el("input", { type: "number", min: 5, max: 300, value: state.lh, style: "width:5em",
       onchange: (e) => { state.lh = Number(e.target.value) || 25; save("lh", state.lh); } });
-    const sizeRow = el("div", { class: "row", hidden: state.printer ? null : "hidden" },
-      el("label", {}, "Label size (mm)"), lwInp, el("span", { style: "opacity:.7" }, "×"), lhInp);
+    const lhRow = el("div", { class: "row", hidden: state.printer ? null : "hidden" },
+      el("label", {}, "Page height (mm)"), lhInp);
 
     body.append(
       el("div", { class: "hint" },
@@ -783,9 +796,11 @@ export class PartDetail {
       el("div", { class: "form-grid" },
         el("label", {}, "Format"), fmtSel,
         el("label", {}, "Copies"), copiesInp,
+        el("label", {}, "Width (mm)"), lwInp,
       ),
+      codeHRow,
       el("div", { class: "row" }, el("label", {}, "Label printer (DYMO etc.) — one label per page"), printerChk),
-      sizeRow,
+      lhRow,
       el("div", { class: "hint" }, "For a label printer, pick your printer + the matching label size/stock in the print dialog — the page is sized to match exactly. For a normal printer, leave this off and use Open in multi-part sheet… for a laid-out A4/Letter page."),
       el("div", { class: "img-mat", style: "width:240px;height:240px;margin:12px 0" }, img),
       el("div", { style: "display:flex;gap:8px" },
@@ -794,7 +809,7 @@ export class PartDetail {
     );
   }
 
-  _printLabel({ fmt, copies, printer, lw, lh }) {
+  _printLabel({ fmt, copies, printer, lw, lh, codeH }) {
     const p = this.p;
     let host = document.getElementById("label-print");
     if (!host) {
@@ -803,12 +818,13 @@ export class PartDetail {
     }
     host.innerHTML = "";
     host.classList.toggle("printer-mode", !!printer);
-    host.style.setProperty("--lw", `${lw}mm`);
+    host.style.setProperty("--w", `${lw}mm`);
     host.style.setProperty("--lh", `${lh}mm`);
+    host.style.setProperty("--codeh", `${codeH}mm`);
     for (let i = 0; i < copies; i++) {
       host.append(
         el("div", { class: `label-card${printer ? " printer-mode" : ""}` },
-          el("img", { class: "label-img", src: `/api/parts/${this.id}/label.png?fmt=${fmt}` }),
+          el("img", { class: `label-img ${fmt === "qr" ? "is-qr" : "is-barcode"}`, src: labelUrl(this.id, fmt, codeH) }),
           el("div", { class: "label-name" }, p.name),
           p.mpn && p.mpn !== p.name ? el("div", { class: "label-mpn" }, p.mpn) : null),
       );
