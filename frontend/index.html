@@ -4,13 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PartsNAS</title>
-    <link rel="stylesheet" href="/css/theme.css?v=36" />
-    <link rel="stylesheet" href="/css/app.css?v=36" />
+    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
+    <link rel="stylesheet" href="/css/theme.css?v=37" />
+    <link rel="stylesheet" href="/css/app.css?v=37" />
   </head>
   <body>
     <div class="app">
       <header class="topbar">
-        <div class="brand">Parts<span>NAS</span></div>
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+            <rect x="6" y="6" width="20" height="20" rx="4.5" fill="var(--accent)" />
+            <path d="M11 11 L11 17 Q11 21 15 21 L21 21" fill="none" stroke="var(--surface)" stroke-width="1.6" stroke-linecap="round" opacity="0.9" />
+            <circle cx="11" cy="11" r="2.1" fill="var(--surface)" />
+          </svg>
+          Parts<span>NAS</span>
+        </div>
         <nav class="tabs" id="tabs"></nav>
         <div class="spacer"></div>
         <span class="scan-ind" id="scan-ind"><span class="dot"></span>Scan</span>
@@ -22,6 +30,6 @@
       </header>
       <main class="body" id="view"></main>
     </div>
-    <script type="module" src="/js/app.js?v=36"></script>
+    <script type="module" src="/js/app.js?v=37"></script>
   </body>
 </html>

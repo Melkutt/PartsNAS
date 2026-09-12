@@ -65,10 +65,14 @@ header.topbar {
   border-bottom: 1px solid var(--border);
 }
 .topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
   letter-spacing: 0.3px;
 }
 .topbar .brand span { color: var(--accent); }
+.brand-mark { flex-shrink: 0; }
 .topbar .spacer { flex: 1; }
 
 .tabs {
