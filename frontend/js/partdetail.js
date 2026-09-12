@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions, partSearch, withBusy } from "./ui.js";
 import { openLookup } from "./lookup.js";
 import { formatValue, valueKind, parseNum, awgToMm2, isAwg } from "./units.js";
+import { addToLabelSheet, setPageSize, clearPageSize } from "./labelcommon.js";
 
 let CLASSES = null; // cached /api/meta/part-classes
 async function partClasses() {
@@ -738,9 +739,14 @@ export class PartDetail {
     const p = this.p;
     const encoded = p.mpn || p.id;
     const KEY = "partsnas.label.";
-    const fmt = localStorage.getItem(KEY + "fmt") || "qr";
-    const copies = Number(localStorage.getItem(KEY + "copies")) || 1;
-    const state = { fmt, copies };
+    const save = (k, v) => { try { localStorage.setItem(KEY + k, v); } catch { /* private mode */ } };
+    const state = {
+      fmt: localStorage.getItem(KEY + "fmt") || "qr",
+      copies: Number(localStorage.getItem(KEY + "copies")) || 1,
+      printer: localStorage.getItem(KEY + "printer") === "1",
+      lw: Number(localStorage.getItem(KEY + "lw")) || 54,
+      lh: Number(localStorage.getItem(KEY + "lh")) || 25,
+    };
 
     const img = el("img", {
       src: `/api/parts/${this.id}/label.png?fmt=${state.fmt}`,
@@ -757,7 +763,15 @@ export class PartDetail {
       type: "number", min: 1, max: 50, value: state.copies, style: "width:5em",
       onchange: (e) => { state.copies = Number(e.target.value) || 1; save("copies", state.copies); },
     });
-    const save = (k, v) => { try { localStorage.setItem(KEY + k, v); } catch { /* private mode */ } };
+
+    const printerChk = el("input", { type: "checkbox", checked: state.printer ? "checked" : null,
+      onchange: (e) => { state.printer = e.target.checked; save("printer", state.printer ? "1" : "0"); sizeRow.hidden = !state.printer; } });
+    const lwInp = el("input", { type: "number", min: 5, max: 300, value: state.lw, style: "width:5em",
+      onchange: (e) => { state.lw = Number(e.target.value) || 54; save("lw", state.lw); } });
+    const lhInp = el("input", { type: "number", min: 5, max: 300, value: state.lh, style: "width:5em",
+      onchange: (e) => { state.lh = Number(e.target.value) || 25; save("lh", state.lh); } });
+    const sizeRow = el("div", { class: "row", hidden: state.printer ? null : "hidden" },
+      el("label", {}, "Label size (mm)"), lwInp, el("span", { style: "opacity:.7" }, "×"), lhInp);
 
     body.append(
       el("div", { class: "hint" },
@@ -766,16 +780,17 @@ export class PartDetail {
         el("label", {}, "Format"), fmtSel,
         el("label", {}, "Copies"), copiesInp,
       ),
+      el("div", { class: "row" }, el("label", {}, "Label printer (DYMO etc.) — one label per page"), printerChk),
+      sizeRow,
+      el("div", { class: "hint" }, "For a label printer, pick your printer + the matching label size/stock in the print dialog — the page is sized to match exactly. For a normal printer, leave this off and use Open in multi-part sheet… for a laid-out A4/Letter page."),
       el("div", { class: "img-mat", style: "width:240px;height:240px;margin:12px 0" }, img),
       el("div", { style: "display:flex;gap:8px" },
         el("button", { class: "primary", onclick: () => this._printLabel(state) }, "🖨 Print"),
-        el("button", { class: "ghost",
-          onclick: () => window.open(`/label.html?ids=${encodeURIComponent(this.id)}`, "_blank") },
-          "Open in multi-part sheet…")),
+        el("button", { class: "ghost", onclick: () => addToLabelSheet(this.id) }, "Open in multi-part sheet…")),
     );
   }
 
-  _printLabel({ fmt, copies }) {
+  _printLabel({ fmt, copies, printer, lw, lh }) {
     const p = this.p;
     let host = document.getElementById("label-print");
     if (!host) {
@@ -783,14 +798,22 @@ export class PartDetail {
       document.body.append(host);
     }
     host.innerHTML = "";
+    host.classList.toggle("printer-mode", !!printer);
+    host.style.setProperty("--lw", `${lw}mm`);
+    host.style.setProperty("--lh", `${lh}mm`);
     for (let i = 0; i < copies; i++) {
       host.append(
-        el("div", { class: "label-card" },
+        el("div", { class: `label-card${printer ? " printer-mode" : ""}` },
           el("img", { class: "label-img", src: `/api/parts/${this.id}/label.png?fmt=${fmt}` }),
           el("div", { class: "label-name" }, p.name),
           p.mpn && p.mpn !== p.name ? el("div", { class: "label-mpn" }, p.mpn) : null),
       );
     }
+    if (printer) setPageSize(lw, lh);
+    else clearPageSize();
+    document.body.classList.add("printing-labels");
+    const cleanup = () => document.body.classList.remove("printing-labels");
+    window.addEventListener("afterprint", cleanup, { once: true });
     window.print();
   }
 }

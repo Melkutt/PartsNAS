@@ -643,10 +643,17 @@ table.parts-table {
 
 /* single-part label print (Label tab, part detail) — #label-print is a
  * .print-only sibling of .detail-panel, appended straight to <body>, so the
- * .detail-panel{display:none} rule above never hides it. */
+ * .detail-panel{display:none} rule above never hides it. Printing it also
+ * needs the whole SPA (.app — rail, parts table, facets…) force-hidden, or
+ * that prints too since it's a normal sibling, not something the rules
+ * above already cover; js/partdetail.js toggles this class around the
+ * print call. */
 #label-print { display: none; flex-wrap: wrap; gap: 4mm; padding: 8mm; }
+#label-print.printer-mode { padding: 0; }
 @media print {
   #label-print { display: flex; }
+  #label-print.printer-mode { display: block; }
+  body.printing-labels .app { display: none !important; }
 }
 .label-card {
   width: 40mm;
@@ -664,6 +671,20 @@ table.parts-table {
 .label-img { display: block; width: 100%; height: auto; }
 .label-name { font-weight: 600; font-size: 9.5px; text-align: center; line-height: 1.2; word-break: break-word; }
 .label-mpn { font-size: 8.5px; color: #333; text-align: center; word-break: break-word; }
+
+/* "Label printer" mode (DYMO etc.): one label per physical page, sized to
+ * exactly match the roll via a dynamically-injected #partsnas-page-size
+ * <style> (see js/labelcommon.js) rather than the sheet grid above. */
+.label-card.printer-mode {
+  width: var(--lw, 54mm);
+  height: var(--lh, 25mm);
+  border: none;
+  border-radius: 0;
+  justify-content: center;
+  break-after: page;
+  page-break-after: always;
+}
+.label-card.printer-mode .label-img { width: auto; max-width: 92%; max-height: 62%; margin: 0 auto; }
 
 /* Design-tab paste/drop zone */
 .dropzone {

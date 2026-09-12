@@ -3,6 +3,7 @@
  * regardless of the app's Light/Gray/Dark choice. */
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font: 13px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -67,6 +68,7 @@ body {
   gap: 4mm;
   justify-content: start;
 }
+.sheet.printer-mode { display: block; }
 .label-card {
   width: var(--w, 40mm);
   background: #fff;
@@ -97,6 +99,20 @@ body {
 }
 .empty { padding: 60px 16px; text-align: center; color: var(--text-muted); }
 
+/* "Label printer" mode: one exact-size label per page instead of a laid-out
+ * grid — see js/labelcommon.js setPageSize(), which injects the matching
+ * @page size right before print. */
+.label-card.printer-mode {
+  width: var(--lw, 54mm);
+  height: var(--lh, 25mm);
+  border: none;
+  border-radius: 0;
+  justify-content: center;
+  break-after: page;
+  page-break-after: always;
+}
+.label-card.printer-mode .label-img { width: auto; max-width: 92%; max-height: 62%; margin: 0 auto; }
+
 @media print {
   .no-print, .toolbar { display: none !important; }
   body { background: #fff; }
@@ -104,5 +120,6 @@ body {
   .sheet { gap: 3mm; }
   .label-card { border-color: #000; }
   .label-card.no-cut { border-color: transparent; }
+  .label-card.printer-mode { border: none; }
   @page { margin: 8mm; }
 }

@@ -5,6 +5,7 @@ import { PartDetail } from "./partdetail.js";
 import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
 import { openLookup } from "./lookup.js";
+import { addToLabelSheet } from "./labelcommon.js";
 
 const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
@@ -275,7 +276,7 @@ export class PartsView {
       el("button", { onclick: () => this._bulkMoveStock() }, "Move stock to location…"),
       el("button", { onclick: () => addPartsToQuote(this._ids()) }, "Add to quote…"),
       el("button", { onclick: () => this._bulkTag() }, "Add tag…"),
-      el("button", { onclick: () => window.open(`/label.html?ids=${this._ids().map(encodeURIComponent).join(",")}`, "_blank") }, "Print labels…"),
+      el("button", { onclick: () => addToLabelSheet(this._ids()) }, "Print labels…"),
       el("button", { onclick: () => this._bulkMinStock() }, "Set min stock…"),
       el("button", { class: "ghost", onclick: () => this._bulkDelete() }, "Delete"),
     );
