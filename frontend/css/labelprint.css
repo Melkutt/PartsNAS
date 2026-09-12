@@ -58,6 +58,8 @@ body {
 }
 #count { color: var(--text-muted); font-size: 12px; }
 
+.hint { color: var(--text-muted); font-size: 12px; }
+
 .sheet-wrap { padding: 16px; }
 .sheet {
   display: grid;

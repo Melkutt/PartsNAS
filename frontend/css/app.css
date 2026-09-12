@@ -627,7 +627,7 @@ table.parts-table {
   .parts-table th, .parts-table td { padding: 8px 10px; }
 }
 
-/* ============ print (quotes) ============ */
+/* ============ print (quotes, labels) ============ */
 .print-only { display: none; }
 @media print {
   header.topbar, .detail-back, .detail-panel, .modal-back, .toast, .no-print { display: none !important; }
@@ -640,6 +640,30 @@ table.parts-table {
   .mini-table th, .mini-table td { border-color: #999 !important; }
   #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
 }
+
+/* single-part label print (Label tab, part detail) — #label-print is a
+ * .print-only sibling of .detail-panel, appended straight to <body>, so the
+ * .detail-panel{display:none} rule above never hides it. */
+#label-print { display: none; flex-wrap: wrap; gap: 4mm; padding: 8mm; }
+@media print {
+  #label-print { display: flex; }
+}
+.label-card {
+  width: 40mm;
+  background: #fff;
+  color: #000;
+  border: 1px dashed #999;
+  border-radius: 3px;
+  padding: 2mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8mm;
+  break-inside: avoid;
+}
+.label-img { display: block; width: 100%; height: auto; }
+.label-name { font-weight: 600; font-size: 9.5px; text-align: center; line-height: 1.2; word-break: break-word; }
+.label-mpn { font-size: 8.5px; color: #333; text-align: center; word-break: break-word; }
 
 /* Design-tab paste/drop zone */
 .dropzone {

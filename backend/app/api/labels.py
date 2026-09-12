@@ -1,8 +1,13 @@
 """Printable barcode / QR labels for parts.
 
 `GET /api/parts/{id}/label.png?fmt=qr|code128` -> a PNG, rendered fully
-offline (see ../labels.py). The layout/printing itself lives in the static
-`frontend/label.html` page, not here.
+offline (see ../labels.py). The layout/printing itself lives in
+`frontend/label.html` (bulk) and the part detail's Label tab (single part).
+
+The encoded payload is the part's MPN when it has one (recognisable, and
+what you'd want to scan back into e.g. the "New part" MPN field), else the
+part's own id. `GET /api/parts/lookup?code=` tries id, then MPN, then name,
+so either payload always resolves straight back to this part.
 """
 from __future__ import annotations
 
@@ -26,5 +31,5 @@ def part_label(part_id: str, fmt: str = "qr", db: Session = Depends(get_db)):
     render = _RENDER.get(fmt)
     if render is None:
         raise HTTPException(400, "fmt must be 'qr' or 'code128'")
-    png = render(p.id)
+    png = render(p.mpn or p.id)
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-store"})

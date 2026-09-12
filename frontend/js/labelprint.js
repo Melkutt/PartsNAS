@@ -71,6 +71,11 @@ document.body.append(
   ),
 );
 
+document.body.append(
+  el("div", { class: "hint no-print", style: "padding:8px 16px 0" },
+    "Each code encodes the part's MPN, or its internal id for parts with no MPN — either way scanning it (e.g. into the “New part” MPN field) resolves straight back to this part."),
+);
+
 const sheet = el("div", { class: "sheet" });
 document.body.append(el("div", { class: "sheet-wrap" }, sheet));
 

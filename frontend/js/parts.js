@@ -1,9 +1,10 @@
 // Parts tab: left category/location rail, right = faceted filters + results table + bulk bar.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions } from "./ui.js";
+import { el, modal, toast, treeOptions, withBusy } from "./ui.js";
 import { PartDetail } from "./partdetail.js";
 import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
+import { openLookup } from "./lookup.js";
 
 const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
@@ -60,6 +61,9 @@ export class PartsView {
   }
 
   _onScan = (e) => {
+    // a modal on top (e.g. "New part") captures scans itself — don't also
+    // look the code up as if it were meant for the list behind it
+    if (document.querySelector(".modal-back")) return;
     const code = e.detail.code;
     api(`/api/parts/lookup?code=${encodeURIComponent(code)}`)
       .then((p) => {
@@ -353,9 +357,33 @@ export class PartsView {
       } });
   }
 
+  // shared by the modal's plain "Create" and its "Look up specs…" shortcut
+  async _createPartFromFields({ name, mpn, mfr, desc, cat, mount, fp, minStock, tags, qty, loc }) {
+    const body = {
+      name: name.value.trim(),
+      mpn: mpn.value.trim() || null,
+      manufacturer: mfr.value.trim() || null,
+      description: desc.value.trim() || null,
+      category_id: cat.value ? Number(cat.value) : null,
+      mount: mount.value || null,
+      footprint_raw: fp.value.trim() || null,
+      min_stock: Number(minStock.value) || 0,
+      tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean),
+    };
+    const { id } = await api("/api/parts", { method: "POST", body });
+    const n = Number(qty.value) || 0;
+    if (n > 0) {
+      await api(`/api/parts/${id}/stock`, {
+        method: "POST",
+        body: { delta: n, kind: "add", location_id: loc.value ? Number(loc.value) : null },
+      });
+    }
+    return { id, name: body.name };
+  }
+
   _newPart() {
     const name = el("input", { type: "text", placeholder: "e.g. LM358 or M3x10 screw" });
-    const mpn = el("input", { type: "text", placeholder: "manufacturer part no." });
+    const mpn = el("input", { type: "text", placeholder: "manufacturer part no. — scan or type" });
     const mfr = el("input", { type: "text" });
     const desc = el("input", { type: "text" });
     const cat = el("select");
@@ -369,6 +397,7 @@ export class PartsView {
     const tags = el("input", { type: "text", placeholder: "comma,separated" });
     const qty = el("input", { type: "text", value: "0", inputmode: "numeric", style: "width:6em" });
     const loc = el("select");
+    const fields = { name, mpn, mfr, desc, cat, mount, fp, minStock, tags, qty, loc };
 
     treeOptions("/api/categories", { includeBlank: "—" }).then((o) => {
       cat.append(...o);
@@ -379,14 +408,47 @@ export class PartsView {
       if (this.rail.mode === "locations" && this.rail.id) loc.value = String(this.rail.id);
     });
 
+    // A scan while this modal is open fills a field instead of doing the
+    // normal parts-list scan lookup: a pure-digit code -> Qty (a count you
+    // scanned or keyed on the scanner), anything else -> MPN.
+    const onScan = (e) => {
+      const code = e.detail.code;
+      if (/^\d+$/.test(code)) {
+        qty.value = code;
+        toast(`Scanned qty: ${code}`);
+      } else {
+        mpn.value = code;
+        if (!name.value.trim()) name.value = code;
+        toast(`Scanned MPN: ${code}`);
+      }
+    };
+    document.addEventListener("partsnas:scan", onScan);
+
+    const lookupBtn = el("button", { class: "ghost", onclick: () => doLookup() }, "Look up specs…");
+    const doLookup = async () => {
+      if (!mpn.value.trim()) return toast("Enter or scan an MPN first");
+      if (!name.value.trim()) name.value = mpn.value.trim();
+      await withBusy(lookupBtn, async () => {
+        const { id } = await this._createPartFromFields(fields);
+        await this.reload();
+        handle.close();
+        const detail = new PartDetail(id, { onChange: () => this.reload() });
+        await detail.open();
+        const classes = await api("/api/meta/part-classes");
+        openLookup(detail.p, classes[detail.p.part_class]?.fields || [], () => detail._reload());
+      });
+    };
+
     const row = (label, ...ctl) => el("div", { class: "row" }, el("label", {}, label), ...ctl);
-    modal({
+    const handle = modal({
       title: "New part",
       wide: true,
       confirmText: "Create",
+      onClose: () => document.removeEventListener("partsnas:scan", onScan),
       body: el("div", { class: "modal-body" },
+        el("div", { class: "hint" }, "📷 Scanner ready — a scanned number fills Qty, anything else fills MPN."),
         row("Name *", name),
-        row("MPN", mpn),
+        row("MPN", mpn, lookupBtn),
         row("Manufacturer", mfr),
         row("Description", desc),
         row("Category", cat),
@@ -396,30 +458,12 @@ export class PartsView {
         row("Tags", tags),
         el("div", { class: "hint" }, "Optional starting stock — you can also add it later on the Stock tab."),
         row("Initial qty", qty, el("span", { style: "opacity:.7" }, "into"), loc),
-        el("div", { class: "hint" }, "After creating, the part opens so you can add parameters, images, suppliers or run Look up.")),
+        el("div", { class: "hint" }, "\"Look up specs…\" creates the part from just the MPN, then opens Look up (Mouser/Digi-Key) to fill in the rest. \"Create\" makes it from what's filled in here, no lookup.")),
       onConfirm: async () => {
         if (!name.value.trim()) throw new Error("Name is required");
-        const body = {
-          name: name.value.trim(),
-          mpn: mpn.value.trim() || null,
-          manufacturer: mfr.value.trim() || null,
-          description: desc.value.trim() || null,
-          category_id: cat.value ? Number(cat.value) : null,
-          mount: mount.value || null,
-          footprint_raw: fp.value.trim() || null,
-          min_stock: Number(minStock.value) || 0,
-          tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean),
-        };
-        const { id } = await api("/api/parts", { method: "POST", body });
-        const n = Number(qty.value) || 0;
-        if (n > 0) {
-          await api(`/api/parts/${id}/stock`, {
-            method: "POST",
-            body: { delta: n, kind: "add", location_id: loc.value ? Number(loc.value) : null },
-          });
-        }
+        const { id, name: n } = await this._createPartFromFields(fields);
         await this.reload();
-        toast(`Created ${body.name}`);
+        toast(`Created ${n}`);
         this.openDetail(id);
       },
     });

@@ -84,9 +84,6 @@ export class PartDetail {
           el("div", { class: "sub" }, [p.mpn, p.manufacturer, p.category].filter(Boolean).join("  ·  ") || "—"),
           el("div", { class: "on-hand" }, `On hand: ${p.on_hand}`),
         ),
-        el("button", { class: "ghost",
-          onclick: () => window.open(`/label.html?ids=${encodeURIComponent(this.id)}`, "_blank") },
-          "🏷 Label"),
         el("button", { class: "ghost", onclick: () => this.close() }, "✕"),
       ),
     );
@@ -108,6 +105,7 @@ export class PartDetail {
       ["suppliers", `Suppliers (${this.suppliers ? p.suppliers.length : 0})`],
       ["design", `Design${this._designCount() ? " (" + this._designCount() + ")" : ""}`],
       ["notes", `Notes (${p.design_note_count})`],
+      ["labels", "🏷 Label"],
     ];
     for (const [key, label] of defs) {
       tabs.append(
@@ -129,6 +127,7 @@ export class PartDetail {
       suppliers: () => this._suppliersTab(body),
       design: () => this._design(body),
       notes: () => this._notes(body),
+      labels: () => this._labelsTab(body),
     })[this.tab]();
   }
 
@@ -732,5 +731,66 @@ export class PartDetail {
     };
     section("Notes anchored here", data.anchored, true);
     section("Referenced by other notes", data.referenced_by, false);
+  }
+
+  // ---------- Label (QR / barcode) ----------
+  _labelsTab(body) {
+    const p = this.p;
+    const encoded = p.mpn || p.id;
+    const KEY = "partsnas.label.";
+    const fmt = localStorage.getItem(KEY + "fmt") || "qr";
+    const copies = Number(localStorage.getItem(KEY + "copies")) || 1;
+    const state = { fmt, copies };
+
+    const img = el("img", {
+      src: `/api/parts/${this.id}/label.png?fmt=${state.fmt}`,
+      style: "max-width:220px;background:#fff;border-radius:6px;padding:10px",
+    });
+    const fmtSel = el(
+      "select",
+      { onchange: (e) => { state.fmt = e.target.value; save("fmt", state.fmt); img.src = `/api/parts/${this.id}/label.png?fmt=${state.fmt}`; } },
+      el("option", { value: "qr" }, "QR"),
+      el("option", { value: "code128" }, "Barcode (Code128)"),
+    );
+    fmtSel.value = state.fmt;
+    const copiesInp = el("input", {
+      type: "number", min: 1, max: 50, value: state.copies, style: "width:5em",
+      onchange: (e) => { state.copies = Number(e.target.value) || 1; save("copies", state.copies); },
+    });
+    const save = (k, v) => { try { localStorage.setItem(KEY + k, v); } catch { /* private mode */ } };
+
+    body.append(
+      el("div", { class: "hint" },
+        `Encodes: ${encoded}${p.mpn ? "" : " (no MPN set — using the part's own id)"}. Scanning it anywhere in PartsNAS resolves straight back to this part.`),
+      el("div", { class: "form-grid" },
+        el("label", {}, "Format"), fmtSel,
+        el("label", {}, "Copies"), copiesInp,
+      ),
+      el("div", { class: "img-mat", style: "width:240px;height:240px;margin:12px 0" }, img),
+      el("div", { style: "display:flex;gap:8px" },
+        el("button", { class: "primary", onclick: () => this._printLabel(state) }, "🖨 Print"),
+        el("button", { class: "ghost",
+          onclick: () => window.open(`/label.html?ids=${encodeURIComponent(this.id)}`, "_blank") },
+          "Open in multi-part sheet…")),
+    );
+  }
+
+  _printLabel({ fmt, copies }) {
+    const p = this.p;
+    let host = document.getElementById("label-print");
+    if (!host) {
+      host = el("div", { id: "label-print", class: "print-only" });
+      document.body.append(host);
+    }
+    host.innerHTML = "";
+    for (let i = 0; i < copies; i++) {
+      host.append(
+        el("div", { class: "label-card" },
+          el("img", { class: "label-img", src: `/api/parts/${this.id}/label.png?fmt=${fmt}` }),
+          el("div", { class: "label-name" }, p.name),
+          p.mpn && p.mpn !== p.name ? el("div", { class: "label-mpn" }, p.mpn) : null),
+      );
+    }
+    window.print();
   }
 }

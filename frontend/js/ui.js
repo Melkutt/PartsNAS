@@ -16,7 +16,7 @@ export function el(tag, props = {}, ...kids) {
   return node;
 }
 
-export function modal({ title, body, confirmText = "OK", onConfirm, wide }) {
+export function modal({ title, body, confirmText = "OK", onConfirm, onClose, wide }) {
   const back = el("div", { class: "modal-back" });
   const box = el("div", { class: "modal" });
   if (wide) box.style.width = "min(760px, 94vw)";
@@ -33,6 +33,7 @@ export function modal({ title, body, confirmText = "OK", onConfirm, wide }) {
   function close() {
     document.removeEventListener("keydown", esc);
     back.remove();
+    onClose && onClose();
   }
   function esc(e) {
     if (e.key === "Escape") close();
