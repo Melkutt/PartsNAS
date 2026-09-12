@@ -76,6 +76,12 @@ def _refdes_prefix(refdes: str | None) -> str | None:
 _VALUE_KEYS = ("capacitance", "resistance", "inductance", "value")
 _TOL_KEYS = ("tolerance",)
 _VOLT_KEYS = ("voltagerated", "voltage_rated", "ratedvoltage", "voltage")
+# BJT/FET polarity — worth surfacing on its own since it's the one thing
+# that decides whether a transistor is interchangeable at all, and it can
+# sit under any of several supplier field names (or none — description
+# text only), so this is a "does this string say so" search, not a fixed
+# key lookup.
+_TYPE_MARKERS = ("n-channel", "p-channel", "npn", "pnp")
 
 
 def _pick_attr(attrs: dict, keys: tuple[str, ...]) -> str | None:
@@ -86,17 +92,77 @@ def _pick_attr(attrs: dict, keys: tuple[str, ...]) -> str | None:
     return None
 
 
+def _pick_type_marker(attrs: dict) -> str | None:
+    for av in attrs.values():
+        if not isinstance(av, str):
+            continue
+        low = av.lower()
+        if any(marker in low for marker in _TYPE_MARKERS):
+            return av.strip()
+    return None
+
+
 def part_summary(p: Part) -> str:
     """'10k, 0603, ±5%, 50V'-style summary — enough to judge a footprint+
-    value guess without opening the part."""
+    value guess without opening the part. A transistor's N/P-channel or
+    NPN/PNP marker, if any, leads — it's the one thing that decides
+    whether it's interchangeable at all — and the generic "value" lookup is
+    skipped for it, since _VALUE_KEYS' "capacitance" substring would
+    otherwise just as happily grab an unrelated Ciss parametric spec."""
     attrs = p.attributes or {}
+    type_marker = _pick_type_marker(attrs)
     bits = [b for b in (
-        _pick_attr(attrs, _VALUE_KEYS),
+        type_marker,
+        None if type_marker else _pick_attr(attrs, _VALUE_KEYS),
         p.footprint_raw,
         _pick_attr(attrs, _TOL_KEYS),
         _pick_attr(attrs, _VOLT_KEYS),
     ) if b]
     return ", ".join(bits) if bits else (p.mpn or p.name)
+
+
+# ---- numeric value proximity (R/L/C only — a component value is always a
+# single number times an SI/RKM prefix, so "how close" has an actual
+# numeric answer, unlike an MPN or a connector series name) --------------
+_SI_MULT = {"p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "m": 1e-3,
+            "k": 1e3, "K": 1e3, "M": 1e6, "g": 1e9, "G": 1e9}
+
+
+def parse_component_value(raw: str | None) -> float | None:
+    """"100nF" -> 1e-7, "2k2" -> 2200.0, "4R7" -> 4.7, "1000" -> 1000.0,
+    None if it doesn't look like a single R/L/C-style number at all."""
+    s = (raw or "").strip().replace(",", ".")
+    if not s:
+        return None
+    s = re.sub(r"(ohms?|Ω|farads?|henr(?:y|ies)|[FH])\s*$", "", s, flags=re.I).strip()
+    # RKM embedded-decimal: 2k2, 4n7, 1M5 (the SI letter stands in for the
+    # decimal point)
+    m = re.match(r"^(\d+)\s*([pnuµmkKMgG])\s*(\d+)$", s)
+    if m:
+        whole, letter, frac = m.groups()
+        return float(f"{whole}.{frac}") * _SI_MULT[letter]
+    # same idea with a bare "R" (ohms, no scale): 4R7, 100R
+    m = re.match(r"^(\d+)\s*[Rr]\s*(\d+)?$", s)
+    if m:
+        whole, frac = m.groups()
+        return float(f"{whole}.{frac}") if frac else float(whole)
+    # plain "<number><optional SI letter>"
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*([pnuµmkKMgG])?$", s)
+    if m:
+        num, letter = m.groups()
+        return float(num) * _SI_MULT.get(letter, 1)
+    return None
+
+
+def value_similarity(target: float, candidate: float) -> float:
+    """1.0 = identical, falling off the further apart they are — a ratio
+    of 2x (double or half) lands around 0.5, matching how a technician
+    actually judges "close enough": 1k needing a stand-in is well served
+    by 1k2, not by 1k5 and even less by 500R."""
+    if target <= 0 or candidate <= 0:
+        return 1.0 if target == candidate else 0.0
+    ratio = max(target, candidate) / min(target, candidate)
+    return max(0.0, 1 - (ratio - 1))
 
 
 # A handful of common KiCad footprint-library naming conventions, matched
@@ -196,6 +262,7 @@ class Matcher:
 
         expect = _REFDES_CATEGORY.get(_refdes_prefix(refdes) or "")
         pool = [p for p in self._by_footprint.get(fnorm, []) if self._category_ok(p, expect)] if fnorm else []
+        target_num = parse_component_value(value)
         scored = []
         for p in pool:
             # a category-consistent guess (refdes prefix said "resistor" and
@@ -206,10 +273,23 @@ class Matcher:
             # attribute (capacitance, resistance, ...), not p.name — which,
             # for parts imported from a supplier, is often just the MPN — so
             # check every string attribute, not only the name.
-            candidates_v = [norm_value(p.name)] + [
-                norm_value(v) for v in (p.attributes or {}).values() if isinstance(v, str)
-            ]
-            if vnorm and vnorm in candidates_v:
+            raw_values = [p.name] + [v for v in (p.attributes or {}).values() if isinstance(v, str)]
+            candidates_v = [norm_value(v) for v in raw_values]
+
+            cand_num = None
+            if target_num is not None:
+                for rv in raw_values:
+                    n = parse_component_value(rv)
+                    if n is not None:
+                        cand_num = n
+                        break
+
+            if target_num is not None and cand_num is not None:
+                # a real number on both sides — "how close" has an actual
+                # answer (1k2 beats 1k5 beats 500R for a 1k target), so use
+                # that instead of an all-or-nothing string match
+                score += round(30 * value_similarity(target_num, cand_num))
+            elif vnorm and vnorm in candidates_v:
                 score += 30
             # a short substring ("1", "50", "100" — a tolerance or voltage
             # attribute, say) can trivially appear inside another short
