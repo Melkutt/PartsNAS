@@ -263,5 +263,17 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
    across tabs via `js/labelcommon.js` (`addToLabelSheet()` — open once,
    `postMessage` more parts into the same tab after). TODO: review-list
    stock-split helper (small, not blocking).
-10. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
-11. Projects / builds / shortage report; min-stock warnings; theme sync.
+10. **done** — BOM import (the KiCad HTTP Library "input" was deliberately
+    skipped: per-machine setup friction for no real gain here). Export a
+    BOM from KiCad's own schematic editor (already built in, no plugin) as
+    CSV; `POST /api/bom/parse` (`app/bomparse.py`, flexible header
+    detection) + `app/bommatch.py` match each line — exact MPN, else a
+    remembered Value+Footprint rule, else a scored footprint+value
+    candidate (never auto-applied, always a suggestion) — review in the
+    new **BOM tab** (`js/bom.js`), confirm/pick a part per line, tick
+    "Remember" to save a rule for next time (keyed on the exact value, so
+    an unvalued placeholder or a different voltage never inherits it).
+    Saves as a `Project` + `BomLine`s (pre-existing, previously-unused
+    models); `Build` deducts stock for N boards, reversible, shortage
+    shown per line. Remembered rules manageable in Settings.
+11. Min-stock warnings; theme sync across devices.

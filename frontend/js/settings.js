@@ -3,10 +3,11 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
+    api("/api/bom/match-rules"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
@@ -73,6 +74,32 @@ export async function openSettings() {
     body.append(el("div", { class: "hint" },
       "Built-in examples (always active, lower priority): " +
       ruleData.builtin.slice(0, 6).map((b) => `${b.pattern.replace(/\\b|\(\?i\)/g, "")} → ${b.category}`).join(" · ") + " …"));
+
+  // ---- remembered BOM Value+Footprint matches ----
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Remembered BOM matches"));
+  body.append(el("div", { class: "hint" },
+    "Confirmed once during a BOM import (Value + Footprint → part) and applied automatically after that. Remove one here if it was wrong."));
+  const bomHost = el("div");
+  const renderBomRules = () => {
+    bomHost.innerHTML = "";
+    if (!bomRules.length) return bomHost.append(el("div", { class: "pill-off" }, "none yet"));
+    const t = el("table", { class: "mini-table" });
+    t.append(el("tr", {}, el("th", {}, "Value"), el("th", {}, "Footprint"), el("th", {}, "→ Part"), el("th", {}, "")));
+    for (const r of bomRules) {
+      t.append(el("tr", {},
+        el("td", {}, r.value),
+        el("td", { style: "max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, r.footprint),
+        el("td", {}, r.part_name),
+        el("td", {}, el("button", { class: "ghost", onclick: async () => {
+          await api(`/api/bom/match-rules/${r.id}`, { method: "DELETE" });
+          bomRules.splice(bomRules.indexOf(r), 1);
+          renderBomRules();
+        } }, "✕"))));
+    }
+    bomHost.append(t);
+  };
+  renderBomRules();
+  body.append(bomHost);
 
   modal({
     title: "Settings",

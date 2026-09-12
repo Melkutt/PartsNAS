@@ -250,6 +250,8 @@ class BomLine(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"), index=True)
     part_id: Mapped[str | None] = mapped_column(ForeignKey("part.id", ondelete="SET NULL"))
     unresolved_mpn: Mapped[str | None] = mapped_column(String(120))  # set when part_id is null
+    value: Mapped[str | None] = mapped_column(String(120))  # raw KiCad "Value" field
+    footprint: Mapped[str | None] = mapped_column(String(160))  # raw KiCad "Footprint" field
     qty_per_board: Mapped[float] = mapped_column(Float, default=1)
     refdes: Mapped[str | None] = mapped_column(Text)  # "R1 R2 R7"
     note: Mapped[str | None] = mapped_column(Text)
@@ -265,9 +267,40 @@ class Build(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"), index=True)
     qty_boards: Mapped[int] = mapped_column(Integer, default=1)
     note: Mapped[str | None] = mapped_column(Text)
+    reverted: Mapped[bool] = mapped_column(default=False)
+    # a random token, not f"bom-build-{id}": SQLite reuses a deleted row's
+    # primary key, and stock ledger entries outlive their Project/Build rows
+    # (deleting a project cascades those away but not the StockEntry history),
+    # so a derived-from-id move_group could collide with a since-deleted
+    # build's leftover entries and let an unrelated Undo touch them.
+    move_group: Mapped[str] = mapped_column(String(20), default=lambda: f"bom-{secrets.token_hex(6)}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     project: Mapped["Project"] = relationship(back_populates="builds")
+
+
+class BomMatchRule(Base):
+    """A Value+Footprint -> Part mapping confirmed once during a BOM import
+    and reused automatically for later ones. Keyed on the exact (normalised)
+    value, on purpose: a placeholder part left unvalued until build time (a
+    pull-up resistor with no value yet, say) or a line with a different
+    voltage/value never has a matching key, so it can never silently inherit
+    someone else's confirmed match — see bommatch.py."""
+    __tablename__ = "bom_match_rule"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    value_norm: Mapped[str] = mapped_column(String(120), index=True)
+    footprint_norm: Mapped[str] = mapped_column(String(120), index=True)
+    value_raw: Mapped[str] = mapped_column(String(120))
+    footprint_raw: Mapped[str] = mapped_column(String(160))
+    part_id: Mapped[str] = mapped_column(ForeignKey("part.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    part: Mapped["Part"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("value_norm", "footprint_norm", name="uq_bom_match_rule"),
+    )
 
 
 class BulkOp(Base):

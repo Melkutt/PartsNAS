@@ -5,6 +5,7 @@ import { PartsView } from "./parts.js";
 import { SuppliersView } from "./suppliers.js";
 import { DesignNotesView } from "./designnotes.js";
 import { QuotesView } from "./quotes.js";
+import { BomView } from "./bom.js";
 import { initScanner } from "./scan.js";
 import { openImport, openExport } from "./importexport.js";
 import { openSettings } from "./settings.js";
@@ -27,6 +28,7 @@ const TABS = {
     ),
   notes: mountNotes,
   quotes: mountQuotes,
+  bom: mountBom,
   suppliers: mountSuppliers,
 };
 
@@ -66,6 +68,13 @@ async function mountQuotes() {
   await v.mount(view);
 }
 
+async function mountBom() {
+  clearView();
+  const v = new BomView();
+  activeObj = v;
+  await v.mount(view);
+}
+
 async function mountTree(base, noun, title, rootAddLabel, onSelect) {
   clearView();
   const panel = document.createElement("div");
@@ -87,11 +96,13 @@ function selectTab(name) {
   TABS[name]();
 }
 
+const TAB_LABELS = { bom: "BOM" };
+
 function buildTabs() {
   for (const name of Object.keys(TABS)) {
     const b = document.createElement("button");
     b.dataset.tab = name;
-    b.textContent = name[0].toUpperCase() + name.slice(1);
+    b.textContent = TAB_LABELS[name] || name[0].toUpperCase() + name.slice(1);
     b.addEventListener("click", () => selectTab(name));
     tabs.append(b);
   }

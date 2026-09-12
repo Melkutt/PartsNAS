@@ -73,6 +73,7 @@ def info():
 def _mount_routers() -> None:
     from .api import (
         backup,
+        bom,
         bulk,
         categories,
         design_notes,
@@ -90,6 +91,7 @@ def _mount_routers() -> None:
         suppliers,
     )
 
+    app.include_router(bom.router)
     app.include_router(categories.router)
     app.include_router(locations.router)
     app.include_router(parts.router)
