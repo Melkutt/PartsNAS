@@ -22,10 +22,81 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .models import BomMatchRule, FootprintAlias, Part
+from .services import category_path_map
 
 
 def norm_value(v: str | None) -> str:
     return re.sub(r"\s+", "", (v or "")).strip().lower()
+
+
+# Reference-designator prefix -> what a candidate's category path must
+# mention. Sharing a footprint is not enough — a resistor and a capacitor
+# both come in 0603, but they are never interchangeable, so a "C1" line
+# should never even be offered a resistor as a candidate. Only prefixes
+# with an unambiguous, universally-taught meaning are listed; anything
+# else (a house prefix, "U" which covers every kind of IC, ...) is left
+# unfiltered rather than guessed at.
+_REFDES_CATEGORY: dict[str, tuple[str, ...]] = {
+    "R": ("resistor",),
+    "RN": ("resistor",),
+    "RV": ("varistor",),
+    "RT": ("thermistor",),
+    "C": ("capacitor",),
+    "L": ("inductor",),
+    "FB": ("ferrite", "inductor"),
+    "D": ("diode", "led"),
+    "LED": ("led", "diode"),
+    "Q": ("transistor", "mosfet", "fet"),
+    "F": ("fuse",),
+    "Y": ("crystal", "oscillator"),
+    "X": ("crystal", "oscillator"),
+    "K": ("relay",),
+    "SW": ("switch",),
+    "S": ("switch",),
+    "J": ("connector",),
+    "P": ("connector",),
+    "BT": ("battery",),
+    "T": ("transformer",),
+}
+
+
+def _refdes_prefix(refdes: str | None) -> str | None:
+    first = (refdes or "").split()[0] if (refdes or "").split() else None
+    if not first:
+        return None
+    m = re.match(r"^([A-Za-z]+)\d", first)
+    return m.group(1).upper() if m else None
+
+
+# A part's real "value" (18pF, 10k, ...) usually lives in a class attribute
+# named after the class (capacitance, resistance, ...), not a fixed "value"
+# key, since these come from a supplier lookup's own field names. Shown to
+# the user alongside a candidate so they have more than a bare MPN to judge
+# a guess by — footprint matching a category means nothing on its own.
+_VALUE_KEYS = ("capacitance", "resistance", "inductance", "value")
+_TOL_KEYS = ("tolerance",)
+_VOLT_KEYS = ("voltagerated", "voltage_rated", "ratedvoltage", "voltage")
+
+
+def _pick_attr(attrs: dict, keys: tuple[str, ...]) -> str | None:
+    for k in keys:
+        for ak, av in attrs.items():
+            if k in ak.lower() and isinstance(av, str) and av.strip():
+                return av.strip()
+    return None
+
+
+def part_summary(p: Part) -> str:
+    """'10k, 0603, ±5%, 50V'-style summary — enough to judge a footprint+
+    value guess without opening the part."""
+    attrs = p.attributes or {}
+    bits = [b for b in (
+        _pick_attr(attrs, _VALUE_KEYS),
+        p.footprint_raw,
+        _pick_attr(attrs, _TOL_KEYS),
+        _pick_attr(attrs, _VOLT_KEYS),
+    ) if b]
+    return ", ".join(bits) if bits else (p.mpn or p.name)
 
 
 # A handful of common KiCad footprint-library naming conventions, matched
@@ -87,18 +158,27 @@ class Matcher:
     def __init__(self, db: Session):
         self.db = db
         self._parts = db.scalars(select(Part)).all()
+        self._cat_path = category_path_map(db)
         self._by_footprint: dict[str, list[Part]] = {}
         for p in self._parts:
             if not p.footprint_raw:
                 continue
             self._by_footprint.setdefault(canonical_footprint(db, p.footprint_raw), []).append(p)
 
-    def match(self, *, mpn: str | None, value: str | None, footprint: str | None) -> dict:
+    def _category_ok(self, p: Part, expect: tuple[str, ...] | None) -> bool:
+        if not expect:
+            return True  # no confident expectation (unknown/ambiguous prefix) -> don't filter
+        path = self._cat_path.get(p.category_id, "").lower()
+        return any(tok in path for tok in expect)
+
+    def match(self, *, mpn: str | None, value: str | None, footprint: str | None,
+              refdes: str | None = None) -> dict:
         mpn = (mpn or "").strip()
         if mpn:
             p = self.db.scalar(select(Part).where(func.lower(Part.mpn) == mpn.lower()))
             if p:
-                return {"kind": "mpn", "part_id": p.id, "part_name": p.name, "score": 100, "candidates": []}
+                return {"kind": "mpn", "part_id": p.id, "part_name": p.name,
+                        "summary": part_summary(p), "score": 100, "candidates": []}
 
         vnorm = norm_value(value)
         fnorm = canonical_footprint(self.db, footprint)
@@ -111,13 +191,17 @@ class Matcher:
             if rule and rule.part:
                 return {
                     "kind": "remembered", "part_id": rule.part_id, "part_name": rule.part.name,
-                    "score": 100, "candidates": [],
+                    "summary": part_summary(rule.part), "score": 100, "candidates": [],
                 }
 
-        pool = self._by_footprint.get(fnorm, []) if fnorm else []
+        expect = _REFDES_CATEGORY.get(_refdes_prefix(refdes) or "")
+        pool = [p for p in self._by_footprint.get(fnorm, []) if self._category_ok(p, expect)] if fnorm else []
         scored = []
         for p in pool:
-            score = 55
+            # a category-consistent guess (refdes prefix said "resistor" and
+            # this part actually lives under Resistor) starts more trusted
+            # than a bare footprint-only guess (unknown/ambiguous prefix)
+            score = 65 if expect else 50
             # a part's "value" (18pF, 10k, ...) usually lives in a class
             # attribute (capacitance, resistance, ...), not p.name — which,
             # for parts imported from a supplier, is often just the MPN — so
@@ -126,7 +210,7 @@ class Matcher:
                 norm_value(v) for v in (p.attributes or {}).values() if isinstance(v, str)
             ]
             if vnorm and vnorm in candidates_v:
-                score += 40
+                score += 30
             # a short substring ("1", "50", "100" — a tolerance or voltage
             # attribute, say) can trivially appear inside another short
             # string by coincidence, so only credit a *partial* match once
@@ -134,19 +218,22 @@ class Matcher:
             elif vnorm and len(vnorm) >= 3 and any(
                 len(pv) >= 3 and (vnorm in pv or pv in vnorm) for pv in candidates_v
             ):
-                score += 20
+                score += 15
             scored.append((score, p))
         scored.sort(key=lambda x: -x[0])
         if not scored:
-            return {"kind": "none", "part_id": None, "part_name": None, "score": 0, "candidates": []}
+            return {"kind": "none", "part_id": None, "part_name": None,
+                    "summary": None, "score": 0, "candidates": []}
         top_score, top = scored[0]
         return {
             "kind": "candidate",
             "part_id": top.id,
             "part_name": top.name,
+            "summary": part_summary(top),
             "score": min(top_score, 95),  # a guess never claims to be certain
             "candidates": [
-                {"id": p.id, "name": p.name, "score": min(s, 95)} for s, p in scored[:5]
+                {"id": p.id, "name": p.name, "summary": part_summary(p), "score": min(s, 95)}
+                for s, p in scored[:5]
             ],
         }
 

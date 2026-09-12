@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..bommatch import Matcher, remember
+from ..bommatch import Matcher, part_summary, remember
 from ..bomparse import parse_bom_csv
 from ..core.db import get_db
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
@@ -39,7 +39,7 @@ async def parse(file: UploadFile = File(...), db: Session = Depends(get_db)):
     matcher = Matcher(db)
     out = []
     for r in rows:
-        m = matcher.match(mpn=r["mpn"], value=r["value"], footprint=r["footprint"])
+        m = matcher.match(mpn=r["mpn"], value=r["value"], footprint=r["footprint"], refdes=r["refdes"])
         out.append({**r, "match": m})
     return {"lines": out, "suggested_name": (file.filename.rsplit(".", 1)[0] or "BOM")}
 
@@ -116,6 +116,7 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "part_id": ln.part_id,
             "part_name": ln.part.name if ln.part else None,
             "part_mpn": ln.part.mpn if ln.part else None,
+            "part_summary": part_summary(ln.part) if ln.part else None,
             "unresolved_mpn": ln.unresolved_mpn,
             "value": ln.value,
             "footprint": ln.footprint,

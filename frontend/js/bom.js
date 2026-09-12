@@ -126,12 +126,14 @@ export class BomView {
 
   _reviewRow(ln, i) {
     const m = ln.match;
-    const partCell = el("span", {});
+    const partCell = el("div", {});
     const renderPartCell = () => {
       partCell.innerHTML = "";
       if (ln.part_id) {
-        const name = m.candidates.find((c) => c.id === ln.part_id)?.name || m.part_name || ln.part_id;
-        partCell.append(name);
+        const c = m.candidates.find((c) => c.id === ln.part_id);
+        const name = c?.name || m.part_name || ln.part_id;
+        const summary = c?.summary || m.summary;
+        partCell.append(el("div", {}, name), summary ? el("div", { class: "hint", style: "padding:0" }, summary) : null);
       } else {
         partCell.append(el("span", { class: "pill-off" }, "— pick —"));
       }
@@ -151,7 +153,7 @@ export class BomView {
       const sel = el("select", {
         onchange: (e) => { ln.part_id = e.target.value || null; renderPartCell(); rememberChk.disabled = !ln.part_id; },
       }, el("option", { value: "" }, "— pick manually —"), ...m.candidates.map((c) =>
-        el("option", { value: c.id }, `${c.name} (~${c.score}%)`)));
+        el("option", { value: c.id }, `${c.name} — ${c.summary} (~${c.score}%)`)));
       sel.value = ln.part_id || "";
       controls.append(sel);
     } else {
@@ -205,7 +207,9 @@ export class BomView {
       const short = ln.short;
       table.append(el("tr", {},
         el("td", {}, ln.refdes || ""),
-        el("td", {}, ln.part_name || el("span", { class: "match-badge low" }, ln.unresolved_mpn || "unresolved")),
+        el("td", {}, ln.part_name
+          ? el("div", {}, el("div", {}, ln.part_name), ln.part_summary ? el("div", { class: "hint", style: "padding:0" }, ln.part_summary) : null)
+          : el("span", { class: "match-badge low" }, ln.unresolved_mpn || "unresolved")),
         el("td", {}, ln.value || ""),
         el("td", { class: "num" }, String(ln.qty_per_board)),
         el("td", { class: "num" }, String(ln.needed)),
