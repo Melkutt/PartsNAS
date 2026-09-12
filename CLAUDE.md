@@ -255,10 +255,13 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
    / datasheet / image / supplier link. TODO: TME (HMAC), Farnell (element14 key).
 8. **done** — Quotes / invoice basis (`js/quotes.js` tab, markup default 50 %,
    static cost snapshots + source, print + CSV, "Add to quote…" bulk action).
-9. **mostly done** — label/QR: `GET /api/parts/{id}/label.png?fmt=code128|qr`
-   (server-side, offline, `app/labels.py`) + standalone printable
-   `frontend/label.html` (columns/width/copies/cut-lines, from a part's 🏷
-   button or the Parts bulk bar's "Print labels…"). TODO: review-list
-   stock-split helper.
+9. **done** — label/QR: `GET /api/parts/{id}/label.png?fmt=code128|qr`
+   (server-side, offline, `app/labels.py`, payload = MPN else id). A
+   part-detail "🏷 Label" tab (instant preview, "Sheet" vs "Label printer —
+   one per page at an exact mm size" for DYMO/roll printers) plus a
+   standalone `frontend/label.html` for the multi-part case, kept in sync
+   across tabs via `js/labelcommon.js` (`addToLabelSheet()` — open once,
+   `postMessage` more parts into the same tab after). TODO: review-list
+   stock-split helper (small, not blocking).
 10. KiCad HTTP Library + BOM import/export; footprint-alias → KiCad footprint map.
 11. Projects / builds / shortage report; min-stock warnings; theme sync.
