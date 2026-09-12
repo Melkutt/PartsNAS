@@ -20,12 +20,13 @@ def build_forest(db: Session, model, extra: dict[int, dict] | None = None) -> li
         by_parent.setdefault(r.parent_id, []).append(r)
 
     def node(r) -> dict:
+        children = [node(c) for c in by_parent.get(r.id, [])]
         d = {
             "id": r.id,
             "name": r.name,
             "parent_id": r.parent_id,
             "sort_order": r.sort_order,
-            "children": [node(c) for c in by_parent.get(r.id, [])],
+            "children": children,
         }
         if hasattr(r, "comment"):
             d["comment"] = r.comment
@@ -37,6 +38,15 @@ def build_forest(db: Session, model, extra: dict[int, dict] | None = None) -> li
             d["legacy_id"] = r.legacy_id
         if extra and r.id in extra:
             d.update(extra[r.id])
+        # part_count rolls up: a parent shows everything under it too (e.g.
+        # "Passive" = Resistor + Capacitor + ... summed all the way down),
+        # and stays unset/blank when the whole subtree is empty.
+        own = d.get("part_count") or 0
+        total = own + sum(c.get("part_count") or 0 for c in children)
+        if total:
+            d["part_count"] = total
+        else:
+            d.pop("part_count", None)
         return d
 
     return [node(r) for r in by_parent.get(None, [])]
