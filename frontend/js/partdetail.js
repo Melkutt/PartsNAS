@@ -294,6 +294,7 @@ export class PartDetail {
     const saveBar = el(
       "div",
       { class: "save-bar" },
+      el("button", { class: "ghost", style: "color:var(--danger)", onclick: () => this._deletePart() }, "🗑 Delete part"),
       el("button", {
         onclick: () =>
           openLookup(this.p, this.classes[this.p.part_class]?.fields || [], () => this._reload()),
@@ -445,6 +446,26 @@ export class PartDetail {
     await attrValues(true); // new parameter values become datalist suggestions
     toast("Saved");
     await this._reload();
+  }
+
+  _deletePart() {
+    const p = this.p;
+    modal({
+      title: `Delete "${p.name}"?`,
+      body: el("div", { class: "modal-body" },
+        el("div", {}, "Removes the part and its full stock/supplier/image/note history. Not undoable."),
+        p.on_hand > 0
+          ? el("div", { class: "hint" },
+              `It still has ${p.on_hand} on hand. If you just used it up (e.g. on a repair job), a Stock → Remove entry keeps the part on file for next time instead of deleting it outright.`)
+          : null),
+      confirmText: "Delete",
+      onConfirm: async () => {
+        await api(`/api/parts/${this.id}`, { method: "DELETE" });
+        toast(`Deleted ${p.name}`);
+        this.onChange();
+        this.close();
+      },
+    });
   }
 
   // ---------- Stock ----------
