@@ -6,6 +6,7 @@ import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
 import { openLookup } from "./lookup.js";
 import { addToLabelSheet } from "./labelcommon.js";
+import { parseMagnitude } from "./units.js";
 
 const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
@@ -13,6 +14,11 @@ const FACET_LABEL = {
   location: "Location", tags: "Tags", in_stock: "Stock",
 };
 const MOUNT_LABEL = { smd: "SMD", tht: "THT", other: "Other" };
+// value-ish facets (Capacitance/Resistance/Inductance/Frequency) sort by
+// magnitude and match "1500" against an option displayed as "1k5", instead
+// of plain string order/substring — everything else is untouched
+const MAGNITUDE_UNITS = new Set(["Ω", "F", "H", "Hz"]);
+const magEq = (a, b) => a != null && b != null && Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b), 1e-15) * 1e-9;
 
 export class PartsView {
   constructor(initial = {}) {
@@ -245,7 +251,7 @@ export class PartsView {
         groups.push(this._facetGroup(key, FACET_LABEL[key], opts, key === "location" ? "location" : key));
       }
       for (const [akey, def] of Object.entries(this.facets.attributes || {})) {
-        groups.push(this._facetGroup("attr:" + akey, def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey));
+        groups.push(this._facetGroup("attr:" + akey, def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey, def.unit));
       }
     }
     host.hidden = groups.length === 0;
@@ -260,7 +266,7 @@ export class PartsView {
       const akey = id.slice(5);
       const def = this.facets.attributes?.[akey];
       if (!def || !def.options?.length) return null;
-      return this._facetGroup(id, label || def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey);
+      return this._facetGroup(id, label || def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey, def.unit);
     }
     const opts = this.facets[id] || [];
     if (!opts.length && id !== "in_stock") return null;
@@ -271,7 +277,7 @@ export class PartsView {
     return kind === "attr" ? (this.facetSel.attr[akey] ||= new Set()) : this.facetSel[kind];
   }
 
-  _facetGroup(id, label, options, kind, akey) {
+  _facetGroup(id, label, options, kind, akey, unit) {
     const g = el("div", { class: "facet-group" });
     g.append(el("h4", {}, label));
     const sel = kind === "in_stock" ? null : this._selSet(kind, akey);
@@ -279,13 +285,26 @@ export class PartsView {
     const shown = options.slice();
     if (sel) for (const v of sel) if (!shown.find((o) => o.value === v)) shown.push({ value: v, count: 0 });
 
+    const byMagnitude = MAGNITUDE_UNITS.has(unit);
+    if (byMagnitude)
+      shown.sort((a, b) => {
+        const ma = parseMagnitude(a.value), mb = parseMagnitude(b.value);
+        if (ma == null || mb == null) return ma == null ? (mb == null ? 0 : 1) : -1;
+        return ma - mb;
+      });
+
     const listEl = el("div", { class: "facet-list" });
     const renderRows = (filterText) => {
       listEl.innerHTML = "";
       const f = (filterText || "").trim().toLowerCase();
+      const qMag = byMagnitude && f ? parseMagnitude(filterText.trim()) : null;
       for (const o of shown) {
         const label2 = kind === "mount" ? (MOUNT_LABEL[o.value] || o.value) : o.value;
-        if (f && !String(label2 ?? "").toLowerCase().includes(f)) continue;
+        if (f) {
+          const substrHit = String(label2 ?? "").toLowerCase().includes(f);
+          const magHit = qMag != null && magEq(parseMagnitude(o.value), qMag);
+          if (!substrHit && !magHit) continue;
+        }
         const isOn = kind === "in_stock" ? this.facetSel.in_stock === o.value : sel.has(o.value);
         listEl.append(el("label", { class: "facet-opt" + (o.count ? "" : " zero") + (isOn ? " on" : "") },
           el("input", { type: kind === "in_stock" ? "radio" : "checkbox", name: "f-" + id,
