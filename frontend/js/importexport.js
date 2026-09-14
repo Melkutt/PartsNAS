@@ -2,14 +2,15 @@
 import { el, modal, toast } from "./ui.js";
 
 export function openImport(onDone) {
-  const fileInput = el("input", { type: "file", accept: ".xlsx,.xlsm,.xls,.zip" });
+  const fileInput = el("input", { type: "file", accept: ".xlsx,.xlsm,.xls,.csv,.zip" });
   const out = el("div", { class: "pre", hidden: "hidden" });
   let parsedOk = false;
 
   // format is chosen when the file isn't a .zip (which is always a backup)
   const formatSel = el("select", {},
     el("option", { value: "partsbox" }, "PartsBox export"),
-    el("option", { value: "mouser" }, "Mouser order history"));
+    el("option", { value: "mouser" }, "Mouser order history"),
+    el("option", { value: "kit" }, "Component kit list (Part Number, Case Size, Value, ...)"));
   const formatRow = el("div", { class: "row" }, el("label", {}, "Format"), formatSel);
 
   // backup mode is chosen when the file is a .zip
@@ -23,7 +24,7 @@ export function openImport(onDone) {
     const zip = name.endsWith(".zip");
     modeRow.hidden = !zip;
     formatRow.hidden = zip;
-    if (!zip) formatSel.value = name.endsWith(".xls") ? "mouser" : "partsbox";
+    if (!zip) formatSel.value = name.endsWith(".csv") ? "kit" : name.endsWith(".xls") ? "mouser" : "partsbox";
     parsedOk = false;
     m.okBtn.disabled = true;
     out.hidden = true;
@@ -31,7 +32,7 @@ export function openImport(onDone) {
 
   const dryBtn = el("button", { onclick: () => send(true) }, "Dry run");
   const body = el("div", { class: "modal-body" },
-    el("div", {}, "A PartsBox spreadsheet export, a Mouser order-history export (My Account → Order History → Download), or a PartsNAS backup (.zip)."),
+    el("div", {}, "A PartsBox spreadsheet export, a Mouser order-history export (My Account → Order History → Download), a vendor kit-list sheet (KEMET-style: Part Number/Case Size/Value/Tolerance/Voltage/Dielectric/Quantity), or a PartsNAS backup (.zip)."),
     el("div", { class: "row" }, el("label", {}, "File"), fileInput),
     formatRow,
     modeRow,
@@ -57,7 +58,9 @@ export function openImport(onDone) {
 
   function endpoint() {
     if (isZip()) return "/api/import/backup";
-    return formatSel.value === "mouser" ? "/api/import/mouser-order" : "/api/import/partsbox";
+    if (formatSel.value === "mouser") return "/api/import/mouser-order";
+    if (formatSel.value === "kit") return "/api/import/kit-list";
+    return "/api/import/partsbox";
   }
 
   async function send(dry) {
@@ -76,7 +79,10 @@ export function openImport(onDone) {
       return;
     }
     out.hidden = false;
-    const summariser = isZip() ? summariseBackup : formatSel.value === "mouser" ? summariseMouser : summarise;
+    const summariser = isZip() ? summariseBackup
+      : formatSel.value === "mouser" ? summariseMouser
+      : formatSel.value === "kit" ? summariseKit
+      : summarise;
     out.textContent = summariser(data);
     parsedOk = true;
     m.okBtn.disabled = false;
@@ -109,6 +115,17 @@ export function openImport(onDone) {
       `supplier links:     ${d.supplier_links}`,
       `rows with no MPN:   ${d.skipped_no_mpn}`,
       `already imported:   ${d.already_imported} (same order line seen before — skipped, not double-counted)`,
+    ];
+    if (d.warnings?.length) lines.push("", "warnings:", ...d.warnings.map((w) => "  - " + w));
+    return lines.join("\n");
+  }
+
+  function summariseKit(d) {
+    const lines = [
+      d.committed ? "IMPORTED" : "DRY RUN — nothing written yet", "",
+      `parts created:      ${d.created} (into Unsorted)`,
+      `already in database: ${d.already_exists} (left untouched)`,
+      `rows with no part #: ${d.skipped_no_mpn}`,
     ];
     if (d.warnings?.length) lines.push("", "warnings:", ...d.warnings.map((w) => "  - " + w));
     return lines.join("\n");
