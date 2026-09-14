@@ -9,3 +9,4 @@ Pillow==11.1.0
 httpx==0.28.1
 python-barcode==0.15.1
 qrcode==8.0
+xlrd==2.0.2

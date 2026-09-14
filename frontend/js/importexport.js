@@ -2,9 +2,15 @@
 import { el, modal, toast } from "./ui.js";
 
 export function openImport(onDone) {
-  const fileInput = el("input", { type: "file", accept: ".xlsx,.xlsm,.zip" });
+  const fileInput = el("input", { type: "file", accept: ".xlsx,.xlsm,.xls,.zip" });
   const out = el("div", { class: "pre", hidden: "hidden" });
   let parsedOk = false;
+
+  // format is chosen when the file isn't a .zip (which is always a backup)
+  const formatSel = el("select", {},
+    el("option", { value: "partsbox" }, "PartsBox export"),
+    el("option", { value: "mouser" }, "Mouser order history"));
+  const formatRow = el("div", { class: "row" }, el("label", {}, "Format"), formatSel);
 
   // backup mode is chosen when the file is a .zip
   const modeSel = el("select", {},
@@ -13,8 +19,11 @@ export function openImport(onDone) {
     el("option", { value: "replace" }, "replace — overwrite + wipe attrs/suppliers/images"));
   const modeRow = el("div", { class: "row", hidden: "hidden" }, el("label", {}, "Backup mode"), modeSel);
   fileInput.addEventListener("change", () => {
-    const isZip = (fileInput.files[0]?.name || "").toLowerCase().endsWith(".zip");
-    modeRow.hidden = !isZip;
+    const name = (fileInput.files[0]?.name || "").toLowerCase();
+    const zip = name.endsWith(".zip");
+    modeRow.hidden = !zip;
+    formatRow.hidden = zip;
+    if (!zip) formatSel.value = name.endsWith(".xls") ? "mouser" : "partsbox";
     parsedOk = false;
     m.okBtn.disabled = true;
     out.hidden = true;
@@ -22,8 +31,9 @@ export function openImport(onDone) {
 
   const dryBtn = el("button", { onclick: () => send(true) }, "Dry run");
   const body = el("div", { class: "modal-body" },
-    el("div", {}, "PartsBox spreadsheet export (.xlsx) or a PartsNAS backup (.zip)."),
+    el("div", {}, "A PartsBox spreadsheet export, a Mouser order-history export (My Account → Order History → Download), or a PartsNAS backup (.zip)."),
     el("div", { class: "row" }, el("label", {}, "File"), fileInput),
+    formatRow,
     modeRow,
     el("div", { class: "row" }, dryBtn),
     out,
@@ -45,13 +55,18 @@ export function openImport(onDone) {
     return (fileInput.files[0]?.name || "").toLowerCase().endsWith(".zip");
   }
 
+  function endpoint() {
+    if (isZip()) return "/api/import/backup";
+    return formatSel.value === "mouser" ? "/api/import/mouser-order" : "/api/import/partsbox";
+  }
+
   async function send(dry) {
     const f = fileInput.files[0];
     if (!f) return toast("Pick a file first");
     const fd = new FormData();
     fd.append("file", f);
     fd.append("dry_run", dry ? "true" : "false");
-    const url = isZip() ? "/api/import/backup" : "/api/import/partsbox";
+    const url = endpoint();
     if (isZip()) fd.append("mode", modeSel.value);
     const res = await fetch(url, { method: "POST", body: fd });
     const data = await res.json();
@@ -61,7 +76,8 @@ export function openImport(onDone) {
       return;
     }
     out.hidden = false;
-    out.textContent = (isZip() ? summariseBackup : summarise)(data);
+    const summariser = isZip() ? summariseBackup : formatSel.value === "mouser" ? summariseMouser : summarise;
+    out.textContent = summariser(data);
     parsedOk = true;
     m.okBtn.disabled = false;
     if (!dry) toast("Import done");
@@ -81,6 +97,20 @@ export function openImport(onDone) {
       lines.push("", `needs manual stock split (${d.review.length}):`);
       for (const r of d.review) lines.push(`  - ${r.part} (${r.qty} @ ${r.location || "?"}) — ${r.note}`);
     }
+    return lines.join("\n");
+  }
+
+  function summariseMouser(d) {
+    const lines = [
+      d.committed ? "IMPORTED" : "DRY RUN — nothing written yet", "",
+      `parts created:      ${d.created} (into Unsorted)`,
+      `parts updated:      ${d.updated}`,
+      `stock entries:      ${d.stock_entries}`,
+      `supplier links:     ${d.supplier_links}`,
+      `rows with no MPN:   ${d.skipped_no_mpn}`,
+      `already imported:   ${d.already_imported} (same order line seen before — skipped, not double-counted)`,
+    ];
+    if (d.warnings?.length) lines.push("", "warnings:", ...d.warnings.map((w) => "  - " + w));
     return lines.join("\n");
   }
 
