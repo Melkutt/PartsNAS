@@ -6,7 +6,6 @@ import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
 import { openLookup } from "./lookup.js";
 import { addToLabelSheet } from "./labelcommon.js";
-import { parseMagnitude } from "./units.js";
 
 const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
@@ -14,11 +13,37 @@ const FACET_LABEL = {
   location: "Location", tags: "Tags", in_stock: "Stock",
 };
 const MOUNT_LABEL = { smd: "SMD", tht: "THT", other: "Other" };
-// value-ish facets (Capacitance/Resistance/Inductance/Frequency) sort by
-// magnitude and match "1500" against an option displayed as "1k5", instead
-// of plain string order/substring — everything else is untouched
-const MAGNITUDE_UNITS = new Set(["Ω", "F", "H", "Hz"]);
+
+// Attribute/footprint facets sort by numeric magnitude when their options
+// are numeric-ish (Capacitance, V Max, or parametric strings like
+// "15 nC @ 4.5 V" / "500mW (Ta)" copied verbatim from a Mouser/Digi-Key
+// lookup) — only the LEADING number+prefix+unit is read, trailing
+// condition text is ignored, so sorting still reflects the primary
+// quantity. Falls back to a natural string sort (still better than raw
+// count-order) for genuinely textual facets like packagecase/footprint.
+const _PREFIX_MULT = { p: 1e-12, n: 1e-9, u: 1e-6, "µ": 1e-6, "μ": 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 };
+const _RKM_LEAD = /^\s*(\d*)\s*([RrkKMmGpnµμu])\s*(\d*)/; // "5k1" / "4R7" / "49R9"
+const _NUM_LEAD = /^\s*([-+]?[\d.]+)\s*([pnuµμmkKMG]?)/; // "100nF" / "931 pF @ 10 V" / "50V"
+
+function leadingMagnitude(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim().replace(",", ".").replace(/^[±]\s*/, "");
+  if (!s) return null;
+  let m = s.match(_RKM_LEAD);
+  if (m && (m[1] || m[3])) {
+    const mult = m[2] === "R" || m[2] === "r" ? 1 : (_PREFIX_MULT[m[2]] ?? 1);
+    return parseFloat((m[1] || "0") + "." + (m[3] || "0")) * mult;
+  }
+  m = s.match(_NUM_LEAD);
+  if (m && m[1]) {
+    const num = parseFloat(m[1]);
+    return isNaN(num) ? null : num * (m[2] ? (_PREFIX_MULT[m[2]] ?? 1) : 1);
+  }
+  return null;
+}
+
 const magEq = (a, b) => a != null && b != null && Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b), 1e-15) * 1e-9;
+const naturalCompare = (a, b) => String(a ?? "").localeCompare(String(b ?? ""), undefined, { numeric: true, sensitivity: "base" });
 
 export class PartsView {
   constructor(initial = {}) {
@@ -251,7 +276,7 @@ export class PartsView {
         groups.push(this._facetGroup(key, FACET_LABEL[key], opts, key === "location" ? "location" : key));
       }
       for (const [akey, def] of Object.entries(this.facets.attributes || {})) {
-        groups.push(this._facetGroup("attr:" + akey, def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey, def.unit));
+        groups.push(this._facetGroup("attr:" + akey, def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey));
       }
     }
     host.hidden = groups.length === 0;
@@ -266,7 +291,7 @@ export class PartsView {
       const akey = id.slice(5);
       const def = this.facets.attributes?.[akey];
       if (!def || !def.options?.length) return null;
-      return this._facetGroup(id, label || def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey, def.unit);
+      return this._facetGroup(id, label || def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey);
     }
     const opts = this.facets[id] || [];
     if (!opts.length && id !== "in_stock") return null;
@@ -277,7 +302,7 @@ export class PartsView {
     return kind === "attr" ? (this.facetSel.attr[akey] ||= new Set()) : this.facetSel[kind];
   }
 
-  _facetGroup(id, label, options, kind, akey, unit) {
+  _facetGroup(id, label, options, kind, akey) {
     const g = el("div", { class: "facet-group" });
     g.append(el("h4", {}, label));
     const sel = kind === "in_stock" ? null : this._selSet(kind, akey);
@@ -285,24 +310,33 @@ export class PartsView {
     const shown = options.slice();
     if (sel) for (const v of sel) if (!shown.find((o) => o.value === v)) shown.push({ value: v, count: 0 });
 
-    const byMagnitude = MAGNITUDE_UNITS.has(unit);
-    if (byMagnitude)
+    // attribute/footprint facets get a sensible order instead of raw
+    // count-order: numeric magnitude when most options parse as one
+    // (Capacitance, V Max, "15 nC @ 4.5 V" parametrics, ...), else a
+    // natural alphanumeric sort (packagecase, footprint package names, ...)
+    const sortable = kind === "attr" || kind === "footprint";
+    const byMagnitude = sortable && shown.length > 0
+      && shown.filter((o) => leadingMagnitude(o.value) != null).length / shown.length >= 0.9;
+    if (byMagnitude) {
       shown.sort((a, b) => {
-        const ma = parseMagnitude(a.value), mb = parseMagnitude(b.value);
+        const ma = leadingMagnitude(a.value), mb = leadingMagnitude(b.value);
         if (ma == null || mb == null) return ma == null ? (mb == null ? 0 : 1) : -1;
         return ma - mb;
       });
+    } else if (sortable) {
+      shown.sort((a, b) => naturalCompare(a.value, b.value));
+    }
 
     const listEl = el("div", { class: "facet-list" });
     const renderRows = (filterText) => {
       listEl.innerHTML = "";
       const f = (filterText || "").trim().toLowerCase();
-      const qMag = byMagnitude && f ? parseMagnitude(filterText.trim()) : null;
+      const qMag = byMagnitude && f ? leadingMagnitude(filterText.trim()) : null;
       for (const o of shown) {
         const label2 = kind === "mount" ? (MOUNT_LABEL[o.value] || o.value) : o.value;
         if (f) {
           const substrHit = String(label2 ?? "").toLowerCase().includes(f);
-          const magHit = qMag != null && magEq(parseMagnitude(o.value), qMag);
+          const magHit = qMag != null && magEq(leadingMagnitude(o.value), qMag);
           if (!substrHit && !magHit) continue;
         }
         const isOn = kind === "in_stock" ? this.facetSel.in_stock === o.value : sel.has(o.value);
