@@ -114,17 +114,22 @@ def run(db: Session, path: str | Path, commit: bool = False) -> dict:
 
         case_size = get(row, "case_size")
         footprint = case_size.split("/", 1)[0].strip() if case_size else None
+        # keys match the class schema (seed/part_classes.json +
+        # part_classes_extra.json) exactly, not made-up names — a
+        # near-miss key (e.g. "voltagerated" instead of the schema's
+        # "voltage") shows up as its own separate "Additional parameters"
+        # entry and facet, duplicating the real field instead of filling it.
         attrs = {}
         if v := get(row, "value"):
-            attrs["value"] = v
+            attrs["value"] = v  # capacitor/resistor/inductor "value" field
         if v := get(row, "tolerance"):
             attrs["tolerance"] = v
         if v := get(row, "voltage"):
-            attrs["voltagerated"] = v
+            attrs["voltage"] = v  # "Voltage (max)"
         if v := get(row, "thickness"):
-            attrs["thickness"] = v
+            attrs["body_height"] = v.split("±")[0].strip()  # "0.80 ±0.07" -> "0.80"
         if v := get(row, "dielectric"):
-            attrs["temperaturecoefficient"] = v
+            attrs["tempchar"] = v  # C0G/X7R/X5R -> "Temperature characteristic"
 
         part = Part(
             name=mpn, mpn=mpn, footprint_raw=footprint or None,

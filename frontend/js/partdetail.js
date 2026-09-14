@@ -199,7 +199,7 @@ export class PartDetail {
       body.append(el("div", { class: "section-title" }, `${cls.label} parameters`));
       const pg = el("div", { class: "form-grid" });
       for (const f of cls.fields) {
-        const val = draft.attributes[f.key] ?? "";
+        let val = draft.attributes[f.key] ?? "";
         let node;
         if (f.type === "bool") {
           node = el("input", { type: "checkbox", checked: val === true || val === "true" ? "checked" : null,
@@ -214,6 +214,10 @@ export class PartDetail {
           const seen = this.attrVals[f.key] || [];
           const dl = el("datalist", { id: listId }, ...seen.map((v) => el("option", { value: v })));
           const kind = valueKind(p.part_class, f.key); // ohms/farads/henries/hertz/num
+          if (f.key === "value" && kind !== "num" && val) {
+            val = formatValue(val, kind);
+            draft.attributes[f.key] = val; // normalise on open, not just on next edit
+          }
           const box = el("input", { type: "text", value: val, list: listId,
             inputmode: f.type === "number" ? "decimal" : null,
             title: kind !== "num" ? "1000pF = 1nF · 2200 = 2k2 — normalised on blur" : "",
