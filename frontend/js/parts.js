@@ -26,7 +26,7 @@ export class PartsView {
     this.rail = { mode: "categories", id: null };
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
       location: new Set(), tags: new Set(), in_stock: null, attr: {} };
-    this.expandFacet = new Set();
+    this.facetConfig = null; // user-picked visible/ordered/renamed facets, see settings.js
   }
 
   async mount(container) {
@@ -54,11 +54,23 @@ export class PartsView {
     else if (this.initial.location_id) { this.rail = { mode: "locations", id: Number(this.initial.location_id) }; this.railCmp.setSelected("locations", this.rail.id); }
 
     document.addEventListener("partsnas:scan", this._onScan);
+    window.addEventListener("partsnas:facets-changed", this._onFacetsChanged);
+    await this._loadFacetConfig();
     await this.reload();
   }
 
   destroy() {
     document.removeEventListener("partsnas:scan", this._onScan);
+    window.removeEventListener("partsnas:facets-changed", this._onFacetsChanged);
+  }
+
+  _onFacetsChanged = async () => {
+    await this._loadFacetConfig();
+    this._renderFacets();
+  };
+
+  async _loadFacetConfig() {
+    this.facetConfig = await api("/api/meta/facet-config");
   }
 
   _onScan = (e) => {
@@ -142,16 +154,39 @@ export class PartsView {
     const host = this.facetHost;
     host.innerHTML = "";
     const groups = [];
-    for (const key of FACET_ORDER) {
-      const opts = this.facets[key] || [];
-      if (!opts.length && !(key === "in_stock")) continue;
-      groups.push(this._facetGroup(key, FACET_LABEL[key], opts, key === "location" ? "location" : key));
-    }
-    for (const [akey, def] of Object.entries(this.facets.attributes || {})) {
-      groups.push(this._facetGroup("attr:" + akey, def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey));
+    const cfg = this.facetConfig?.selected;
+    if (cfg && cfg.length) {
+      for (const entry of cfg) {
+        const g = this._resolveFacetEntry(entry);
+        if (g) groups.push(g);
+      }
+    } else {
+      for (const key of FACET_ORDER) {
+        const opts = this.facets[key] || [];
+        if (!opts.length && !(key === "in_stock")) continue;
+        groups.push(this._facetGroup(key, FACET_LABEL[key], opts, key === "location" ? "location" : key));
+      }
+      for (const [akey, def] of Object.entries(this.facets.attributes || {})) {
+        groups.push(this._facetGroup("attr:" + akey, def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey));
+      }
     }
     host.hidden = groups.length === 0;
     groups.forEach((g) => host.append(g));
+  }
+
+  // resolve one entry from the user's saved facet-config list to a rendered
+  // group, or null if that facet has nothing to show for the current query
+  // (e.g. "Voltage" while browsing inductors, which have no such field)
+  _resolveFacetEntry({ id, label }) {
+    if (id.startsWith("attr:")) {
+      const akey = id.slice(5);
+      const def = this.facets.attributes?.[akey];
+      if (!def || !def.options?.length) return null;
+      return this._facetGroup(id, label || def.label + (def.unit ? ` (${def.unit})` : ""), def.options, "attr", akey);
+    }
+    const opts = this.facets[id] || [];
+    if (!opts.length && id !== "in_stock") return null;
+    return this._facetGroup(id, label || FACET_LABEL[id], opts, id === "location" ? "location" : id);
   }
 
   _selSet(kind, akey) {
@@ -165,24 +200,29 @@ export class PartsView {
     // keep a selected value visible even if it dropped to 0
     const shown = options.slice();
     if (sel) for (const v of sel) if (!shown.find((o) => o.value === v)) shown.push({ value: v, count: 0 });
-    const expanded = this.expandFacet.has(id);
-    const list = expanded ? shown : shown.slice(0, 8);
-    for (const o of list) {
-      const isOn = kind === "in_stock" ? this.facetSel.in_stock === o.value : sel.has(o.value);
-      const label2 = kind === "mount" ? (MOUNT_LABEL[o.value] || o.value) : o.value;
-      const row = el("label", { class: "facet-opt" + (o.count ? "" : " zero") + (isOn ? " on" : "") },
-        el("input", { type: kind === "in_stock" ? "radio" : "checkbox", name: "f-" + id,
-          checked: isOn ? "checked" : null,
-          onchange: () => this._toggleFacet(kind, akey, o.value) }),
-        el("span", { class: "nm", title: label2 }, label2 || "—"),
-        el("span", { class: "c" }, o.count),
-      );
-      g.append(row);
-    }
-    if (shown.length > 8)
-      g.append(el("span", { class: "facet-more",
-        onclick: () => { expanded ? this.expandFacet.delete(id) : this.expandFacet.add(id); this._renderFacets(); } },
-        expanded ? "less" : `+${shown.length - 8} more`));
+
+    const listEl = el("div", { class: "facet-list" });
+    const renderRows = (filterText) => {
+      listEl.innerHTML = "";
+      const f = (filterText || "").trim().toLowerCase();
+      for (const o of shown) {
+        const label2 = kind === "mount" ? (MOUNT_LABEL[o.value] || o.value) : o.value;
+        if (f && !String(label2 ?? "").toLowerCase().includes(f)) continue;
+        const isOn = kind === "in_stock" ? this.facetSel.in_stock === o.value : sel.has(o.value);
+        listEl.append(el("label", { class: "facet-opt" + (o.count ? "" : " zero") + (isOn ? " on" : "") },
+          el("input", { type: kind === "in_stock" ? "radio" : "checkbox", name: "f-" + id,
+            checked: isOn ? "checked" : null,
+            onchange: () => this._toggleFacet(kind, akey, o.value) }),
+          el("span", { class: "nm", title: label2 }, label2 || "—"),
+          el("span", { class: "c" }, o.count),
+        ));
+      }
+    };
+    if (shown.length > 6)
+      g.append(el("input", { type: "text", class: "facet-search", placeholder: "search…",
+        oninput: (e) => renderRows(e.target.value) }));
+    g.append(listEl);
+    renderRows("");
     return g;
   }
 

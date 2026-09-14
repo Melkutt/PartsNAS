@@ -1,8 +1,10 @@
 """Static / derived metadata the frontend needs.
 
-`GET /api/meta/part-classes`   per-class field schemas (base + *_extra overlay)
-`GET /api/meta/attr-values`    distinct values already used for each attribute key
-`GET/PUT /api/meta/attr-rules` user-defined attribute-text -> category rules
+`GET /api/meta/part-classes`     per-class field schemas (base + *_extra overlay)
+`GET /api/meta/attr-values`      distinct values already used for each attribute key
+`GET/PUT /api/meta/attr-rules`   user-defined attribute-text -> category rules
+`GET/PUT /api/meta/facet-config` user-picked, ordered, optionally-renamed set of
+                                 filter groups shown in the Parts view sidebar
 """
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..catmatch import builtin_attr_rules, custom_attr_rules
 from ..core.db import get_db
-from ..core.kv import set_kv
+from ..core.kv import get_kv, set_kv
 from ..models import Part
 from ..partschema import part_class_schema
 from ..services import category_path_map
@@ -25,6 +27,16 @@ router = APIRouter(prefix="/api/meta", tags=["meta"])
 
 _num = re.compile(r"^-?\d+(\.\d+)?$")
 _cache: dict = {"t": 0, "v": None}
+
+_KEY_RE = re.compile(r"^[a-z0-9_]+$")
+_BUILTIN_FACETS = [
+    {"id": "mount", "label": "Mount"},
+    {"id": "footprint", "label": "Footprint"},
+    {"id": "manufacturer", "label": "Manufacturer"},
+    {"id": "location", "label": "Location"},
+    {"id": "tags", "label": "Tags"},
+    {"id": "in_stock", "label": "Stock"},
+]
 
 
 @router.get("/part-classes")
@@ -77,6 +89,51 @@ def put_attr_rules(body: AttrRules, db: Session = Depends(get_db)):
             "note": r.note.strip(),
         })
     set_kv(db, "catmatch:attr_rules", out)
+    return {"ok": True, "count": len(out)}
+
+
+class FacetEntry(BaseModel):
+    id: str
+    label: str | None = None
+
+
+class FacetConfig(BaseModel):
+    selected: list[FacetEntry]
+
+
+@router.get("/facet-config")
+def get_facet_config(db: Session = Depends(get_db)):
+    schema = part_class_schema()
+    attrs: dict[str, dict] = {}
+    for cls in schema.values():
+        for f in cls.get("fields", []):
+            if f["type"] == "bool" or f["key"] in attrs:
+                continue
+            attrs[f["key"]] = {"key": f["key"], "label": f["label"], "unit": f.get("unit")}
+    seen_keys: set[str] = set()
+    for (a,) in db.execute(select(Part.attributes)).all():
+        seen_keys |= set((a or {}).keys())
+    for key in sorted(seen_keys):
+        if key not in attrs and _KEY_RE.match(key):
+            attrs[key] = {"key": key, "label": key.replace("_", " "), "unit": None}
+    return {
+        "selected": get_kv(db, "facets:visible", []),
+        "available": {
+            "builtins": _BUILTIN_FACETS,
+            "attrs": sorted(attrs.values(), key=lambda a: a["label"].lower()),
+        },
+    }
+
+
+@router.put("/facet-config")
+def put_facet_config(body: FacetConfig, db: Session = Depends(get_db)):
+    builtin_ids = {b["id"] for b in _BUILTIN_FACETS}
+    out = []
+    for e in body.selected:
+        if e.id not in builtin_ids and not (e.id.startswith("attr:") and _KEY_RE.match(e.id[5:])):
+            raise HTTPException(400, f"unknown facet id {e.id!r}")
+        out.append({"id": e.id, "label": (e.label or "").strip() or None})
+    set_kv(db, "facets:visible", out)
     return {"ok": True, "count": len(out)}
 
 

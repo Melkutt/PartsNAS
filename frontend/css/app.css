@@ -302,12 +302,13 @@ main.body {
 .facets {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6px 18px;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  max-height: 190px;
+  max-height: 260px;
   overflow: auto;
 }
 .facet-group { min-width: 148px; }
@@ -318,6 +319,20 @@ main.body {
   letter-spacing: 0.5px;
   color: var(--text-muted);
 }
+.facet-search {
+  display: block;
+  width: 100%;
+  font-size: 11.5px;
+  padding: 2px 6px;
+  margin-bottom: 3px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
+/* fixed (not max-) height so every group is the same size regardless of how
+   many options it has — only the list scrolls, the header/search stay put */
+.facet-list { height: 150px; overflow-y: auto; }
 .facet-opt {
   display: flex;
   align-items: center;
@@ -332,7 +347,6 @@ main.body {
 .facet-opt.on { color: var(--accent); }
 .facet-opt .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 .facet-opt .c { margin-left: auto; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.facet-more { font-size: 11px; color: var(--accent); cursor: pointer; }
 .active-filters { display: flex; flex-wrap: wrap; gap: 5px; }
 .active-filters .chip { cursor: pointer; border-color: var(--accent); color: var(--accent); }
 .active-filters .chip::after { content: " ✕"; }
@@ -617,8 +631,9 @@ table.parts-table {
   .parts-layout { grid-template-rows: auto 1fr; }
   .rail { max-height: 170px; }
 
-  .facets { max-height: 150px; gap: 4px 12px; }
+  .facets { max-height: 220px; gap: 4px 12px; }
   .facet-group { min-width: 46%; }
+  .facet-list { height: 130px; }
   .facet-opt { line-height: 1.9; }            /* bigger tap target */
   .facet-opt .nm { max-width: 40vw; }
 
