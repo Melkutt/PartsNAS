@@ -44,7 +44,7 @@ _REFDES_CATEGORY: dict[str, tuple[str, ...]] = {
     "C": ("capacitor",),
     "L": ("inductor",),
     "FB": ("ferrite", "inductor"),
-    "D": ("diode", "led"),
+    "D": ("diode",),
     "LED": ("led", "diode"),
     "Q": ("transistor", "mosfet", "fet"),
     "F": ("fuse",),
@@ -237,14 +237,40 @@ class Matcher:
         path = self._cat_path.get(p.category_id, "").lower()
         return any(tok in path for tok in expect)
 
+    def _suggest_category_id(self, expect: tuple[str, ...] | None) -> int | None:
+        """The category to preselect when the user creates a brand-new part
+        for this line — same refdes-prefix signal as _category_ok, but
+        resolved to one concrete id instead of used as a filter. Tokens are
+        tried in order (most specific first, e.g. "LED" tries "led" before
+        the fallback "diode") and matched against a category's own name
+        (not just anywhere in its path), preferring the shallowest node so
+        e.g. "capacitor" lands on Capacitor itself, not some subtype."""
+        if not expect:
+            return None
+        for tok in expect:
+            best: tuple[int, int] | None = None
+            for cid, path in self._cat_path.items():
+                leaf = path.rsplit(" > ", 1)[-1].lower()
+                if leaf == tok or leaf.startswith(tok):
+                    depth = path.count(">")
+                    if best is None or depth < best[1]:
+                        best = (cid, depth)
+            if best:
+                return best[0]
+        return None
+
     def match(self, *, mpn: str | None, value: str | None, footprint: str | None,
               refdes: str | None = None) -> dict:
+        expect = _REFDES_CATEGORY.get(_refdes_prefix(refdes) or "")
+        suggested_category_id = self._suggest_category_id(expect)
+
         mpn = (mpn or "").strip()
         if mpn:
             p = self.db.scalar(select(Part).where(func.lower(Part.mpn) == mpn.lower()))
             if p:
                 return {"kind": "mpn", "part_id": p.id, "part_name": p.name,
-                        "summary": part_summary(p), "score": 100, "candidates": []}
+                        "summary": part_summary(p), "score": 100, "candidates": [],
+                        "suggested_category_id": suggested_category_id}
 
         vnorm = norm_value(value)
         fnorm = canonical_footprint(self.db, footprint)
@@ -258,9 +284,9 @@ class Matcher:
                 return {
                     "kind": "remembered", "part_id": rule.part_id, "part_name": rule.part.name,
                     "summary": part_summary(rule.part), "score": 100, "candidates": [],
+                    "suggested_category_id": suggested_category_id,
                 }
 
-        expect = _REFDES_CATEGORY.get(_refdes_prefix(refdes) or "")
         pool = [p for p in self._by_footprint.get(fnorm, []) if self._category_ok(p, expect)] if fnorm else []
         target_num = parse_component_value(value)
         scored = []
@@ -303,7 +329,8 @@ class Matcher:
         scored.sort(key=lambda x: -x[0])
         if not scored:
             return {"kind": "none", "part_id": None, "part_name": None,
-                    "summary": None, "score": 0, "candidates": []}
+                    "summary": None, "score": 0, "candidates": [],
+                    "suggested_category_id": suggested_category_id}
         top_score, top = scored[0]
         return {
             "kind": "candidate",
@@ -315,6 +342,7 @@ class Matcher:
                 {"id": p.id, "name": p.name, "summary": part_summary(p), "score": min(s, 95)}
                 for s, p in scored[:5]
             ],
+            "suggested_category_id": suggested_category_id,
         }
 
 

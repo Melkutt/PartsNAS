@@ -9,11 +9,13 @@
 // footprint (an unvalued placeholder, a different voltage, ...) never
 // matches an old rule, since the rule is keyed on the value too.
 import { api } from "./api.js";
-import { el, modal, toast, partSearch, withBusy } from "./ui.js";
+import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
 
+const CERTAIN = ["mpn", "remembered", "new"];
 const badge = (score, kind) => {
-  const cls = kind === "mpn" || kind === "remembered" ? "ok" : score >= 70 ? "warn" : "low";
-  const label = kind === "mpn" ? "MPN exact" : kind === "remembered" ? "Remembered" : kind === "none" ? "No match" : `~${score}% match`;
+  const cls = CERTAIN.includes(kind) ? "ok" : score >= 70 ? "warn" : "low";
+  const label = kind === "mpn" ? "MPN exact" : kind === "remembered" ? "Remembered"
+    : kind === "new" ? "New part" : kind === "none" ? "No match" : `~${score}% match`;
   return el("span", { class: `match-badge ${cls}` }, label);
 };
 
@@ -114,7 +116,7 @@ export class BomView {
     const table = el("table", { class: "mini-table" });
     table.append(el("tr", {}, el("th", {}, "Refdes"), el("th", {}, "Value"), el("th", {}, "Footprint"),
       el("th", { class: "num" }, "Qty"), el("th", {}, "Match"), el("th", {}, "Part"), el("th", {}, "Remember")));
-    this.reviewLines.forEach((ln, i) => table.append(this._reviewRow(ln, i)));
+    this.reviewLines.forEach((ln) => table.append(this._reviewRow(ln)));
     body.append(table);
     body.append(
       el("div", { style: "display:flex;gap:8px;margin-top:14px" },
@@ -124,15 +126,15 @@ export class BomView {
     this.el.append(panel);
   }
 
-  _reviewRow(ln, i) {
-    const m = ln.match;
+  _reviewRow(ln) {
+    const badgeCell = el("td", {}, badge(ln.match.score, ln.match.kind));
     const partCell = el("div", {});
     const renderPartCell = () => {
       partCell.innerHTML = "";
       if (ln.part_id) {
-        const c = m.candidates.find((c) => c.id === ln.part_id);
-        const name = c?.name || m.part_name || ln.part_id;
-        const summary = c?.summary || m.summary;
+        const c = ln.match.candidates.find((c) => c.id === ln.part_id);
+        const name = c?.name || ln.match.part_name || ln.part_id;
+        const summary = c?.summary || ln.match.summary;
         partCell.append(el("div", {}, name), summary ? el("div", { class: "hint", style: "padding:0" }, summary) : null);
       } else {
         partCell.append(el("span", { class: "pill-off" }, "— pick —"));
@@ -146,33 +148,87 @@ export class BomView {
     });
 
     const controls = el("span", { style: "display:flex;gap:6px;align-items:center" });
-    if (m.kind === "mpn" || m.kind === "remembered") {
-      // already certain — nothing to pick, remembering an MPN match would be redundant
-      rememberChk.disabled = true;
-    } else if (m.candidates.length > 1) {
-      const sel = el("select", {
-        onchange: (e) => { ln.part_id = e.target.value || null; renderPartCell(); rememberChk.disabled = !ln.part_id; },
-      }, el("option", { value: "" }, "— pick manually —"), ...m.candidates.map((c) =>
-        el("option", { value: c.id }, `${c.name} — ${c.summary} (~${c.score}%)`)));
-      sel.value = ln.part_id || "";
-      controls.append(sel);
-    } else {
-      const ps = partSearch({
-        placeholder: "search part…",
-        onPick: (p) => { ln.part_id = p.id; renderPartCell(); rememberChk.disabled = false; },
-      });
-      if (ln.part_id) ps.set({ id: ln.part_id, name: m.part_name });
-      controls.append(ps.el);
-    }
+    const buildControls = () => {
+      controls.innerHTML = "";
+      if (CERTAIN.includes(ln.match.kind)) {
+        // already certain — nothing to pick, remembering it again is redundant
+        rememberChk.disabled = true;
+        return;
+      }
+      if (ln.match.candidates.length > 1) {
+        const sel = el("select", {
+          onchange: (e) => { ln.part_id = e.target.value || null; renderPartCell(); rememberChk.disabled = !ln.part_id; },
+        }, el("option", { value: "" }, "— pick manually —"), ...ln.match.candidates.map((c) =>
+          el("option", { value: c.id }, `${c.name} — ${c.summary} (~${c.score}%)`)));
+        sel.value = ln.part_id || "";
+        controls.append(sel);
+      } else {
+        const ps = partSearch({
+          placeholder: "search part…",
+          onPick: (p) => { ln.part_id = p.id; renderPartCell(); rememberChk.disabled = false; },
+        });
+        if (ln.part_id) ps.set({ id: ln.part_id, name: ln.match.part_name });
+        controls.append(ps.el);
+      }
+      controls.append(el("button", { class: "ghost", onclick: () => this._newPartFor(ln, onCreated) }, "+ New part"));
+    };
+    const onCreated = (part) => {
+      ln.part_id = part.id;
+      ln.match = {
+        kind: "new", score: 100, part_id: part.id, part_name: part.name, summary: "new part",
+        candidates: [{ id: part.id, name: part.name, summary: "new part", score: 100 }],
+      };
+      renderPartCell();
+      rememberChk.disabled = false;
+      badgeCell.innerHTML = "";
+      badgeCell.append(badge(100, "new"));
+      buildControls();
+    };
+    buildControls();
 
     return el("tr", {},
       el("td", {}, ln.refdes || ""),
       el("td", {}, ln.value || ""),
       el("td", { style: "max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, ln.footprint || ""),
       el("td", { class: "num" }, String(ln.qty)),
-      el("td", {}, badge(m.score, m.kind)),
+      badgeCell,
       el("td", {}, partCell, controls.childNodes.length ? el("div", {}, controls) : null),
       el("td", {}, rememberChk));
+  }
+
+  // Create a part on the spot for a BOM line with no good match — category
+  // is preselected from the reference-designator guess (see bommatch.py
+  // _suggest_category_id), so it lands in the right place without having
+  // to remember to file it later.
+  _newPartFor(ln, onCreated) {
+    const nameInp = el("input", { type: "text", value: ln.mpn || ln.value || "" });
+    const mpnInp = el("input", { type: "text", value: ln.mpn || "" });
+    const fpInp = el("input", { type: "text", value: ln.footprint || "" });
+    const catSel = el("select");
+    treeOptions("/api/categories", { includeBlank: "— none —" }).then((opts) => {
+      catSel.append(...opts);
+      if (ln.match.suggested_category_id) catSel.value = String(ln.match.suggested_category_id);
+    });
+    modal({
+      title: "New part",
+      body: el("div", { class: "modal-body" },
+        el("div", { class: "row" }, el("label", {}, "Name *"), nameInp),
+        el("div", { class: "row" }, el("label", {}, "MPN"), mpnInp),
+        el("div", { class: "row" }, el("label", {}, "Footprint"), fpInp),
+        el("div", { class: "row" }, el("label", {}, "Category"), catSel),
+        el("div", { class: "hint" }, "Category is guessed from the reference designator (e.g. R → Resistor) — check it. Open the part afterwards to fill in the value, tolerance, etc.")),
+      confirmText: "Create",
+      onConfirm: async () => {
+        if (!nameInp.value.trim()) throw new Error("Name is required");
+        const name = nameInp.value.trim();
+        const part = await api("/api/parts", { method: "POST", body: {
+          name, mpn: mpnInp.value.trim() || null, footprint_raw: fpInp.value.trim() || null,
+          category_id: catSel.value ? Number(catSel.value) : null,
+        } });
+        onCreated({ id: part.id, name });
+        toast(`Created ${name}`);
+      },
+    });
   }
 
   async _saveProject(name) {
