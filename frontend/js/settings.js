@@ -3,12 +3,11 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts, bomRules, facetData] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
     api("/api/bom/match-rules"),
-    api("/api/meta/facet-config"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
@@ -42,61 +41,6 @@ export async function openSettings() {
       priceChk, " search prices from here"));
     body.append(block);
   }
-
-  // ---- visible filters (Parts view facet sidebar) ----
-  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Visible filters"));
-  body.append(el("div", { class: "hint" },
-    "Which filter groups show in the Parts view, and in what order. Leave empty to show everything present (today's behaviour) — a filter with nothing to show for the current category (e.g. Voltage while browsing inductors) is simply skipped."));
-
-  const facetRows = (facetData.selected || []).map((e) => ({ id: e.id, label: e.label || "" }));
-  const facetDefaultLabel = (id) => {
-    if (id.startsWith("attr:")) {
-      const a = facetData.available.attrs.find((a) => "attr:" + a.key === id);
-      return a ? a.label + (a.unit ? ` (${a.unit})` : "") : id;
-    }
-    return facetData.available.builtins.find((b) => b.id === id)?.label || id;
-  };
-
-  const facetHost = el("div");
-  const addSel = el("select", { style: "min-width:180px" });
-  const refreshAddSel = () => {
-    addSel.innerHTML = "";
-    addSel.append(el("option", { value: "" }, "+ add filter…"));
-    const used = new Set(facetRows.map((r) => r.id));
-    const bGroup = el("optgroup", { label: "Built-in" });
-    for (const b of facetData.available.builtins) if (!used.has(b.id)) bGroup.append(el("option", { value: b.id }, b.label));
-    const aGroup = el("optgroup", { label: "Attribute" });
-    for (const a of facetData.available.attrs) {
-      const id = "attr:" + a.key;
-      if (!used.has(id)) aGroup.append(el("option", { value: id }, a.label + (a.unit ? ` (${a.unit})` : "")));
-    }
-    if (bGroup.children.length) addSel.append(bGroup);
-    if (aGroup.children.length) addSel.append(aGroup);
-  };
-  const renderFacetRows = () => {
-    facetHost.innerHTML = "";
-    facetRows.forEach((entry, i) => {
-      const nameEl = el("span", { style: "flex:1;min-width:120px" }, facetDefaultLabel(entry.id));
-      const labelInp = el("input", { type: "text", value: entry.label, placeholder: "rename (optional)", style: "flex:1;min-width:100px",
-        oninput: (e) => (entry.label = e.target.value) });
-      const upBtn = el("button", { class: "ghost", title: "move up", disabled: i === 0 ? "disabled" : null,
-        onclick: () => { [facetRows[i - 1], facetRows[i]] = [facetRows[i], facetRows[i - 1]]; renderFacetRows(); } }, "▲");
-      const downBtn = el("button", { class: "ghost", title: "move down", disabled: i === facetRows.length - 1 ? "disabled" : null,
-        onclick: () => { [facetRows[i + 1], facetRows[i]] = [facetRows[i], facetRows[i + 1]]; renderFacetRows(); } }, "▼");
-      const rmBtn = el("button", { class: "ghost", onclick: () => { facetRows.splice(i, 1); renderFacetRows(); refreshAddSel(); } }, "✕");
-      facetHost.append(el("div", { class: "row", style: "flex-wrap:wrap;gap:6px;align-items:center" },
-        nameEl, labelInp, upBtn, downBtn, rmBtn));
-    });
-  };
-  addSel.addEventListener("change", () => {
-    if (!addSel.value) return;
-    facetRows.push({ id: addSel.value, label: "" });
-    renderFacetRows();
-    refreshAddSel();
-  });
-  renderFacetRows();
-  refreshAddSel();
-  body.append(facetHost, addSel);
 
   // ---- auto-categorisation rules ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Auto-categorisation rules"));
@@ -177,9 +121,6 @@ export async function openSettings() {
         .filter((e) => e.pat.value.trim() && e.cat.value)
         .map((e) => ({ pattern: e.pat.value.trim(), regex: e.rx.checked, category_id: Number(e.cat.value), note: e.note.value.trim() }));
       const res = await api("/api/meta/attr-rules", { method: "PUT", body: { rules } });
-      const selected = facetRows.map((r) => ({ id: r.id, label: r.label.trim() || null }));
-      await api("/api/meta/facet-config", { method: "PUT", body: { selected } });
-      window.dispatchEvent(new CustomEvent("partsnas:facets-changed"));
       toast(`Saved ${n} provider(s), ${res.count} rule(s)`);
     },
   });

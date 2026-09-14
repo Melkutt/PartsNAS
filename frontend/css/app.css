@@ -350,6 +350,7 @@ main.body {
 .active-filters { display: flex; flex-wrap: wrap; gap: 5px; }
 .active-filters .chip { cursor: pointer; border-color: var(--accent); color: var(--accent); }
 .active-filters .chip::after { content: " ✕"; }
+.facet-toolbar { display: flex; justify-content: flex-end; margin: 2px 0 6px; }
 
 @media (max-width: 820px) {
   .parts-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }

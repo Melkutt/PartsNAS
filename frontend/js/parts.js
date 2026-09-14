@@ -26,7 +26,7 @@ export class PartsView {
     this.rail = { mode: "categories", id: null };
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
       location: new Set(), tags: new Set(), in_stock: null, attr: {} };
-    this.facetConfig = null; // user-picked visible/ordered/renamed facets, see settings.js
+    this.facetConfig = null; // per-category visible/ordered/renamed facets, see _openFacetEditor()
   }
 
   async mount(container) {
@@ -35,7 +35,7 @@ export class PartsView {
     this.el.append(layout);
 
     const railHost = el("div", { style: "min-height:0;display:flex" });
-    this.railCmp = new CatRail({ onSelect: ({ mode, id }) => { this.rail = { mode, id }; this.reload(); } });
+    this.railCmp = new CatRail({ onSelect: ({ mode, id, name }) => { this.rail = { mode, id, name }; this.reload(); } });
     await this.railCmp.mount(railHost);
 
     this.main = el("div", { class: "parts-main" });
@@ -43,6 +43,7 @@ export class PartsView {
     this.main.append(
       this._topBar(),
       (this.activeHost = el("div", { class: "active-filters" })),
+      (this.facetToolbar = el("div", { class: "facet-toolbar", hidden: "hidden" })),
       (this.facetHost = el("div", { class: "facets", hidden: "hidden" })),
       (this.bulkHost = el("div")),
       (this.tableWrap = el("div", { class: "table-wrap" })),
@@ -54,23 +55,21 @@ export class PartsView {
     else if (this.initial.location_id) { this.rail = { mode: "locations", id: Number(this.initial.location_id) }; this.railCmp.setSelected("locations", this.rail.id); }
 
     document.addEventListener("partsnas:scan", this._onScan);
-    window.addEventListener("partsnas:facets-changed", this._onFacetsChanged);
-    await this._loadFacetConfig();
     await this.reload();
   }
 
   destroy() {
     document.removeEventListener("partsnas:scan", this._onScan);
-    window.removeEventListener("partsnas:facets-changed", this._onFacetsChanged);
   }
 
-  _onFacetsChanged = async () => {
-    await this._loadFacetConfig();
-    this._renderFacets();
-  };
-
+  // "All categories" / Unsorted / Locations mode all pass no category_id and
+  // always come back unrestricted+non-editable (see backend/app/api/meta.py) —
+  // only fetched fresh when the category actually changed, not on every reload
   async _loadFacetConfig() {
-    this.facetConfig = await api("/api/meta/facet-config");
+    const catId = this.rail.mode === "categories" ? this.rail.id : null;
+    if (this.facetConfig && this._facetConfigFor === catId) return;
+    this.facetConfig = await api(`/api/meta/facet-config${catId != null ? `?category_id=${catId}` : ""}`);
+    this._facetConfigFor = catId;
   }
 
   _onScan = (e) => {
@@ -139,17 +138,96 @@ export class PartsView {
     const [list, facets] = await Promise.all([
       api(`/api/parts?${qs}&limit=1000`),
       api(`/api/parts/facets?${qs}`),
+      this._loadFacetConfig(),
     ]);
     this.items = list.items;
     this.lastTotal = list.total;
     this.facets = facets;
     this._renderActive();
+    this._renderFacetToolbar();
     this._renderFacets();
     this._renderBulk();
     this._renderTable();
   }
 
   // ---- facets ----
+  _renderFacetToolbar() {
+    this.facetToolbar.innerHTML = "";
+    this.facetToolbar.hidden = !this.facetConfig?.editable;
+    if (!this.facetConfig?.editable) return;
+    this.facetToolbar.append(
+      el("button", { class: "ghost", onclick: () => this._openFacetEditor() }, "⚙ Customize filters"),
+    );
+  }
+
+  _openFacetEditor() {
+    const { available } = this.facetConfig;
+    const rows = (this.facetConfig.selected || []).map((e) => ({ id: e.id, label: e.label || "" }));
+    const defaultLabel = (id) => {
+      if (id.startsWith("attr:")) {
+        const a = available.attrs.find((a) => "attr:" + a.key === id);
+        return a ? a.label + (a.unit ? ` (${a.unit})` : "") : id;
+      }
+      return available.builtins.find((b) => b.id === id)?.label || id;
+    };
+
+    const rowHost = el("div");
+    const addSel = el("select", { style: "min-width:180px" });
+    const refreshAddSel = () => {
+      addSel.innerHTML = "";
+      addSel.append(el("option", { value: "" }, "+ add filter…"));
+      const used = new Set(rows.map((r) => r.id));
+      const bGroup = el("optgroup", { label: "Built-in" });
+      for (const b of available.builtins) if (!used.has(b.id)) bGroup.append(el("option", { value: b.id }, b.label));
+      const aGroup = el("optgroup", { label: "Attribute" });
+      for (const a of available.attrs) {
+        const id = "attr:" + a.key;
+        if (!used.has(id)) aGroup.append(el("option", { value: id }, a.label + (a.unit ? ` (${a.unit})` : "")));
+      }
+      if (bGroup.children.length) addSel.append(bGroup);
+      if (aGroup.children.length) addSel.append(aGroup);
+    };
+    const renderRows = () => {
+      rowHost.innerHTML = "";
+      rows.forEach((entry, i) => {
+        const nameEl = el("span", { style: "flex:1;min-width:120px" }, defaultLabel(entry.id));
+        const labelInp = el("input", { type: "text", value: entry.label, placeholder: "rename (optional)", style: "flex:1;min-width:100px",
+          oninput: (e) => (entry.label = e.target.value) });
+        const upBtn = el("button", { class: "ghost", title: "move up", disabled: i === 0 ? "disabled" : null,
+          onclick: () => { [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; renderRows(); } }, "▲");
+        const downBtn = el("button", { class: "ghost", title: "move down", disabled: i === rows.length - 1 ? "disabled" : null,
+          onclick: () => { [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; renderRows(); } }, "▼");
+        const rmBtn = el("button", { class: "ghost", onclick: () => { rows.splice(i, 1); renderRows(); refreshAddSel(); } }, "✕");
+        rowHost.append(el("div", { class: "row", style: "flex-wrap:wrap;gap:6px;align-items:center" },
+          nameEl, labelInp, upBtn, downBtn, rmBtn));
+      });
+    };
+    addSel.addEventListener("change", () => {
+      if (!addSel.value) return;
+      rows.push({ id: addSel.value, label: "" });
+      renderRows();
+      refreshAddSel();
+    });
+    renderRows();
+    refreshAddSel();
+
+    modal({
+      title: "Customize filters" + (this.rail.name ? ` — ${this.rail.name}` : ""),
+      body: el("div", { class: "modal-body" },
+        el("div", { class: "hint" },
+          "Which filter groups show while browsing this category, and in what order. Leave empty to show everything present, same as \"All categories\"."),
+        rowHost, addSel),
+      confirmText: "Save",
+      onConfirm: async () => {
+        const selected = rows.map((r) => ({ id: r.id, label: r.label.trim() || null }));
+        await api("/api/meta/facet-config", { method: "PUT", body: { category_id: this.rail.id, selected } });
+        this.facetConfig = null; // force a refetch even though the category id itself hasn't changed
+        await this._loadFacetConfig();
+        this._renderFacetToolbar();
+        this._renderFacets();
+      },
+    });
+  }
   _renderFacets() {
     const host = this.facetHost;
     host.innerHTML = "";
