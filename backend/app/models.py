@@ -333,6 +333,20 @@ class Supplier(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=100)
 
 
+class Customer(Base):
+    """A quote/invoice customer — name + contact details."""
+
+    __tablename__ = "customer"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    address: Mapped[str | None] = mapped_column(Text)
+    org_number: Mapped[str | None] = mapped_column(String(40))
+    phone: Mapped[str | None] = mapped_column(String(40))
+    email: Mapped[str | None] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class PartSupplier(Base):
     """A part <-> supplier link: their article number, a link, last known price.
 
@@ -433,7 +447,10 @@ class Quote(Base):
     __tablename__ = "quote"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    customer: Mapped[str | None] = mapped_column(String(160))
+    customer: Mapped[str | None] = mapped_column(String(160))  # display-name snapshot
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer.id", ondelete="SET NULL")
+    )
     title: Mapped[str | None] = mapped_column(String(200))
     note: Mapped[str | None] = mapped_column(Text)
     markup_percent: Mapped[float] = mapped_column(Float, default=50.0)
@@ -451,6 +468,7 @@ class Quote(Base):
         cascade="all, delete-orphan",
         order_by="QuoteLine.sort_order, QuoteLine.id",
     )
+    customer_ref: Mapped["Customer | None"] = relationship()
 
 
 class QuoteLine(Base):

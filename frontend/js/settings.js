@@ -3,11 +3,12 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts, bomRules] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules, logoData] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
     api("/api/bom/match-rules"),
+    api("/api/settings/logo"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
@@ -41,6 +42,35 @@ export async function openSettings() {
       priceChk, " search prices from here"));
     body.append(block);
   }
+
+  // ---- company logo ----
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Company logo"));
+  body.append(el("div", { class: "hint" }, "Shown on printed Quotes/Invoices. Uploads immediately."));
+  const logoPreview = el("img", { class: "quote-logo", src: logoData.logo_url || "",
+    style: logoData.logo_url ? "" : "display:none" });
+  const logoFile = el("input", { type: "file", accept: "image/*" });
+  const removeLogoBtn = el("button", { class: "ghost", style: logoData.logo_url ? "" : "display:none",
+    onclick: async () => {
+      await api("/api/settings/logo", { method: "DELETE" });
+      logoPreview.style.display = "none";
+      removeLogoBtn.style.display = "none";
+      logoFile.value = "";
+      toast("Logo removed");
+    } }, "Remove logo");
+  logoFile.addEventListener("change", async () => {
+    const f = logoFile.files[0];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    const res = await fetch("/api/settings/logo", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) return toast("Error: " + (data.detail || res.statusText));
+    logoPreview.src = data.logo_url;
+    logoPreview.style.display = "";
+    removeLogoBtn.style.display = "";
+    toast("Logo uploaded");
+  });
+  body.append(el("div", { class: "row", style: "align-items:center;gap:10px" }, logoPreview, logoFile, removeLogoBtn));
 
   // ---- auto-categorisation rules ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Auto-categorisation rules"));

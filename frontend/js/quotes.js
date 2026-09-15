@@ -6,6 +6,17 @@ import { api } from "./api.js";
 import { el, modal, toast, partSearch } from "./ui.js";
 import { parseNum } from "./units.js";
 
+let CUSTOMERS = null; // cached /api/customers
+async function customersList(force) {
+  if (!CUSTOMERS || force) CUSTOMERS = await api("/api/customers");
+  return CUSTOMERS;
+}
+let LOGO_URL; // cached /api/settings/logo (undefined = not fetched yet)
+async function logoUrl() {
+  if (LOGO_URL === undefined) LOGO_URL = (await api("/api/settings/logo")).logo_url;
+  return LOGO_URL;
+}
+
 export class QuotesView {
   constructor({ openId } = {}) {
     this.el = el("div", { class: "parts" });
@@ -100,7 +111,11 @@ export class QuotesView {
   }
 
   async openQuote(id) {
-    this.q = await api(`/api/quotes/${id}`);
+    [this.q, this.customers, this.logoUrl] = await Promise.all([
+      api(`/api/quotes/${id}`),
+      customersList(),
+      logoUrl(),
+    ]);
     this._renderQuote();
   }
 
@@ -110,8 +125,25 @@ export class QuotesView {
     const panel = el("div", { class: "panel", style: "max-width:940px" });
     const head = el("div", { class: "panel-body", id: "quote-print" });
 
-    const cust = el("input", { type: "text", value: q.customer || "", placeholder: "customer",
-      onchange: (e) => this._patch({ customer: e.target.value }) });
+    const cust = el("input", { type: "text", value: q.customer || "", placeholder: "customer name",
+      onchange: (e) => this._patch({ customer: e.target.value, customer_id: null }) });
+    const custSel = el("select", {});
+    custSel.append(el("option", { value: "" }, "— pick saved customer —"),
+      ...this.customers.map((c) => el("option", { value: c.id }, c.name)),
+      el("option", { value: "__new__" }, "+ New customer…"));
+    custSel.value = q.customer_id || "";
+    custSel.addEventListener("change", () => {
+      if (custSel.value === "__new__") {
+        this._newCustomerDialog(
+          async (c) => { this.customers.push(c); await this._patch({ customer_id: c.id, customer: c.name }); },
+          () => { custSel.value = q.customer_id || ""; },
+        );
+        return;
+      }
+      const id = custSel.value ? Number(custSel.value) : null;
+      const c = this.customers.find((x) => x.id === id);
+      this._patch({ customer_id: id, customer: c ? c.name : q.customer });
+    });
     const title = el("input", { type: "text", value: q.title || "", placeholder: "title",
       onchange: (e) => this._patch({ title: e.target.value }) });
     const markup = el("input", { type: "text", value: q.markup_percent, style: "width:70px",
@@ -132,18 +164,28 @@ export class QuotesView {
         el("button", { onclick: () => window.print() }, "Print"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.csv`) }, "CSV"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.xlsx`) }, "Excel")),
-      el("h2", { style: "border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:18px" },
-        q.title || `Quote #${q.id}`),
+      el("div", { style: "display:flex;align-items:center;gap:12px" },
+        this.logoUrl ? el("img", { src: this.logoUrl, class: "quote-logo" }) : null,
+        el("h2", { style: "border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:18px" },
+          q.title || `Quote #${q.id}`)),
       q.stock_committed ? el("div", { class: "repl-banner no-print" },
         el("b", {}, "Stock deducted for this quote. "),
         el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
       el("div", { class: "form-grid no-print", style: "max-width:520px;margin:8px 0" },
         el("label", {}, "Customer"), cust,
+        el("label", {}, ""), custSel,
         el("label", {}, "Title"), title,
         el("label", {}, "Markup %"), markup,
         el("label", {}, "VAT %"), vat),
-      el("div", { class: "print-only", style: "margin:6px 0;color:#000" },
-        `Customer: ${q.customer || "—"}    `,
+      q.customer_info
+        ? el("div", { class: "print-only", style: "margin:6px 0 2px;color:#000;white-space:pre-line" },
+            [q.customer_info.name, q.customer_info.address,
+              [q.customer_info.org_number && `Org.nr: ${q.customer_info.org_number}`,
+                q.customer_info.phone && `Tel: ${q.customer_info.phone}`,
+                q.customer_info.email].filter(Boolean).join("   ")]
+              .filter(Boolean).join("\n"))
+        : el("div", { class: "print-only", style: "margin:6px 0 2px;color:#000" }, `Customer: ${q.customer || "—"}`),
+      el("div", { class: "print-only", style: "margin:0 0 6px;color:#000" },
         el("span", { class: "cost-col" }, `Markup: ${q.markup_percent}%    `),
         `VAT: ${q.vat_percent}%`),
     ].filter(Boolean));
@@ -308,6 +350,34 @@ export class QuotesView {
             qty: parseNum(qty.value) ?? 1, unit_cost: parseNum(cost.value) ?? 0 } });
         this.openQuote(this.q.id);
       },
+    });
+  }
+
+  // used by the "+ New customer…" option in the quote's customer <select>
+  _newCustomerDialog(onCreated, onCancel) {
+    const name = el("input", { type: "text" });
+    const address = el("textarea", { style: "width:100%;min-height:50px" });
+    const orgNumber = el("input", { type: "text" });
+    const phone = el("input", { type: "text" });
+    const email = el("input", { type: "text" });
+    modal({
+      title: "New customer",
+      body: el("div", { class: "modal-body" },
+        el("div", { class: "row" }, el("label", {}, "Name"), name),
+        el("div", { class: "row" }, el("label", {}, "Address"), address),
+        el("div", { class: "row" }, el("label", {}, "Org number"), orgNumber),
+        el("div", { class: "row" }, el("label", {}, "Phone"), phone),
+        el("div", { class: "row" }, el("label", {}, "Email"), email)),
+      confirmText: "Create",
+      onConfirm: async () => {
+        if (!name.value.trim()) throw new Error("name required");
+        const c = await api("/api/customers", { method: "POST",
+          body: { name: name.value.trim(), address: address.value.trim() || null,
+            org_number: orgNumber.value.trim() || null, phone: phone.value.trim() || null,
+            email: email.value.trim() || null } });
+        await onCreated(c);
+      },
+      onClose: () => onCancel && onCancel(),
     });
   }
 }

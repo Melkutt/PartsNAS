@@ -76,6 +76,7 @@ def _mount_routers() -> None:
         bom,
         bulk,
         categories,
+        customers,
         design_notes,
         exports,
         images,
@@ -99,6 +100,7 @@ def _mount_routers() -> None:
     app.include_router(stock.router)
     app.include_router(bulk.router)
     app.include_router(suppliers.router)
+    app.include_router(customers.router)
     app.include_router(images.router)
     app.include_router(labels.router)
     app.include_router(design_notes.router)

@@ -41,8 +41,12 @@ class Settings(BaseSettings):
     def thumbs_dir(self) -> Path:
         return self.data_dir / "thumbs"
 
+    @property
+    def branding_dir(self) -> Path:
+        return self.data_dir / "branding"
+
     def ensure_dirs(self) -> None:
-        for p in (self.data_dir, self.images_dir, self.thumbs_dir):
+        for p in (self.data_dir, self.images_dir, self.thumbs_dir, self.branding_dir):
             p.mkdir(parents=True, exist_ok=True)
 
 

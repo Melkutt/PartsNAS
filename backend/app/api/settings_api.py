@@ -1,7 +1,10 @@
-"""Provider API-credential configuration + live status.
+"""Provider API-credential configuration + live status, and the company logo.
 
 `GET  /api/settings/providers`        list with cred fields / configured / quota
 `PUT  /api/settings/providers/{name}` body {creds: {field: value}} — "" clears one
+`GET  /api/settings/logo`             {logo_url} or {logo_url: null}
+`POST /api/settings/logo`             multipart upload (field: file) — replaces any existing one
+`DELETE /api/settings/logo`           removes it
 
 Credentials live in the Setting table (single-user LAN app). An env var
 PARTSNAS_<NAME>_<FIELD> (e.g. PARTSNAS_DIGIKEY_CLIENT_ID) wins per field.
@@ -10,11 +13,14 @@ Values are never returned.
 from __future__ import annotations
 
 import os
+import secrets
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..core.config import get_settings
 from ..core.db import get_db
 from ..core.kv import get_kv, set_kv
 from ..providers import all_providers, get_provider
@@ -23,6 +29,7 @@ from ..providers.safety import status as breaker_status
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 _LIMITS = {"mouser": (10, 1000), "digikey": (20, 1000)}
+_LOGO_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 
 
 class CredsBody(BaseModel):
@@ -87,3 +94,36 @@ def set_creds(name: str, body: CredsBody, db: Session = Depends(get_db)):
     if body.price_enabled is not None:
         set_kv(db, f"provider:{name}:price_enabled", bool(body.price_enabled))
     return {"ok": True, "configured": p.configured(db)}
+
+
+@router.get("/logo")
+def get_logo(db: Session = Depends(get_db)):
+    rel = get_kv(db, "branding:logo", None)
+    return {"logo_url": f"/media/{rel}" if rel else None}
+
+
+@router.post("/logo")
+async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _LOGO_EXT:
+        raise HTTPException(400, f"unsupported image type {ext!r}")
+    s = get_settings()
+    old = get_kv(db, "branding:logo", None)
+    if old:
+        (s.data_dir / old).unlink(missing_ok=True)
+    raw = await file.read()
+    key = secrets.token_hex(8)
+    rel = f"branding/logo_{key}{ext}"
+    (s.data_dir / rel).write_bytes(raw)
+    set_kv(db, "branding:logo", rel)
+    return {"logo_url": f"/media/{rel}"}
+
+
+@router.delete("/logo")
+def delete_logo(db: Session = Depends(get_db)):
+    s = get_settings()
+    old = get_kv(db, "branding:logo", None)
+    if old:
+        (s.data_dir / old).unlink(missing_ok=True)
+    set_kv(db, "branding:logo", None)
+    return {"ok": True}

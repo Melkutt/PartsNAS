@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
 from ..core.db import get_db
-from ..models import Part, PartSupplier, Quote, QuoteLine, StockEntry
+from ..models import Customer, Part, PartSupplier, Quote, QuoteLine, StockEntry
 from ..services import location_breakdown
 
 _LINE_TYPES = {"part", "labor", "fee"}
@@ -37,6 +37,7 @@ router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
 class QuoteIn(BaseModel):
     customer: str | None = None
+    customer_id: int | None = None
     title: str | None = None
     markup_percent: float = 50.0
     vat_percent: float = 25.0
@@ -44,6 +45,7 @@ class QuoteIn(BaseModel):
 
 class QuotePatch(BaseModel):
     customer: str | None = None
+    customer_id: int | None = None
     title: str | None = None
     note: str | None = None
     markup_percent: float | None = None
@@ -151,6 +153,14 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
     d = {
         "id": q.id,
         "customer": q.customer,
+        "customer_id": q.customer_id,
+        "customer_info": {
+            "name": q.customer_ref.name,
+            "address": q.customer_ref.address,
+            "org_number": q.customer_ref.org_number,
+            "phone": q.customer_ref.phone,
+            "email": q.customer_ref.email,
+        } if q.customer_ref else None,
         "title": q.title,
         "note": q.note,
         "markup_percent": q.markup_percent,

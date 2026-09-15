@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { Tree } from "./tree.js";
 import { PartsView } from "./parts.js";
 import { SuppliersView } from "./suppliers.js";
+import { CustomersView } from "./customers.js";
 import { DesignNotesView } from "./designnotes.js";
 import { QuotesView } from "./quotes.js";
 import { BomView } from "./bom.js";
@@ -28,6 +29,7 @@ const TABS = {
       gotoPartsFiltered({ location_id: node.id }),
     ),
   notes: mountNotes,
+  customers: mountCustomers,
   quotes: mountQuotes,
   bom: mountBom,
   suppliers: mountSuppliers,
@@ -59,6 +61,13 @@ async function mountNotes() {
   clearView();
   const v = new DesignNotesView({ q: pendingNoteQuery });
   pendingNoteQuery = "";
+  activeObj = v;
+  await v.mount(view);
+}
+
+async function mountCustomers() {
+  clearView();
+  const v = new CustomersView();
   activeObj = v;
   await v.mount(view);
 }

@@ -610,6 +610,8 @@ table.parts-table {
 }
 .repl-banner b { color: var(--warn); }
 
+.quote-logo { max-height: 50px; max-width: 200px; object-fit: contain; }
+
 /* toast */
 .toast {
   position: fixed;
