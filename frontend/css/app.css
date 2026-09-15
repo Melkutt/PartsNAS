@@ -134,6 +134,22 @@ main.body {
 }
 .panel .panel-body { padding: 8px 6px 12px; }
 
+/* ---------- About tab stat tiles ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+.stat-tile {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.stat-value { font-size: 22px; font-weight: 700; color: var(--text); }
+.stat-label { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+
 /* ---------- tree ---------- */
 .tree, .tree ul {
   list-style: none;
@@ -673,6 +689,7 @@ table.parts-table {
   #quote-print, #quote-print * { color: #000 !important; }
   .mini-table th, .mini-table td { border-color: #999 !important; }
   #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
+  #quote-print.hide-cost-print .cost-col { display: none !important; }
 }
 
 /* single-part label print (Label tab, part detail) — #label-print is a

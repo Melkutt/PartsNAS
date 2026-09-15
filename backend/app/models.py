@@ -440,6 +440,7 @@ class Quote(Base):
     vat_percent: Mapped[float] = mapped_column(Float, default=25.0)
     status: Mapped[str] = mapped_column(String(12), default="open")  # open | invoiced
     stock_committed: Mapped[bool] = mapped_column(default=False)
+    hide_cost: Mapped[bool] = mapped_column(default=False)  # omit cost/markup on print + export
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
@@ -467,6 +468,7 @@ class QuoteLine(Base):
     cost_source: Mapped[str | None] = mapped_column(String(80))  # "Mouser 2026-09-09" / ...
     note: Mapped[str | None] = mapped_column(Text)  # "replaced R12", etc.
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    line_type: Mapped[str] = mapped_column(String(12), default="part")  # part|labor|fee
 
     quote: Mapped["Quote"] = relationship(back_populates="lines")
     part: Mapped["Part | None"] = relationship()

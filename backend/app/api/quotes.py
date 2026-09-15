@@ -25,9 +25,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..core.config import get_settings
 from ..core.db import get_db
 from ..models import Part, PartSupplier, Quote, QuoteLine, StockEntry
 from ..services import location_breakdown
+
+_LINE_TYPES = {"part", "labor", "fee"}
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -46,6 +49,7 @@ class QuotePatch(BaseModel):
     markup_percent: float | None = None
     vat_percent: float | None = None
     status: str | None = None
+    hide_cost: bool | None = None
 
 
 class LineIn(BaseModel):
@@ -56,6 +60,7 @@ class LineIn(BaseModel):
     unit_cost: float | None = None  # override the snapshot
     supplier_link_id: int | None = None  # pin the price to this PartSupplier row
     note: str | None = None
+    line_type: str = "part"  # part | labor | fee
 
 
 class LinePatch(BaseModel):
@@ -64,6 +69,7 @@ class LinePatch(BaseModel):
     unit_cost: float | None = None
     markup_percent: float | None = None  # explicit null clears -> use quote markup
     note: str | None = None
+    line_type: str | None = None
 
 
 class BulkLine(BaseModel):
@@ -87,8 +93,8 @@ def snapshot_from_link(db: Session, link_id: int) -> tuple[float, str, str] | No
     return link.unit_price, link.currency, f"{name} {when}".strip()
 
 
-def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str]:
-    """(ex-VAT unit cost, currency, source label) for a part, at this moment."""
+def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str, float]:
+    """(ex-VAT unit cost, currency, source label, vat_percent) for a part, now."""
     links = db.scalars(
         select(PartSupplier).where(
             PartSupplier.part_id == part_id, PartSupplier.unit_price.is_not(None)
@@ -98,7 +104,7 @@ def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str]:
         # the ★ preferred link wins; otherwise the DEAREST price (quote conservatively)
         best = max(links, key=lambda x: (x.preferred, x.unit_price or 0))
         when = best.updated_at.strftime("%Y-%m-%d") if best.updated_at else ""
-        return best.unit_price, best.currency, f"{best.supplier.name} {when}".strip()
+        return best.unit_price, best.currency, f"{best.supplier.name} {when}".strip(), best.vat_percent
     entry = db.scalar(
         select(StockEntry)
         .where(
@@ -111,8 +117,8 @@ def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str]:
     )
     if entry:
         when = entry.created_at.strftime("%Y-%m-%d") if entry.created_at else ""
-        return entry.unit_price, entry.currency, f"last purchase {when}".strip()
-    return 0.0, "SEK", "no price on file"
+        return entry.unit_price, entry.currency, f"last purchase {when}".strip(), entry.vat_percent
+    return 0.0, "SEK", "no price on file", get_settings().default_vat_percent
 
 
 def _line_row(ln: QuoteLine, quote_markup: float) -> dict:
@@ -121,6 +127,7 @@ def _line_row(ln: QuoteLine, quote_markup: float) -> dict:
     return {
         "id": ln.id,
         "part_id": ln.part_id,
+        "line_type": ln.line_type or "part",
         "description": ln.description,
         "mpn": ln.mpn,
         "qty": ln.qty,
@@ -150,6 +157,7 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
         "vat_percent": q.vat_percent,
         "status": q.status,
         "stock_committed": q.stock_committed,
+        "hide_cost": q.hide_cost,
         "line_count": len(q.lines),
         "created_at": q.created_at.isoformat() if q.created_at else None,
         "totals": {
@@ -205,7 +213,9 @@ def delete_quote(qid: int, db: Session = Depends(get_db)):
 
 
 def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, note,
-              supplier_link_id=None):
+              supplier_link_id=None, line_type="part"):
+    if line_type not in _LINE_TYPES:
+        raise HTTPException(400, f"unknown line_type {line_type!r}")
     order = (
         db.scalar(
             select(QuoteLine.sort_order)
@@ -227,7 +237,7 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
             if picked:
                 unit_cost, cur, src = picked
         if unit_cost is None:
-            unit_cost, cur, src = snapshot_cost(db, part_id)
+            unit_cost, cur, src, _vat = snapshot_cost(db, part_id)
     if unit_cost is None:
         unit_cost = 0.0
     if src is None:
@@ -237,7 +247,7 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
     ln = QuoteLine(
         quote_id=q.id, part_id=part_id, description=description, mpn=mpn,
         qty=qty, unit_cost=unit_cost, currency=cur, cost_source=src, note=note,
-        sort_order=order + 1,
+        sort_order=order + 1, line_type=line_type,
     )
     db.add(ln)
     return ln
@@ -247,7 +257,7 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
 def add_line(qid: int, body: LineIn, db: Session = Depends(get_db)):
     q = _need(db, qid)
     ln = _add_line(db, q, body.part_id, body.description, body.mpn, body.qty,
-                   body.unit_cost, body.note, body.supplier_link_id)
+                   body.unit_cost, body.note, body.supplier_link_id, body.line_type)
     db.commit()
     return {"id": ln.id}
 
@@ -357,28 +367,37 @@ def export_xlsx(qid: int, db: Session = Depends(get_db)):
 
     q = _need(db, qid)
     d = _quote_dict(db, q, full=True)
+    hide = q.hide_cost
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Quote"
     ws.append([q.title or f"Quote #{q.id}"])
     ws.append(["Customer", q.customer or ""])
-    ws.append(["Markup %", q.markup_percent, "VAT %", q.vat_percent, "Status", q.status])
+    info_row = ["VAT %", q.vat_percent, "Status", q.status] if hide else \
+        ["Markup %", q.markup_percent, "VAT %", q.vat_percent, "Status", q.status]
+    ws.append(info_row)
     ws.append([])
-    head = ["MPN", "Description", "Qty", "Unit cost ex VAT", "Markup %",
-            "Source", "Sell unit ex VAT", "Line ex VAT", "Note"]
+    head = ["MPN", "Description", "Qty", "Sell unit ex VAT", "Line ex VAT", "Note"] if hide else \
+        ["MPN", "Description", "Qty", "Unit cost ex VAT", "Markup %",
+         "Source", "Sell unit ex VAT", "Line ex VAT", "Note"]
     ws.append(head)
     for ln in d["lines"]:
-        ws.append([ln["mpn"] or "", ln["description"], ln["qty"], ln["unit_cost"],
-                   ln["effective_markup"], ln["cost_source"] or "",
-                   ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""])
+        row = [ln["mpn"] or "", ln["description"], ln["qty"]]
+        if not hide:
+            row += [ln["unit_cost"], ln["effective_markup"], ln["cost_source"] or ""]
+        row += [ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""]
+        ws.append(row)
     t = d["totals"]
     ws.append([])
-    for label, val in [("Cost", t["cost"]), ("Markup", t["markup"]),
-                       ("Sell ex VAT", t["sell_ex_vat"]),
-                       (f"VAT {q.vat_percent}%", t["vat"]),
-                       ("Total inc VAT", t["inc_vat_ceil"])]:
-        ws.append(["", "", "", "", "", "", label, val])
-    for i, colw in enumerate([16, 40, 6, 16, 10, 22, 16, 14, 24], 1):
+    totals = [("Sell ex VAT", t["sell_ex_vat"]), (f"VAT {q.vat_percent}%", t["vat"]),
+              ("Total inc VAT", t["inc_vat_ceil"])] if hide else \
+        [("Cost", t["cost"]), ("Markup", t["markup"]), ("Sell ex VAT", t["sell_ex_vat"]),
+         (f"VAT {q.vat_percent}%", t["vat"]), ("Total inc VAT", t["inc_vat_ceil"])]
+    label_col = 6 if hide else 8  # F vs H, matching the shorter/longer header row
+    for label, val in totals:
+        ws.append([""] * (label_col - 1) + [label, val])
+    widths = [16, 40, 6, 16, 14, 24] if hide else [16, 40, 6, 16, 10, 22, 16, 14, 24]
+    for i, colw in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = colw
     bio = io.BytesIO()
     wb.save(bio)
@@ -394,23 +413,33 @@ def export_xlsx(qid: int, db: Session = Depends(get_db)):
 def export_csv(qid: int, db: Session = Depends(get_db)):
     q = _need(db, qid)
     d = _quote_dict(db, q, full=True)
+    hide = q.hide_cost
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Quote", q.title or f"#{q.id}", "Customer", q.customer or ""])
-    w.writerow(["Markup %", q.markup_percent, "VAT %", q.vat_percent])
+    w.writerow(["VAT %", q.vat_percent] if hide else ["Markup %", q.markup_percent, "VAT %", q.vat_percent])
     w.writerow([])
-    w.writerow(["MPN", "Description", "Qty", "Unit cost ex VAT", "Source",
-                "Sell unit ex VAT", "Line ex VAT", "Note"])
-    for ln in d["lines"]:
-        w.writerow([ln["mpn"] or "", ln["description"], ln["qty"], ln["unit_cost"],
-                    ln["cost_source"] or "", ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""])
+    if hide:
+        w.writerow(["MPN", "Description", "Qty", "Sell unit ex VAT", "Line ex VAT", "Note"])
+        for ln in d["lines"]:
+            w.writerow([ln["mpn"] or "", ln["description"], ln["qty"],
+                        ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""])
+    else:
+        w.writerow(["MPN", "Description", "Qty", "Unit cost ex VAT", "Source",
+                    "Sell unit ex VAT", "Line ex VAT", "Note"])
+        for ln in d["lines"]:
+            w.writerow([ln["mpn"] or "", ln["description"], ln["qty"], ln["unit_cost"],
+                        ln["cost_source"] or "", ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""])
     t = d["totals"]
     w.writerow([])
-    w.writerow(["", "", "", "", "", "Cost", t["cost"]])
-    w.writerow(["", "", "", "", "", "Markup", t["markup"]])
-    w.writerow(["", "", "", "", "", "Sell ex VAT", t["sell_ex_vat"]])
-    w.writerow(["", "", "", "", "", f"VAT {q.vat_percent}%", t["vat"]])
-    w.writerow(["", "", "", "", "", "Total inc VAT", t["inc_vat_ceil"]])
+    label_col = 4 if hide else 6
+    pad = [""] * (label_col - 1)
+    if not hide:
+        w.writerow(pad + ["Cost", t["cost"]])
+        w.writerow(pad + ["Markup", t["markup"]])
+    w.writerow(pad + ["Sell ex VAT", t["sell_ex_vat"]])
+    w.writerow(pad + [f"VAT {q.vat_percent}%", t["vat"]])
+    w.writerow(pad + ["Total inc VAT", t["inc_vat_ceil"]])
     buf.seek(0)
     fn = f"quote-{q.id}-{datetime.now():%Y%m%d}.csv"
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",

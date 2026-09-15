@@ -118,11 +118,17 @@ export class QuotesView {
       onchange: (e) => this._patch({ markup_percent: parseNum(e.target.value) ?? 50 }) });
     const vat = el("input", { type: "text", value: q.vat_percent, style: "width:70px",
       onchange: (e) => this._patch({ vat_percent: parseNum(e.target.value) ?? 25 }) });
+    if (q.hide_cost) head.classList.add("hide-cost-print");
+    const hideCostCb = el("input", { type: "checkbox", checked: q.hide_cost ? "checked" : null,
+      onchange: (e) => { head.classList.toggle("hide-cost-print", e.target.checked); this._patch({ hide_cost: e.target.checked }); } });
 
     head.append(...[
-      el("div", { class: "no-print", style: "display:flex;gap:8px;margin-bottom:10px" },
+      el("div", { class: "no-print", style: "display:flex;gap:8px;align-items:center;margin-bottom:10px" },
         el("button", { class: "ghost", onclick: () => this.list() }, "← all quotes"),
         el("span", { style: "flex:1" }),
+        el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
+          title: "Omit cost/markup/source from print and CSV/Excel export — the on-screen view here always shows them" },
+          hideCostCb, "Hide cost (customer copy)"),
         el("button", { onclick: () => window.print() }, "Print"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.csv`) }, "CSV"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.xlsx`) }, "Excel")),
@@ -142,7 +148,7 @@ export class QuotesView {
 
     const t = el("table", { class: "mini-table", style: "margin-top:8px" });
     t.append(el("tr", {}, el("th", {}, "MPN"), el("th", {}, "Description"), el("th", { class: "num" }, "Qty"),
-      el("th", { class: "num" }, "Unit cost"), el("th", { class: "num" }, "Markup %"), el("th", {}, "Source"),
+      el("th", { class: "num cost-col" }, "Unit cost"), el("th", { class: "num cost-col" }, "Markup %"), el("th", { class: "cost-col" }, "Source"),
       el("th", { class: "num" }, "Sell/u ex"), el("th", { class: "num" }, "Line ex"), el("th", { class: "no-print" }, "")));
     for (const ln of q.lines) {
       const qtyI = el("input", { type: "text", value: ln.qty, style: "width:56px",
@@ -156,12 +162,12 @@ export class QuotesView {
       const noteI = el("input", { type: "text", value: ln.note || "", placeholder: "note (e.g. replaced R12)",
         style: "width:100%", onchange: (e) => this._patchLine(ln.id, { note: e.target.value }) });
       t.append(el("tr", {},
-        el("td", {}, ln.mpn || ""),
+        el("td", {}, ln.line_type && ln.line_type !== "part" ? el("span", { class: "pill-off" }, ln.line_type.toUpperCase()) : (ln.mpn || "")),
         el("td", {}, el("div", {}, ln.description), noteI),
         el("td", { class: "num" }, qtyI),
-        el("td", { class: "num" }, costI),
-        el("td", { class: "num" }, mkI),
-        el("td", { style: "color:var(--text-faint);font-size:11px" }, ln.cost_source || ""),
+        el("td", { class: "num cost-col" }, costI),
+        el("td", { class: "num cost-col" }, mkI),
+        el("td", { class: "cost-col", style: "color:var(--text-faint);font-size:11px" }, ln.cost_source || ""),
         el("td", { class: "num" }, ln.sell_unit_ex),
         el("td", { class: "num" }, ln.line_ex),
         el("td", { class: "no-print" }, el("button", { class: "ghost", onclick: () => this._delLine(ln.id) }, "✕"))));
@@ -174,7 +180,7 @@ export class QuotesView {
 
     const tt = q.totals;
     head.append(el("div", { style: "margin-top:14px;margin-left:auto;max-width:280px" },
-      row("Cost", tt.cost), row("Markup", tt.markup),
+      row("Cost", tt.cost, false, true), row("Markup", tt.markup, false, true),
       row("Sell ex VAT", tt.sell_ex_vat, true),
       row(`VAT ${q.vat_percent}%`, tt.vat),
       row("Total inc VAT", tt.inc_vat_ceil, true)));
@@ -182,8 +188,9 @@ export class QuotesView {
     panel.append(head);
     this.el.append(panel);
 
-    function row(label, val, strong) {
-      return el("div", { style: "display:flex;justify-content:space-between;padding:2px 0" + (strong ? ";font-weight:700" : "") },
+    function row(label, val, strong, costOnly) {
+      return el("div", { class: costOnly ? "cost-col" : "",
+        style: "display:flex;justify-content:space-between;padding:2px 0" + (strong ? ";font-weight:700" : "") },
         el("span", {}, label), el("span", {}, `${val} ${tt.currency}`));
     }
   }
@@ -241,22 +248,52 @@ export class QuotesView {
   }
 
   _addFree() {
+    const typeSel = el("select", {},
+      el("option", { value: "part" }, "Part (manual)"),
+      el("option", { value: "labor" }, "Labor"),
+      el("option", { value: "fee" }, "Fee"));
     const desc = el("input", { type: "text", placeholder: "description" });
     const mpn = el("input", { type: "text", placeholder: "MPN (optional)" });
     const qty = el("input", { type: "text", value: "1", style: "width:70px" });
     const cost = el("input", { type: "text", value: "0", style: "width:90px" });
+    const qtyLabel = el("label", {}, "Qty");
+    const costLabel = el("label", {}, "Unit cost ex VAT");
+    const mpnRow = el("div", { class: "row" }, el("label", {}, "MPN"), mpn);
+    const applyType = () => {
+      if (typeSel.value === "labor") {
+        qtyLabel.textContent = "Hours";
+        costLabel.textContent = "Rate/hour ex VAT";
+        mpnRow.style.display = "none";
+        qty.disabled = false;
+      } else if (typeSel.value === "fee") {
+        qtyLabel.textContent = "Qty";
+        costLabel.textContent = "Fee amount ex VAT";
+        mpnRow.style.display = "none";
+        qty.value = "1";
+        qty.disabled = true;
+      } else {
+        qtyLabel.textContent = "Qty";
+        costLabel.textContent = "Unit cost ex VAT";
+        mpnRow.style.display = "";
+        qty.disabled = false;
+      }
+    };
+    typeSel.addEventListener("change", applyType);
+    applyType();
     modal({
       title: "Free line",
       body: el("div", { class: "modal-body" },
+        el("div", { class: "row" }, el("label", {}, "Type"), typeSel),
         el("div", { class: "row" }, el("label", {}, "Description"), desc),
-        el("div", { class: "row" }, el("label", {}, "MPN"), mpn),
-        el("div", { class: "row" }, el("label", {}, "Qty"), qty),
-        el("div", { class: "row" }, el("label", {}, "Unit cost ex VAT"), cost)),
+        mpnRow,
+        el("div", { class: "row" }, qtyLabel, qty),
+        el("div", { class: "row" }, costLabel, cost)),
       confirmText: "Add",
       onConfirm: async () => {
         if (!desc.value.trim()) throw new Error("description required");
         await api(`/api/quotes/${this.q.id}/lines`, { method: "POST",
-          body: { description: desc.value.trim(), mpn: mpn.value.trim() || null, qty: parseNum(qty.value) ?? 1, unit_cost: parseNum(cost.value) ?? 0 } });
+          body: { line_type: typeSel.value, description: desc.value.trim(), mpn: mpn.value.trim() || null,
+            qty: parseNum(qty.value) ?? 1, unit_cost: parseNum(cost.value) ?? 0 } });
         this.openQuote(this.q.id);
       },
     });

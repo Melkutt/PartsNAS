@@ -6,6 +6,7 @@ import { SuppliersView } from "./suppliers.js";
 import { DesignNotesView } from "./designnotes.js";
 import { QuotesView } from "./quotes.js";
 import { BomView } from "./bom.js";
+import { AboutView } from "./about.js";
 import { initScanner } from "./scan.js";
 import { openImport, openExport } from "./importexport.js";
 import { openSettings } from "./settings.js";
@@ -30,6 +31,7 @@ const TABS = {
   quotes: mountQuotes,
   bom: mountBom,
   suppliers: mountSuppliers,
+  about: mountAbout,
 };
 
 function clearView() {
@@ -71,6 +73,13 @@ async function mountQuotes() {
 async function mountBom() {
   clearView();
   const v = new BomView();
+  activeObj = v;
+  await v.mount(view);
+}
+
+async function mountAbout() {
+  clearView();
+  const v = new AboutView();
   activeObj = v;
   await v.mount(view);
 }
