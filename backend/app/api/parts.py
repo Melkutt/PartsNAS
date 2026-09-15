@@ -124,7 +124,15 @@ def _query(db: Session, f: PartFilter, *, exclude: str | None = None):
         unsorted = db.scalar(select(Category.id).where(Category.is_unsorted.is_(True)))
         stmt = stmt.where(or_(Part.category_id.is_(None), Part.category_id == unsorted))
     if f.mounts and exclude != "mount":
-        stmt = stmt.where(Part.mount.in_(f.mounts))
+        # "" is the Unknown/unset bucket from the facet - IN doesn't match
+        # NULL, so it needs its own OR'd condition
+        real = [m for m in f.mounts if m]
+        conds = []
+        if real:
+            conds.append(Part.mount.in_(real))
+        if "" in f.mounts:
+            conds.append(Part.mount.is_(None))
+        stmt = stmt.where(or_(*conds))
     if f.footprints and exclude != "footprint":
         stmt = stmt.where(Part.footprint_raw.in_(f.footprints))
     if f.manufacturers and exclude != "manufacturer":
@@ -244,16 +252,24 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
         ids = list(db.scalars(_query(db, f, exclude=exclude)).all())
         return db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
 
-    def count(field_get, exclude):
+    def count(field_get, exclude, include_empty=False):
         c = Counter()
+        empty = 0
         for p in parts_for(exclude):
             v = field_get(p)
-            if v not in (None, ""):
+            if v in (None, ""):
+                empty += 1
+            else:
                 c[str(v)] += 1
-        return [{"value": k, "count": n} for k, n in c.most_common()]
+        opts = [{"value": k, "count": n} for k, n in c.most_common()]
+        # "" is the sentinel for "not set" - always last, not folded into the
+        # count-order above, so it doesn't get lost among the real values
+        if include_empty and empty:
+            opts.append({"value": "", "count": empty})
+        return opts
 
     result: dict = {
-        "mount": count(lambda p: p.mount, "mount"),
+        "mount": count(lambda p: p.mount, "mount", include_empty=True),
         "footprint": count(lambda p: p.footprint_raw, "footprint"),
         "manufacturer": count(lambda p: p.manufacturer, "manufacturer"),
     }

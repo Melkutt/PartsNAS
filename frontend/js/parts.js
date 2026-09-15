@@ -12,7 +12,7 @@ const FACET_LABEL = {
   mount: "Mount", footprint: "Footprint", manufacturer: "Manufacturer",
   location: "Location", tags: "Tags", in_stock: "Stock",
 };
-const MOUNT_LABEL = { smd: "SMD", tht: "THT", other: "Other" };
+const MOUNT_LABEL = { smd: "SMD", tht: "THT", other: "Other", "": "Unknown" };
 
 // Attribute/footprint facets sort by numeric magnitude when their options
 // are numeric-ish (Capacitance, V Max, or parametric strings like
@@ -537,7 +537,7 @@ export class PartsView {
       manufacturer: mfr.value.trim() || null,
       description: desc.value.trim() || null,
       category_id: cat.value ? Number(cat.value) : null,
-      mount: mount.value || null,
+      mount: mount.value.trim().toLowerCase() || null,
       footprint_raw: fp.value.trim() || null,
       min_stock: Number(minStock.value) || 0,
       tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean),
@@ -559,11 +559,9 @@ export class PartsView {
     const mfr = el("input", { type: "text" });
     const desc = el("input", { type: "text" });
     const cat = el("select");
-    const mount = el("select", {},
-      el("option", { value: "" }, "—"),
-      el("option", { value: "smd" }, "SMD"),
-      el("option", { value: "tht" }, "THT"),
-      el("option", { value: "other" }, "Other"));
+    const mountDl = el("datalist", { id: "dl-newpart-mount" });
+    const mount = el("input", { type: "text", list: "dl-newpart-mount", placeholder: "smd / tht / other / …" });
+    api("/api/meta/attr-values").then((v) => mountDl.append(...(v.mount || []).map((m) => el("option", { value: m }))));
     const fp = el("input", { type: "text", placeholder: "e.g. 0805, SOIC-8, TO-220" });
     const minStock = el("input", { type: "text", value: "0", inputmode: "numeric", style: "width:6em" });
     const tags = el("input", { type: "text", placeholder: "comma,separated" });
@@ -624,7 +622,7 @@ export class PartsView {
         row("Manufacturer", mfr),
         row("Description", desc),
         row("Category", cat),
-        row("Mount", mount),
+        row("Mount", mount, mountDl),
         row("Footprint", fp),
         row("Min stock", minStock),
         row("Tags", tags),

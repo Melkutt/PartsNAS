@@ -179,12 +179,15 @@ def put_facet_config(body: FacetConfig, db: Session = Depends(get_db)):
 def attr_values(db: Session = Depends(get_db)):
     if _cache["v"] is not None and time.time() - _cache["t"] < 30:
         return _cache["v"]
-    seen: dict[str, set] = {}
+    seen: dict[str, set] = {"mount": {"smd", "tht", "other"}}
     for (attrs,) in db.execute(select(Part.attributes)).all():
         for k, v in (attrs or {}).items():
             if v in (None, "", True, False):
                 continue
             seen.setdefault(k, set()).add(str(v))
+    for (m,) in db.execute(select(Part.mount).distinct()).all():
+        if m:
+            seen["mount"].add(m)
     out = {k: sorted(vs, key=_sort_key) for k, vs in seen.items()}
     _cache.update(t=time.time(), v=out)
     return out
