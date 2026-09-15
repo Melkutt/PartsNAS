@@ -160,6 +160,7 @@ export class QuotesView {
         title: "blank = use the quote markup",
         onchange: (e) => this._patchLine(ln.id, { markup_percent: e.target.value.trim() === "" ? null : parseNum(e.target.value) }) });
       const noteI = el("input", { type: "text", value: ln.note || "", placeholder: "note (e.g. replaced R12)",
+        class: ln.note ? "" : "print-hide-empty",
         style: "width:100%", onchange: (e) => this._patchLine(ln.id, { note: e.target.value }) });
       t.append(el("tr", {},
         el("td", {}, ln.line_type && ln.line_type !== "part" ? el("span", { class: "pill-off" }, ln.line_type.toUpperCase()) : (ln.mpn || "")),
@@ -184,6 +185,15 @@ export class QuotesView {
       row("Sell ex VAT", tt.sell_ex_vat, true),
       row(`VAT ${q.vat_percent}%`, tt.vat),
       row("Total inc VAT", tt.inc_vat_ceil, true)));
+
+    head.append(...[
+      el("div", { class: "no-print", style: "margin-top:14px" },
+        el("label", { style: "display:block;margin-bottom:4px;color:var(--text-muted);font-size:12px" }, "Notes"),
+        el("textarea", { style: "width:100%;min-height:70px;resize:vertical",
+          placeholder: "Notes for this quote — wraps automatically, Enter for a new line…",
+          onchange: (e) => this._patch({ note: e.target.value }) }, q.note || "")),
+      q.note ? el("div", { class: "print-only", style: "margin-top:10px;white-space:pre-wrap;color:#000" }, q.note) : null,
+    ].filter(Boolean));
 
     panel.append(head);
     this.el.append(panel);

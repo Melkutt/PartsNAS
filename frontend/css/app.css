@@ -690,6 +690,7 @@ table.parts-table {
   .mini-table th, .mini-table td { border-color: #999 !important; }
   #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
   #quote-print.hide-cost-print .cost-col { display: none !important; }
+  #quote-print .print-hide-empty { display: none !important; }
 }
 
 /* single-part label print (Label tab, part detail) — #label-print is a
