@@ -30,7 +30,7 @@ from ..core.db import get_db
 from ..models import Customer, Part, PartSupplier, Quote, QuoteLine, StockEntry
 from ..services import location_breakdown
 
-_LINE_TYPES = {"part", "labor", "fee"}
+_LINE_TYPES = {"part", "labor", "fee", "shipping"}
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -41,6 +41,7 @@ class QuoteIn(BaseModel):
     title: str | None = None
     markup_percent: float = 50.0
     vat_percent: float = 25.0
+    hide_vat: bool = False
 
 
 class QuotePatch(BaseModel):
@@ -52,6 +53,7 @@ class QuotePatch(BaseModel):
     vat_percent: float | None = None
     status: str | None = None
     hide_cost: bool | None = None
+    hide_vat: bool | None = None
 
 
 class LineIn(BaseModel):
@@ -148,8 +150,11 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
     lines = [_line_row(ln, q.markup_percent) for ln in q.lines]
     cost_total = round(sum(ln.unit_cost * ln.qty for ln in q.lines), 2)
     sell_ex_total = round(sum(x["line_ex"] for x in lines), 2)
-    vat_amount = round(sell_ex_total * q.vat_percent / 100, 2)
-    inc_total_ceil = math.ceil(sell_ex_total * (1 + q.vat_percent / 100) - 1e-9)
+    # not VAT-registered -> treat as 0% for the math, but keep the stored
+    # vat_percent untouched in case VAT applies again in the future
+    vat_pct = 0 if q.hide_vat else q.vat_percent
+    vat_amount = round(sell_ex_total * vat_pct / 100, 2)
+    inc_total_ceil = math.ceil(sell_ex_total * (1 + vat_pct / 100) - 1e-9)
     d = {
         "id": q.id,
         "customer": q.customer,
@@ -168,6 +173,7 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
         "status": q.status,
         "stock_committed": q.stock_committed,
         "hide_cost": q.hide_cost,
+        "hide_vat": q.hide_vat,
         "line_count": len(q.lines),
         "created_at": q.created_at.isoformat() if q.created_at else None,
         "totals": {
@@ -175,6 +181,7 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
             "markup": round(sell_ex_total - cost_total, 2),
             "sell_ex_vat": sell_ex_total,
             "vat": vat_amount,
+            "vat_percent": vat_pct,
             "inc_vat_ceil": inc_total_ceil,
             "currency": "SEK",
         },
@@ -383,8 +390,13 @@ def export_xlsx(qid: int, db: Session = Depends(get_db)):
     ws.title = "Quote"
     ws.append([q.title or f"Quote #{q.id}"])
     ws.append(["Customer", q.customer or ""])
-    info_row = ["VAT %", q.vat_percent, "Status", q.status] if hide else \
-        ["Markup %", q.markup_percent, "VAT %", q.vat_percent, "Status", q.status]
+    t = d["totals"]
+    info_row = []
+    if not hide:
+        info_row += ["Markup %", q.markup_percent]
+    if not q.hide_vat:
+        info_row += ["VAT %", t["vat_percent"]]
+    info_row += ["Status", q.status]
     ws.append(info_row)
     ws.append([])
     head = ["MPN", "Description", "Qty", "Sell unit ex VAT", "Line ex VAT", "Note"] if hide else \
@@ -397,12 +409,13 @@ def export_xlsx(qid: int, db: Session = Depends(get_db)):
             row += [ln["unit_cost"], ln["effective_markup"], ln["cost_source"] or ""]
         row += [ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""]
         ws.append(row)
-    t = d["totals"]
     ws.append([])
-    totals = [("Sell ex VAT", t["sell_ex_vat"]), (f"VAT {q.vat_percent}%", t["vat"]),
-              ("Total inc VAT", t["inc_vat_ceil"])] if hide else \
-        [("Cost", t["cost"]), ("Markup", t["markup"]), ("Sell ex VAT", t["sell_ex_vat"]),
-         (f"VAT {q.vat_percent}%", t["vat"]), ("Total inc VAT", t["inc_vat_ceil"])]
+    totals = []
+    if not hide:
+        totals += [("Cost", t["cost"]), ("Markup", t["markup"])]
+    totals.append(("Sell ex VAT", t["sell_ex_vat"]))
+    if not q.hide_vat:
+        totals += [(f"VAT {t['vat_percent']}%", t["vat"]), ("Total inc VAT", t["inc_vat_ceil"])]
     label_col = 6 if hide else 8  # F vs H, matching the shorter/longer header row
     for label, val in totals:
         ws.append([""] * (label_col - 1) + [label, val])
@@ -424,10 +437,16 @@ def export_csv(qid: int, db: Session = Depends(get_db)):
     q = _need(db, qid)
     d = _quote_dict(db, q, full=True)
     hide = q.hide_cost
+    t = d["totals"]
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Quote", q.title or f"#{q.id}", "Customer", q.customer or ""])
-    w.writerow(["VAT %", q.vat_percent] if hide else ["Markup %", q.markup_percent, "VAT %", q.vat_percent])
+    info_row = []
+    if not hide:
+        info_row += ["Markup %", q.markup_percent]
+    if not q.hide_vat:
+        info_row += ["VAT %", t["vat_percent"]]
+    w.writerow(info_row)
     w.writerow([])
     if hide:
         w.writerow(["MPN", "Description", "Qty", "Sell unit ex VAT", "Line ex VAT", "Note"])
@@ -440,7 +459,6 @@ def export_csv(qid: int, db: Session = Depends(get_db)):
         for ln in d["lines"]:
             w.writerow([ln["mpn"] or "", ln["description"], ln["qty"], ln["unit_cost"],
                         ln["cost_source"] or "", ln["sell_unit_ex"], ln["line_ex"], ln["note"] or ""])
-    t = d["totals"]
     w.writerow([])
     label_col = 4 if hide else 6
     pad = [""] * (label_col - 1)
@@ -448,8 +466,9 @@ def export_csv(qid: int, db: Session = Depends(get_db)):
         w.writerow(pad + ["Cost", t["cost"]])
         w.writerow(pad + ["Markup", t["markup"]])
     w.writerow(pad + ["Sell ex VAT", t["sell_ex_vat"]])
-    w.writerow(pad + [f"VAT {q.vat_percent}%", t["vat"]])
-    w.writerow(pad + ["Total inc VAT", t["inc_vat_ceil"]])
+    if not q.hide_vat:
+        w.writerow(pad + [f"VAT {t['vat_percent']}%", t["vat"]])
+        w.writerow(pad + ["Total inc VAT", t["inc_vat_ceil"]])
     buf.seek(0)
     fn = f"quote-{q.id}-{datetime.now():%Y%m%d}.csv"
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",

@@ -3,12 +3,13 @@ import { api } from "./api.js";
 import { el, modal, toast, treeOptions } from "./ui.js";
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts, bomRules, logoData] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules, logoData, footerData] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
     api("/api/bom/match-rules"),
     api("/api/settings/logo"),
+    api("/api/settings/footer"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
@@ -71,6 +72,16 @@ export async function openSettings() {
     toast("Logo uploaded");
   });
   body.append(el("div", { class: "row", style: "align-items:center;gap:10px" }, logoPreview, logoFile, removeLogoBtn));
+
+  // ---- invoice footer ----
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Invoice footer"));
+  body.append(el("div", { class: "hint" }, "Your name, address and payment options — printed at the bottom of every Quote/Invoice. Saved automatically."));
+  const footerTa = el("textarea", { rows: 4, style: "width:100%", placeholder: "e.g.\nJohn Doe\n123 Main St, 12345 Anytown\nSwish: 070-000 00 00",
+    onchange: async () => {
+      await api("/api/settings/footer", { method: "PUT", body: { text: footerTa.value } });
+      toast("Footer saved");
+    } }, footerData.text || "");
+  body.append(footerTa);
 
   // ---- auto-categorisation rules ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Auto-categorisation rules"));

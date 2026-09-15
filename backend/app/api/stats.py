@@ -1,7 +1,8 @@
 """Overall inventory facts, shown on the About tab.
 
 `GET /api/stats` -> part/stock counts, inventory value (cost basis and sale
-value at the standard markup, each ex/inc VAT), and lifetime logged labor hours.
+value at the standard markup, each ex/inc VAT), lifetime logged labor hours,
+and actual sales from invoiced quotes (ex/inc VAT, shipping, labor hours+kr).
 """
 from __future__ import annotations
 
@@ -10,10 +11,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
-from ..models import Part, QuoteLine
+from ..models import Part, Quote, QuoteLine
 from ..money import with_vat
 from ..services import on_hand_map
-from .quotes import snapshot_cost
+from .quotes import _quote_dict, snapshot_cost
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -49,6 +50,26 @@ def get_stats(db: Session = Depends(get_db)):
         .where(QuoteLine.line_type == "labor")
     ) or 0
 
+    # actual sales: only quotes that were really invoiced. Reuses
+    # _quote_dict() rather than re-deriving VAT/markup math - also means a
+    # hide_vat quote's inc total already collapses to its ex total for free.
+    sales_ex = 0.0
+    sales_inc = 0.0
+    shipping_total = 0.0
+    labor_hours_invoiced = 0.0
+    labor_revenue_invoiced = 0.0
+    invoiced = db.scalars(select(Quote).where(Quote.status == "invoiced")).all()
+    for q in invoiced:
+        qd = _quote_dict(db, q, full=True)
+        sales_ex += qd["totals"]["sell_ex_vat"]
+        sales_inc += qd["totals"]["inc_vat_ceil"]
+        for ln in qd["lines"]:
+            if ln["line_type"] == "shipping":
+                shipping_total += ln["line_ex"]
+            elif ln["line_type"] == "labor":
+                labor_hours_invoiced += ln["qty"]
+                labor_revenue_invoiced += ln["line_ex"]
+
     return {
         "total_parts": total_parts,
         "total_stock_units": total_stock_units,
@@ -58,5 +79,10 @@ def get_stats(db: Session = Depends(get_db)):
         "inventory_sale_inc_vat": round(sale_inc, 2),
         "markup_percent_used": _DEFAULT_MARKUP,
         "total_labor_hours": total_labor_hours,
+        "sales_ex_vat": round(sales_ex, 2),
+        "sales_inc_vat": round(sales_inc, 2),
+        "shipping_total": round(shipping_total, 2),
+        "labor_hours_invoiced": labor_hours_invoiced,
+        "labor_revenue_invoiced": round(labor_revenue_invoiced, 2),
         "currency": "SEK",
     }

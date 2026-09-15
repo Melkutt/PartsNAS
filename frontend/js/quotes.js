@@ -16,6 +16,12 @@ async function logoUrl() {
   if (LOGO_URL === undefined) LOGO_URL = (await api("/api/settings/logo")).logo_url;
   return LOGO_URL;
 }
+let FOOTER_TEXT; // cached /api/settings/footer (undefined = not fetched yet)
+async function footerText() {
+  if (FOOTER_TEXT === undefined) FOOTER_TEXT = (await api("/api/settings/footer")).text;
+  return FOOTER_TEXT;
+}
+const HIDE_VAT_KEY = "partsnas.hideVatDefault";
 
 export class QuotesView {
   constructor({ openId } = {}) {
@@ -103,18 +109,21 @@ export class QuotesView {
         el("div", { class: "row" }, el("label", {}, "Markup %"), markup)),
       confirmText: "Create",
       onConfirm: async () => {
+        const hideVat = localStorage.getItem(HIDE_VAT_KEY) === "true";
         const { id } = await api("/api/quotes", { method: "POST",
-          body: { customer: cust.value.trim() || null, title: title.value.trim() || null, markup_percent: parseNum(markup.value) ?? 50 } });
+          body: { customer: cust.value.trim() || null, title: title.value.trim() || null,
+            markup_percent: parseNum(markup.value) ?? 50, hide_vat: hideVat } });
         this.openQuote(id);
       },
     });
   }
 
   async openQuote(id) {
-    [this.q, this.customers, this.logoUrl] = await Promise.all([
+    [this.q, this.customers, this.logoUrl, this.footerText] = await Promise.all([
       api(`/api/quotes/${id}`),
       customersList(),
       logoUrl(),
+      footerText(),
     ]);
     this._renderQuote();
   }
@@ -153,21 +162,27 @@ export class QuotesView {
     if (q.hide_cost) head.classList.add("hide-cost-print");
     const hideCostCb = el("input", { type: "checkbox", checked: q.hide_cost ? "checked" : null,
       onchange: (e) => { head.classList.toggle("hide-cost-print", e.target.checked); this._patch({ hide_cost: e.target.checked }); } });
+    const hideVatCb = el("input", { type: "checkbox", checked: q.hide_vat ? "checked" : null,
+      onchange: (e) => { localStorage.setItem(HIDE_VAT_KEY, String(e.target.checked)); this._patch({ hide_vat: e.target.checked }); } });
+    const docLabel = q.status === "invoiced" ? "Invoice" : "Quote";
 
     head.append(...[
-      el("div", { class: "no-print", style: "display:flex;gap:8px;align-items:center;margin-bottom:10px" },
+      el("div", { class: "no-print", style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px" },
         el("button", { class: "ghost", onclick: () => this.list() }, "← all quotes"),
         el("span", { style: "flex:1" }),
         el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
           title: "Omit cost/markup/source from print and CSV/Excel export — the on-screen view here always shows them" },
           hideCostCb, "Hide cost (customer copy)"),
+        el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
+          title: "Not VAT-registered — omit VAT entirely from totals, print and export. Remembered for new quotes." },
+          hideVatCb, "No VAT"),
         el("button", { onclick: () => window.print() }, "Print"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.csv`) }, "CSV"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.xlsx`) }, "Excel")),
       el("div", { style: "display:flex;align-items:center;gap:12px" },
         this.logoUrl ? el("img", { src: this.logoUrl, class: "quote-logo" }) : null,
         el("h2", { style: "border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:18px" },
-          q.title || `Quote #${q.id}`)),
+          q.title || `${docLabel} #${q.id}`)),
       q.stock_committed ? el("div", { class: "repl-banner no-print" },
         el("b", {}, "Stock deducted for this quote. "),
         el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
@@ -180,14 +195,12 @@ export class QuotesView {
       q.customer_info
         ? el("div", { class: "print-only", style: "margin:6px 0 2px;color:#000;white-space:pre-line" },
             [q.customer_info.name, q.customer_info.address,
-              [q.customer_info.org_number && `Org.nr: ${q.customer_info.org_number}`,
-                q.customer_info.phone && `Tel: ${q.customer_info.phone}`,
-                q.customer_info.email].filter(Boolean).join("   ")]
+              q.customer_info.org_number && `Org.nr: ${q.customer_info.org_number}`,
+              q.customer_info.phone && `Tel: ${q.customer_info.phone}`,
+              q.customer_info.email]
               .filter(Boolean).join("\n"))
         : el("div", { class: "print-only", style: "margin:6px 0 2px;color:#000" }, `Customer: ${q.customer || "—"}`),
-      el("div", { class: "print-only", style: "margin:0 0 6px;color:#000" },
-        el("span", { class: "cost-col" }, `Markup: ${q.markup_percent}%    `),
-        `VAT: ${q.vat_percent}%`),
+      el("div", { class: "print-only cost-col", style: "margin:0 0 6px;color:#000" }, `Markup: ${q.markup_percent}%`),
     ].filter(Boolean));
 
     const t = el("table", { class: "mini-table", style: "margin-top:8px" });
@@ -225,10 +238,12 @@ export class QuotesView {
 
     const tt = q.totals;
     head.append(el("div", { style: "margin-top:14px;margin-left:auto;max-width:280px" },
-      row("Cost", tt.cost, false, true), row("Markup", tt.markup, false, true),
-      row("Sell ex VAT", tt.sell_ex_vat, true),
-      row(`VAT ${q.vat_percent}%`, tt.vat),
-      row("Total inc VAT", tt.inc_vat_ceil, true)));
+      ...[
+        row("Cost", tt.cost, false, true), row("Markup", tt.markup, false, true),
+        row("Sell ex VAT", tt.sell_ex_vat, true),
+        q.hide_vat ? null : row(`VAT ${tt.vat_percent}%`, tt.vat),
+        q.hide_vat ? null : row("Total inc VAT", tt.inc_vat_ceil, true),
+      ].filter(Boolean)));
 
     head.append(...[
       el("div", { class: "no-print", style: "margin-top:14px" },
@@ -237,6 +252,10 @@ export class QuotesView {
           placeholder: "Notes for this quote — wraps automatically, Enter for a new line…",
           onchange: (e) => this._patch({ note: e.target.value }) }, q.note || "")),
       q.note ? el("div", { class: "print-only", style: "margin-top:10px;white-space:pre-wrap;color:#000" }, q.note) : null,
+      this.footerText
+        ? el("div", { class: "print-only", style: "margin-top:24px;padding-top:8px;border-top:1px solid #999;white-space:pre-wrap;color:#000;font-size:12px" },
+            this.footerText)
+        : null,
     ].filter(Boolean));
 
     panel.append(head);
@@ -305,7 +324,8 @@ export class QuotesView {
     const typeSel = el("select", {},
       el("option", { value: "part" }, "Part (manual)"),
       el("option", { value: "labor" }, "Labor"),
-      el("option", { value: "fee" }, "Fee"));
+      el("option", { value: "fee" }, "Fee"),
+      el("option", { value: "shipping" }, "Shipping"));
     const desc = el("input", { type: "text", placeholder: "description" });
     const mpn = el("input", { type: "text", placeholder: "MPN (optional)" });
     const qty = el("input", { type: "text", value: "1", style: "width:70px" });
@@ -322,6 +342,12 @@ export class QuotesView {
       } else if (typeSel.value === "fee") {
         qtyLabel.textContent = "Qty";
         costLabel.textContent = "Fee amount ex VAT";
+        mpnRow.style.display = "none";
+        qty.value = "1";
+        qty.disabled = true;
+      } else if (typeSel.value === "shipping") {
+        qtyLabel.textContent = "Qty";
+        costLabel.textContent = "Shipping cost ex VAT";
         mpnRow.style.display = "none";
         qty.value = "1";
         qty.disabled = true;

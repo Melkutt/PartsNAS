@@ -1,10 +1,12 @@
-"""Provider API-credential configuration + live status, and the company logo.
+"""Provider API-credential configuration + live status, and quote/invoice branding.
 
 `GET  /api/settings/providers`        list with cred fields / configured / quota
 `PUT  /api/settings/providers/{name}` body {creds: {field: value}} — "" clears one
 `GET  /api/settings/logo`             {logo_url} or {logo_url: null}
 `POST /api/settings/logo`             multipart upload (field: file) — replaces any existing one
 `DELETE /api/settings/logo`           removes it
+`GET  /api/settings/footer`           {text} — the seller's own name/address/payment info
+`PUT  /api/settings/footer`           body {text} — printed at the bottom of every quote/invoice
 
 Credentials live in the Setting table (single-user LAN app). An env var
 PARTSNAS_<NAME>_<FIELD> (e.g. PARTSNAS_DIGIKEY_CLIENT_ID) wins per field.
@@ -126,4 +128,19 @@ def delete_logo(db: Session = Depends(get_db)):
     if old:
         (s.data_dir / old).unlink(missing_ok=True)
     set_kv(db, "branding:logo", None)
+    return {"ok": True}
+
+
+class FooterBody(BaseModel):
+    text: str = ""
+
+
+@router.get("/footer")
+def get_footer(db: Session = Depends(get_db)):
+    return {"text": get_kv(db, "branding:footer", "") or ""}
+
+
+@router.put("/footer")
+def set_footer(body: FooterBody, db: Session = Depends(get_db)):
+    set_kv(db, "branding:footer", body.text.strip())
     return {"ok": True}
