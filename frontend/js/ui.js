@@ -52,6 +52,61 @@ export function modal({ title, body, confirmText = "OK", onConfirm, onClose, wid
   return { close, box, okBtn: ok };
 }
 
+// <select> that also lets the user type a brand-new option via a small
+// dialog, added to the SAME dropdown from then on (not just a one-off
+// value) - preserves whatever case they typed. `onChange(value)` fires
+// whenever the committed value changes, including right after an add.
+// The returned <select>'s own `.value` always works normally; call
+// `.setOptions([...])` to (re)supply the option list once it's ready
+// (e.g. after an async fetch) without losing the current selection.
+export function selectWithAdd(value, options, onChange, { addLabel = "+ Add new…", addTitle = "Add a new option" } = {}) {
+  const ADD = "__add_new__";
+  const sel = el("select", {});
+  let list = [...options];
+  const fill = (v) => {
+    sel.innerHTML = "";
+    sel.append(el("option", { value: "" }, "—"));
+    for (const o of list) if (o) sel.append(el("option", { value: o }, o));
+    sel.append(el("option", { value: ADD }, addLabel));
+    sel.value = v || "";
+  };
+  if (value && !list.includes(value)) list.push(value);
+  fill(value);
+  sel.setOptions = (opts) => {
+    const cur = sel.value === ADD ? value : sel.value;
+    list = [...opts];
+    if (cur && !list.includes(cur)) list.push(cur);
+    fill(cur);
+  };
+  sel.addEventListener("change", () => {
+    if (sel.value !== ADD) {
+      value = sel.value;
+      onChange && onChange(value);
+      return;
+    }
+    const prev = value;
+    const nameInp = el("input", { type: "text", placeholder: "e.g. Blade" });
+    modal({
+      title: addTitle,
+      body: el("div", { class: "modal-body" }, el("div", { class: "row" }, el("label", {}, "Name"), nameInp)),
+      confirmText: "Add",
+      onConfirm: () => {
+        const name = nameInp.value.trim();
+        if (!name) throw new Error("Enter a name");
+        // reuse an existing entry's casing instead of creating a near-duplicate
+        const existing = list.find((o) => o.toLowerCase() === name.toLowerCase());
+        const final = existing || name;
+        if (!list.includes(final)) list.push(final);
+        value = final;
+        fill(final);
+        onChange && onChange(final);
+      },
+      onClose: () => { if (sel.value === ADD) fill(prev); },
+    });
+  });
+  return sel;
+}
+
 export function spinner(text, big) {
   return el("div", { class: "busy-row" }, el("span", { class: "spin" + (big ? " lg" : "") }), text || "Working…");
 }

@@ -1,6 +1,6 @@
 // Parts tab: left category/location rail, right = faceted filters + results table + bulk bar.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions, withBusy } from "./ui.js";
+import { el, modal, toast, treeOptions, withBusy, selectWithAdd } from "./ui.js";
 import { PartDetail } from "./partdetail.js";
 import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
@@ -537,7 +537,7 @@ export class PartsView {
       manufacturer: mfr.value.trim() || null,
       description: desc.value.trim() || null,
       category_id: cat.value ? Number(cat.value) : null,
-      mount: mount.value.trim().toLowerCase() || null,
+      mount: mount.value.trim() || null,
       footprint_raw: fp.value.trim() || null,
       min_stock: Number(minStock.value) || 0,
       tags: tags.value.split(",").map((s) => s.trim()).filter(Boolean),
@@ -559,9 +559,8 @@ export class PartsView {
     const mfr = el("input", { type: "text" });
     const desc = el("input", { type: "text" });
     const cat = el("select");
-    const mountDl = el("datalist", { id: "dl-newpart-mount" });
-    const mount = el("input", { type: "text", list: "dl-newpart-mount", placeholder: "smd / tht / other / …" });
-    api("/api/meta/attr-values").then((v) => mountDl.append(...(v.mount || []).map((m) => el("option", { value: m }))));
+    const mount = selectWithAdd("", []);
+    api("/api/meta/attr-values").then((v) => mount.setOptions(v.mount || []));
     const fp = el("input", { type: "text", placeholder: "e.g. 0805, SOIC-8, TO-220" });
     const minStock = el("input", { type: "text", value: "0", inputmode: "numeric", style: "width:6em" });
     const tags = el("input", { type: "text", placeholder: "comma,separated" });
@@ -622,7 +621,7 @@ export class PartsView {
         row("Manufacturer", mfr),
         row("Description", desc),
         row("Category", cat),
-        row("Mount", mount, mountDl),
+        row("Mount", mount),
         row("Footprint", fp),
         row("Min stock", minStock),
         row("Tags", tags),

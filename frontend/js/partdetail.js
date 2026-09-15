@@ -1,6 +1,6 @@
 // Part detail panel: Details (edit) / Stock / Suppliers / Notes, in a right-side overlay.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions, partSearch, withBusy } from "./ui.js";
+import { el, modal, toast, treeOptions, partSearch, withBusy, selectWithAdd } from "./ui.js";
 import { openLookup } from "./lookup.js";
 import { formatValue, valueKind, parseNum, awgToMm2, isAwg } from "./units.js";
 import { addToLabelSheet, setPageSize, clearPageSize, labelUrl } from "./labelcommon.js";
@@ -16,7 +16,7 @@ async function attrValues(force) {
   return ATTR_VALUES;
 }
 
-const MOUNTS = ["smd", "tht", "other"]; // fallback datalist suggestions before attr-values loads
+const MOUNTS = ["smd", "tht", "other"]; // fallback options before attr-values loads
 
 // "3,3" -> "3.3" so a comma and a dot don't create two values of the same thing
 const commaFix = (v) => (/^-?\d+,\d+$/.test(String(v).trim()) ? String(v).trim().replace(",", ".") : v);
@@ -178,11 +178,8 @@ export class PartDetail {
     cat.value = String(draft.category_id || "");
     field("Category", cat);
 
-    const mountDl = el("datalist", { id: "dl-mount" },
-      ...(this.attrVals.mount || MOUNTS).map((m) => el("option", { value: m })));
-    const mount = el("input", { type: "text", list: "dl-mount", value: draft.mount,
-      placeholder: "smd / tht / other / …", oninput: (e) => (draft.mount = e.target.value) });
-    field("Mount", el("span", { style: "display:flex;gap:4px" }, mount, mountDl));
+    const mount = selectWithAdd(draft.mount, this.attrVals.mount || MOUNTS, (v) => (draft.mount = v));
+    field("Mount", mount);
 
     field("Footprint", inp("footprint_raw"));
     field("KiCad symbol", inp("kicad_symbol"));
@@ -431,7 +428,7 @@ export class PartDetail {
       manufacturer: draft.manufacturer.trim() || null,
       category_id: draft.category_id ? Number(draft.category_id) : null,
       set_category: true,
-      mount: draft.mount.trim().toLowerCase() || null,
+      mount: draft.mount.trim() || null,
       footprint_raw: draft.footprint_raw.trim() || null,
       kicad_symbol: draft.kicad_symbol.trim() || null,
       kicad_footprint: draft.kicad_footprint.trim() || null,
