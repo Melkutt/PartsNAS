@@ -143,7 +143,9 @@ export class QuotesView {
         el("label", {}, "Markup %"), markup,
         el("label", {}, "VAT %"), vat),
       el("div", { class: "print-only", style: "margin:6px 0;color:#000" },
-        `Customer: ${q.customer || "—"}    Markup: ${q.markup_percent}%    VAT: ${q.vat_percent}%`),
+        `Customer: ${q.customer || "—"}    `,
+        el("span", { class: "cost-col" }, `Markup: ${q.markup_percent}%    `),
+        `VAT: ${q.vat_percent}%`),
     ].filter(Boolean));
 
     const t = el("table", { class: "mini-table", style: "margin-top:8px" });
