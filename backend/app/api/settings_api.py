@@ -7,6 +7,8 @@
 `DELETE /api/settings/logo`           removes it
 `GET  /api/settings/footer`           {text} — the seller's own name/address/payment info
 `PUT  /api/settings/footer`           body {text} — printed at the bottom of every quote/invoice
+`GET  /api/settings/defaults`         {currency, vat_percent} — used whenever nothing more
+`PUT  /api/settings/defaults`         specific (a supplier price, a quote) says otherwise
 
 Credentials live in the Setting table (single-user LAN app). An env var
 PARTSNAS_<NAME>_<FIELD> (e.g. PARTSNAS_DIGIKEY_CLIENT_ID) wins per field.
@@ -24,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
 from ..core.db import get_db
-from ..core.kv import get_kv, set_kv
+from ..core.kv import get_default_currency, get_default_vat_percent, get_kv, set_kv
 from ..providers import all_providers, get_provider
 from ..providers.safety import status as breaker_status
 
@@ -143,4 +145,22 @@ def get_footer(db: Session = Depends(get_db)):
 @router.put("/footer")
 def set_footer(body: FooterBody, db: Session = Depends(get_db)):
     set_kv(db, "branding:footer", body.text.strip())
+    return {"ok": True}
+
+
+class DefaultsBody(BaseModel):
+    currency: str = "SEK"
+    vat_percent: float = 25.0
+
+
+@router.get("/defaults")
+def get_defaults(db: Session = Depends(get_db)):
+    return {"currency": get_default_currency(db), "vat_percent": get_default_vat_percent(db)}
+
+
+@router.put("/defaults")
+def set_defaults(body: DefaultsBody, db: Session = Depends(get_db)):
+    cur = body.currency.strip().upper()[:3] or "SEK"
+    set_kv(db, "defaults:currency", cur)
+    set_kv(db, "defaults:vat_percent", body.vat_percent)
     return {"ok": True}

@@ -15,6 +15,11 @@ async function attrValues(force) {
   if (!ATTR_VALUES || force) ATTR_VALUES = await api("/api/meta/attr-values");
   return ATTR_VALUES;
 }
+let DEFAULT_VAT; // cached /api/settings/defaults .vat_percent
+async function defaultVat() {
+  if (DEFAULT_VAT === undefined) DEFAULT_VAT = (await api("/api/settings/defaults")).vat_percent;
+  return DEFAULT_VAT;
+}
 
 const MOUNTS = ["smd", "tht", "other"]; // fallback options before attr-values loads
 
@@ -533,13 +538,14 @@ export class PartDetail {
     return sel;
   }
 
-  _stockDialog(kind) {
+  async _stockDialog(kind) {
+    const dvat = await defaultVat();
     const qty = el("input", { type: "text", inputmode: "numeric", value: kind === "count" ? "0" : "1" });
     const loc = el("select");
     treeOptions("/api/locations", { includeBlank: "— location —" }).then((o) => loc.append(...o));
     const price = el("input", { type: "text", inputmode: "decimal", placeholder: "unit price" });
     const incVat = el("input", { type: "checkbox" });
-    const vat = el("input", { type: "text", inputmode: "decimal", value: "25", style: "width:60px" });
+    const vat = el("input", { type: "text", inputmode: "decimal", value: String(dvat), style: "width:60px" });
     const sku = el("input", { type: "text", placeholder: "supplier article no." });
     const sup = this._supplierSelect();
     const note = el("input", { type: "text", placeholder: "note" });
@@ -577,7 +583,7 @@ export class PartDetail {
             Object.assign(b, {
               unit_price: parseNum(price.value),
               price_includes_vat: incVat.checked,
-              vat_percent: parseNum(vat.value) || 25,
+              vat_percent: parseNum(vat.value) || dvat,
               supplier_id: sup.value ? Number(sup.value) : null,
               supplier_sku: sku.value || null,
             });
@@ -656,7 +662,8 @@ export class PartDetail {
     body.append(t);
   }
 
-  _linkDialog(existing) {
+  async _linkDialog(existing) {
+    const dvat = await defaultVat();
     const sup = this._supplierSelect();
     if (existing) {
       sup.value = String(existing.supplier_id);
@@ -672,7 +679,7 @@ export class PartDetail {
     const url = el("input", { type: "text", value: existing?.url || "", placeholder: "product page URL" });
     const price = el("input", { type: "text", inputmode: "decimal", value: existing?.price.ex_vat ?? "" });
     const incVat = el("input", { type: "checkbox" });
-    const vat = el("input", { type: "text", value: existing?.price.vat_percent ?? 25, style: "width:60px" });
+    const vat = el("input", { type: "text", value: existing?.price.vat_percent ?? dvat, style: "width:60px" });
     const active = el("input", { type: "checkbox", checked: existing ? (existing.active ? "checked" : null) : "checked" });
     const pref = el("input", { type: "checkbox", checked: existing?.preferred ? "checked" : null });
     const body = el("div", { class: "modal-body" },
@@ -690,7 +697,7 @@ export class PartDetail {
         const payload = {
           sku: sku.value.trim() || null, url: url.value.trim() || null,
           price: parseNum(price.value),
-          price_includes_vat: incVat.checked, vat_percent: parseNum(vat.value) || 25,
+          price_includes_vat: incVat.checked, vat_percent: parseNum(vat.value) || dvat,
           active: active.checked, preferred: pref.checked,
         };
         if (existing) {

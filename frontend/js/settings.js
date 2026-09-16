@@ -1,20 +1,49 @@
 // Settings modal: supplier API credentials + auto-categorisation rules.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions } from "./ui.js";
+import { el, modal, toast, treeOptions, selectWithAdd } from "./ui.js";
+import { parseNum } from "./units.js";
+
+const CURRENCIES = ["SEK", "NOK", "DKK", "EUR", "USD", "GBP", "CHF"];
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts, bomRules, logoData, footerData] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules, logoData, footerData, defaultsData] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
     api("/api/bom/match-rules"),
     api("/api/settings/logo"),
     api("/api/settings/footer"),
+    api("/api/settings/defaults"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
     el("p", { style: "color:var(--text-muted);margin:0" },
       "Credentials are stored on the NAS (single-user). Lookups only run when you press ‘Look up’ on a part — never in bulk. Each provider is rate-limited, disk-cached and auto-paused if it returns a block."),
+  );
+
+  // ---- defaults (currency + VAT %) ----
+  body.append(el("div", { class: "section-title" }, "Defaults"));
+  body.append(el("div", { class: "hint" },
+    "Used for new quotes, stock entries and supplier prices whenever nothing more specific says otherwise. Saved immediately."));
+  const curDefaults = { ...defaultsData };
+  const saveDefaults = async () => {
+    await api("/api/settings/defaults", { method: "PUT", body: curDefaults });
+    toast("Defaults saved");
+  };
+  const currencySel = selectWithAdd(curDefaults.currency, CURRENCIES, async (v) => {
+    curDefaults.currency = v;
+    await saveDefaults();
+  }, { addLabel: "+ Add other…", addTitle: "Add a currency code" });
+  const vatInput = el("input", { type: "text", inputmode: "decimal", style: "width:80px", value: String(curDefaults.vat_percent),
+    onchange: async () => {
+      curDefaults.vat_percent = parseNum(vatInput.value) ?? curDefaults.vat_percent;
+      vatInput.value = String(curDefaults.vat_percent);
+      await saveDefaults();
+    } });
+  body.append(
+    el("div", { class: "row", style: "align-items:center;gap:16px;flex-wrap:wrap" },
+      el("label", { style: "display:flex;gap:6px;align-items:center" }, "Currency", currencySel),
+      el("label", { style: "display:flex;gap:6px;align-items:center" }, "VAT %", vatInput)),
   );
 
   const inputs = {}; // name -> { fields:{}, priceChk, priceWas }

@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
-from ..core.kv import get_kv
+from ..core.kv import get_default_currency, get_default_vat_percent, get_kv
 from ..models import Part, PartSupplier, StockEntry, Supplier
 from ..money import price_block, strip_vat
 from ..providers import all_providers
@@ -41,8 +41,8 @@ class LinkIn(BaseModel):
     url: str | None = None
     price: float | None = None
     price_includes_vat: bool = False
-    vat_percent: float = 25.0
-    currency: str = "SEK"
+    vat_percent: float | None = None  # None -> the configured default (Settings)
+    currency: str | None = None       # None -> the configured default (Settings)
     active: bool = True
     preferred: bool = False
     note: str | None = None
@@ -236,7 +236,9 @@ def add_link(pid: str, body: LinkIn, db: Session = Depends(get_db)):
     _need_part(db, pid)
     if db.get(Supplier, body.supplier_id) is None:
         raise HTTPException(400, "unknown supplier_id")
-    ex = strip_vat(body.price, body.vat_percent) if body.price_includes_vat else body.price
+    vat_percent = body.vat_percent if body.vat_percent is not None else get_default_vat_percent(db)
+    currency = body.currency or get_default_currency(db)
+    ex = strip_vat(body.price, vat_percent) if body.price_includes_vat else body.price
     if body.preferred:
         for other in db.scalars(
             select(PartSupplier).where(PartSupplier.part_id == pid)
@@ -248,8 +250,8 @@ def add_link(pid: str, body: LinkIn, db: Session = Depends(get_db)):
         sku=body.sku or None,
         url=body.url or None,
         unit_price=ex,
-        currency=body.currency,
-        vat_percent=body.vat_percent,
+        currency=currency,
+        vat_percent=vat_percent,
         active=body.active,
         preferred=body.preferred,
         note=body.note or None,

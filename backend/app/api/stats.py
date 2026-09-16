@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
+from ..core.kv import get_default_currency
 from ..models import Part, Quote, QuoteLine
 from ..money import with_vat
 from ..services import on_hand_map
@@ -84,5 +85,5 @@ def get_stats(db: Session = Depends(get_db)):
         "shipping_total": round(shipping_total, 2),
         "labor_hours_invoiced": labor_hours_invoiced,
         "labor_revenue_invoiced": round(labor_revenue_invoiced, 2),
-        "currency": "SEK",
+        "currency": get_default_currency(db),
     }

@@ -20,3 +20,17 @@ def set_kv(db: Session, key: str, value: Any) -> None:
     else:
         row.value = value
     db.commit()
+
+
+def get_default_currency(db: Session) -> str:
+    """User-configured default (Settings -> Defaults), falling back to the
+    PARTSNAS_DEFAULT_CURRENCY env var until they ever set one."""
+    from .config import get_settings
+
+    return get_kv(db, "defaults:currency", get_settings().default_currency)
+
+
+def get_default_vat_percent(db: Session) -> float:
+    from .config import get_settings
+
+    return get_kv(db, "defaults:vat_percent", get_settings().default_vat_percent)

@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
+from ..core.kv import get_default_currency, get_default_vat_percent
 from ..models import Part, PartSupplier, StockEntry, StorageLocation, Supplier
 from ..money import price_block, strip_vat
 from ..services import location_breakdown
@@ -32,8 +33,8 @@ class StockIn(BaseModel):
     kind: str = "add"
     unit_price: float | None = None  # price per unit as typed
     price_includes_vat: bool = False
-    vat_percent: float = 25.0
-    currency: str = "SEK"
+    vat_percent: float | None = None  # None -> the configured default (Settings)
+    currency: str | None = None       # None -> the configured default (Settings)
     supplier_id: int | None = None
     supplier_sku: str | None = None
     link_to_part: bool = True  # also upsert the part<->supplier link
@@ -99,8 +100,10 @@ def add_entry(part_id: str, body: StockIn, db: Session = Depends(get_db)):
     sup = db.get(Supplier, body.supplier_id) if body.supplier_id else None
     if body.supplier_id and sup is None:
         raise HTTPException(400, "unknown supplier_id")
+    vat_percent = body.vat_percent if body.vat_percent is not None else get_default_vat_percent(db)
+    currency = body.currency or get_default_currency(db)
     ex_price = (
-        strip_vat(body.unit_price, body.vat_percent)
+        strip_vat(body.unit_price, vat_percent)
         if body.price_includes_vat
         else body.unit_price
     )
@@ -111,8 +114,8 @@ def add_entry(part_id: str, body: StockIn, db: Session = Depends(get_db)):
         delta=body.delta,
         kind=body.kind,
         unit_price=ex_price,
-        vat_percent=body.vat_percent,
-        currency=body.currency,
+        vat_percent=vat_percent,
+        currency=currency,
         supplier=sup.name if sup else None,
         supplier_id=sup.id if sup else None,
         supplier_sku=body.supplier_sku or None,
@@ -137,8 +140,8 @@ def add_entry(part_id: str, body: StockIn, db: Session = Depends(get_db)):
             db.add(link)
         if ex_price is not None:
             link.unit_price = ex_price
-            link.vat_percent = body.vat_percent
-            link.currency = body.currency
+            link.vat_percent = vat_percent
+            link.currency = currency
 
     db.commit()
     return {"id": e.id}

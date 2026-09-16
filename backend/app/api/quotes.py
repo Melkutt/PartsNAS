@@ -25,8 +25,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..core.config import get_settings
 from ..core.db import get_db
+from ..core.kv import get_default_currency, get_default_vat_percent
 from ..models import Customer, Part, PartSupplier, Quote, QuoteLine, StockEntry
 from ..services import location_breakdown
 
@@ -40,7 +40,7 @@ class QuoteIn(BaseModel):
     customer_id: int | None = None
     title: str | None = None
     markup_percent: float = 50.0
-    vat_percent: float = 25.0
+    vat_percent: float | None = None  # None -> the configured default (Settings)
     hide_vat: bool = False
 
 
@@ -122,7 +122,7 @@ def snapshot_cost(db: Session, part_id: str) -> tuple[float, str, str, float]:
     if entry:
         when = entry.created_at.strftime("%Y-%m-%d") if entry.created_at else ""
         return entry.unit_price, entry.currency, f"last purchase {when}".strip(), entry.vat_percent
-    return 0.0, "SEK", "no price on file", get_settings().default_vat_percent
+    return 0.0, get_default_currency(db), "no price on file", get_default_vat_percent(db)
 
 
 def _line_row(ln: QuoteLine, quote_markup: float) -> dict:
@@ -183,7 +183,7 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
             "vat": vat_amount,
             "vat_percent": vat_pct,
             "inc_vat_ceil": inc_total_ceil,
-            "currency": "SEK",
+            "currency": get_default_currency(db),
         },
     }
     if full:
@@ -202,7 +202,10 @@ def list_quotes(status: str = "open", db: Session = Depends(get_db)):
 
 @router.post("", status_code=201)
 def create_quote(body: QuoteIn, db: Session = Depends(get_db)):
-    q = Quote(**body.model_dump())
+    data = body.model_dump()
+    if data["vat_percent"] is None:
+        data["vat_percent"] = get_default_vat_percent(db)
+    q = Quote(**data)
     db.add(q)
     db.commit()
     return {"id": q.id}
@@ -242,7 +245,7 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
         )
         or 0
     )
-    cur, src = "SEK", None
+    cur, src = get_default_currency(db), None
     if part_id:
         p = db.get(Part, part_id)
         if p is None:
