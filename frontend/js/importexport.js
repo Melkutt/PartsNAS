@@ -38,6 +38,10 @@ export function openImport(onDone) {
     modeRow,
     el("div", { class: "row" }, dryBtn),
     out,
+    el("div", { style: "margin-top:14px;padding-top:10px;border-top:1px solid var(--border)" },
+      el("button", { class: "ghost", onclick: () => { m.close(); openRestoreSnapshot(); } },
+        "Restore a snapshot instead…"),
+      el("span", { class: "hint", style: "padding:0 0 0 6px" }, "replaces everything with an exact earlier copy")),
   );
 
   const m = modal({
@@ -149,6 +153,43 @@ export function openImport(onDone) {
   }
 }
 
+// Put a snapshot back: replaces the database and every file. The server checks
+// every checksum first and saves the current state to data/backups/ before it
+// touches anything; the typed word is a second guard against a stray click.
+export function openRestoreSnapshot() {
+  const fileInput = el("input", { type: "file", accept: ".zip" });
+  const word = el("input", { type: "text", placeholder: "REPLACE" });
+  const out = el("div", { class: "pre", hidden: "hidden" });
+  const body = el("div", { class: "modal-body" },
+    el("div", { class: "repl-banner" }, el("b", {}, "This replaces EVERYTHING "),
+      "— all parts, invoices, customers, settings and images become exactly what the snapshot contained. " +
+      "Whatever is here now is saved to a safety snapshot on the server first."),
+    el("div", { class: "row" }, el("label", {}, "Snapshot"), fileInput),
+    el("div", { class: "row" }, el("label", {}, "Type REPLACE"), word),
+    out);
+  modal({
+    title: "Restore snapshot",
+    body,
+    confirmText: "Restore",
+    onConfirm: async () => {
+      const f = fileInput.files[0];
+      if (!f) throw new Error("pick a snapshot file first");
+      if (word.value.trim() !== "REPLACE") throw new Error('type "REPLACE" exactly to confirm');
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("confirm", "REPLACE");
+      const res = await fetch("/api/import/snapshot", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || res.statusText);
+      out.hidden = false;
+      out.textContent = `Restored snapshot from ${data.snapshot_created} (${data.files} files).\n` +
+        `Your previous state was saved on the server as ${data.safety_snapshot}.\nReloading…`;
+      setTimeout(() => location.reload(), 2500);
+      return false; // keep the dialog open, showing the result, until the reload
+    },
+  });
+}
+
 export function openExport() {
   const onlySup = el("input", { type: "checkbox" });
   const withKeys = el("input", { type: "checkbox" });
@@ -157,8 +198,14 @@ export function openExport() {
     el("div", { class: "row" },
       el("button", { class: "primary", onclick: () => go("/api/export/parts.csv") }, "Parts — CSV"),
       el("button", { class: "primary", onclick: () => go("/api/export/parts.xlsx") }, "Parts — XLSX")),
-    el("div", { style: "margin-top:12px" }, el("b", {}, "Full backup (.zip)"),
-      " — everything: attributes, tags, suppliers, images, stock, design notes. Re-importable."),
+    el("div", { style: "margin-top:12px;padding:10px;border:1px solid var(--accent);border-radius:6px" },
+      el("b", {}, "Snapshot (.zip) — exact copy of everything"),
+      el("div", { class: "hint", style: "padding:4px 0 8px" },
+        "The database and every file, verbatim, as it is right now — invoices, customers, settings, images, logo, all of it. " +
+        "Restore puts the whole thing back. Contains your supplier API keys: keep the file private."),
+      el("button", { class: "primary", onclick: () => go("/api/export/snapshot.zip") }, "Snapshot — ZIP")),
+    el("div", { style: "margin-top:14px" }, el("b", {}, "Portable backup (.zip)"),
+      " — parts, suppliers, images, stock, design notes, quotes and customers as data you can merge into another database. Not an exact copy."),
     el("label", { class: "facet-opt" }, onlySup, " only parts that have a supplier link"),
     el("label", { class: "facet-opt", title: "Mouser key, Digi-Key client id/secret — keep the file private" },
       withKeys, " include supplier API keys ⚠"),

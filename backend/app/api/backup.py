@@ -387,6 +387,8 @@ async def import_backup(
     try:
         records = json.loads(zf.read("parts.json"))
     except KeyError:
+        if "snapshot.json" in zf.namelist():
+            raise HTTPException(400, "this is a Snapshot — use “Restore a snapshot instead…” in the Import dialog")
         raise HTTPException(400, "parts.json missing — not a PartsNAS backup")
 
     s: dict = {"created": 0, "updated": 0, "skipped": 0, "images": 0,

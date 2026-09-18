@@ -719,8 +719,16 @@ table.parts-table {
     line-height: 1.35;
   }
   .quote-footer-text { white-space: pre-wrap; }
-  .quote-footer-swish { flex: none; text-align: center; font-size: 9px; }
-  .quote-footer-swish img { display: block; width: 30mm; height: 30mm; image-rendering: pixelated; margin: 0 auto 1mm; }
+  .quote-footer-swish { flex: none; display: flex; align-items: center; gap: 3mm; }
+  /* Swish's own typeface/logo is proprietary, so this is a look-alike: heavy
+     italic sans. Swap in the official wordmark if one is ever supplied. */
+  .quote-footer-swish .swish-word {
+    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900; font-style: italic; font-size: 15px; letter-spacing: 0.5px;
+  }
+  .quote-footer-swish img { display: block; width: 30mm; height: 30mm; image-rendering: pixelated; }
+  /* document number, top right of the printed header */
+  .quote-docno { margin-left: auto; font-size: 17px; font-weight: 700; }
 }
 
 /* single-part label print (Label tab, part detail) — #label-print is a

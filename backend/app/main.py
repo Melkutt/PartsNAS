@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .core.config import get_settings
@@ -88,6 +89,7 @@ def _mount_routers() -> None:
         parts,
         quotes,
         settings_api,
+        snapshot,
         stats,
         stock,
         suppliers,
@@ -112,13 +114,27 @@ def _mount_routers() -> None:
     app.include_router(imports.router)
     app.include_router(exports.router)
     app.include_router(backup.router)
+    app.include_router(snapshot.router)
     # kicad -> next milestone
 
 
 _mount_routers()
 
-# /media serves everything under data/ (images/ and thumbs/)
-app.mount("/media", StaticFiles(directory=settings.data_dir), name="media")
+class MediaFiles(StaticFiles):
+    """Only the public-facing asset folders — data/ also holds the database
+    (with the supplier API keys in it), provider caches and snapshots, none of
+    which may ever be downloadable by URL."""
+
+    _ALLOWED = {"images", "thumbs", "branding"}
+
+    async def get_response(self, path, scope):
+        first = path.replace("\\", "/").lstrip("/").split("/", 1)[0]
+        if first not in self._ALLOWED:
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+
+app.mount("/media", MediaFiles(directory=settings.data_dir), name="media")
 app.mount("/", StaticFiles(directory=settings.frontend_dir, html=True), name="frontend")
 
 

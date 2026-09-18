@@ -260,7 +260,8 @@ export class QuotesView {
       el("div", { style: "display:flex;align-items:center;gap:12px" },
         this.logoUrl ? el("img", { src: this.logoUrl, class: "quote-logo" }) : null,
         el("h2", { style: "border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:18px" },
-          q.title || `${docLabel} #${q.id}`)),
+          q.title || `${docLabel} #${q.id}`),
+        el("div", { class: "print-only quote-docno" }, `${docLabel} ${q.id}`)),
       el("div", { class: "no-print", style: "font-size:12px;color:var(--text-muted);margin:-2px 0 8px" },
         `Created ${this._fmtDate(q.created_at)}`,
         q.invoiced_at ? ` · Invoiced ${this._fmtDate(q.invoiced_at)}` : ""),
@@ -328,9 +329,8 @@ export class QuotesView {
       ? el("div", { class: "quote-footer print-only" },
           el("div", { class: "quote-footer-text" }, this.footerText || ""),
           showSwish ? el("div", { class: "quote-footer-swish" },
-            el("img", { src: `/api/quotes/${q.id}/swish.png?t=${Date.now()}`, alt: "Swish QR" }),
-            el("div", {}, `Swish ${tt.inc_vat_ceil} ${tt.currency}`),
-            el("div", {}, `Invoice ${q.id}`)) : null)
+            el("span", { class: "swish-word" }, "SWISH:"),
+            el("img", { src: `/api/quotes/${q.id}/swish.png?t=${Date.now()}`, alt: "Swish QR" })) : null)
       : null;
     head.append(el("div", { style: "margin-top:14px;margin-left:auto;max-width:280px" },
       ...[
