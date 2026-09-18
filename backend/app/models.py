@@ -344,6 +344,7 @@ class Customer(Base):
     org_number: Mapped[str | None] = mapped_column(String(40))
     phone: Mapped[str | None] = mapped_column(String(40))
     email: Mapped[str | None] = mapped_column(String(160))
+    archived: Mapped[bool] = mapped_column(default=False)  # hidden from pickers/list, kept for history
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

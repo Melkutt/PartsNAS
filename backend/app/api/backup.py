@@ -123,7 +123,7 @@ def _iso(dt) -> str | None:
 
 def _customer_record(c: Customer) -> dict:
     return {"id": c.id, "name": c.name, "address": c.address, "org_number": c.org_number,
-            "phone": c.phone, "email": c.email, "created_at": _iso(c.created_at)}
+            "phone": c.phone, "email": c.email, "archived": c.archived, "created_at": _iso(c.created_at)}
 
 
 def _quote_record(q: Quote) -> dict:
@@ -316,7 +316,7 @@ def _restore_customers_and_quotes(db: Session, zf: zipfile.ZipFile, mode: str, s
                 func.coalesce(Customer.org_number, "") == (cr.get("org_number") or "")))
             if hit is None:
                 hit = Customer(name=cr["name"], address=cr.get("address"), org_number=cr.get("org_number"),
-                               phone=cr.get("phone"), email=cr.get("email"))
+                               phone=cr.get("phone"), email=cr.get("email"), archived=bool(cr.get("archived")))
                 if cr.get("created_at"):
                     hit.created_at = _dt(cr["created_at"])
                 db.add(hit)

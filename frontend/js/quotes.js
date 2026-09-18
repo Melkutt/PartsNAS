@@ -50,11 +50,24 @@ export class QuotesView {
       seg.append(el("button", { class: this.tab === t ? "active" : "",
         title: t === "archive" ? "Invoices you've locked — finished history" : "",
         onclick: () => { this.tab = t; this.list(); } }, labels[t]));
+    // client-side search over number / customer / title — the point of the
+    // Archive is digging out an old invoice, so it must be quick to find
+    const host = el("div");
+    const draw = () => {
+      const f = (this.filterText || "").trim().toLowerCase().replace(/^#/, "");
+      const shown = f ? rows.filter((q) => `${q.id} ${q.customer || ""} ${q.title || ""}`.toLowerCase().includes(f)) : rows;
+      host.innerHTML = "";
+      host.append(this.tab === "trash" ? this._trashTable(shown) : this._table(shown)); // archive reuses _table, read-only
+    };
+    const search = el("input", { type: "search", placeholder: "find by number, customer or title…", value: this.filterText || "",
+      style: "margin:10px 0 0 8px;min-width:250px",
+      oninput: (e) => { this.filterText = e.target.value; draw(); } });
+    draw();
     panel.append(
       el("h2", {}, titles[this.tab]),
       el("div", { class: "panel-body" }, seg,
         this.tab === "open" ? el("button", { class: "primary", style: "margin:10px 0 0 6px", onclick: () => this.newQuote() }, "+ New quote") : null,
-        this.tab === "trash" ? this._trashTable(rows) : this._table(rows)),  // archive reuses _table, read-only
+        search, host),
     );
     this.el.append(panel);
   }
@@ -65,7 +78,7 @@ export class QuotesView {
     const archive = this.tab === "archive"; // read-only history: no stock/re-open toggles
     const t = el("table", { class: "mini-table", style: "margin-top:12px" });
     t.append(el("tr", {},
-      el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, this.tab === "open" ? "Created" : "Invoiced"),
+      el("th", {}, "No."), el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, this.tab === "open" ? "Created" : "Invoiced"),
       el("th", {}, "Lines"),
       el("th", { class: "num" }, "Sell ex"), el("th", { class: "num" }, "Inc VAT"),
       archive ? null : el("th", {}, "Stock"),
@@ -91,6 +104,7 @@ export class QuotesView {
           this.list();
         } });
       t.append(el("tr", { style: "cursor:pointer", onclick: () => this.openQuote(q.id) },
+        el("td", { style: "font-variant-numeric:tabular-nums;white-space:nowrap" }, `#${q.id}`),
         el("td", {}, q.customer || "—"),
         el("td", {}, q.title || `#${q.id}`, q.locked ? el("span", { class: "pill-off", title: "locked", style: "margin-left:6px" }, "🔒") : null),
         el("td", {}, this._fmtDate(this.tab === "open" ? q.created_at : q.invoiced_at)),
@@ -102,16 +116,17 @@ export class QuotesView {
         el("td", {}, el("button", { class: "ghost", onclick: (e) => { e.stopPropagation(); this._del(q); } }, "✕"))));
     }
     const empty = { open: "no open quotes", invoiced: "no invoices", archive: "no locked invoices yet" }[this.tab];
-    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "9", class: "pill-off" }, empty)));
+    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "10", class: "pill-off" }, empty)));
     return t;
   }
 
   _trashTable(rows) {
     const t = el("table", { class: "mini-table", style: "margin-top:12px" });
-    t.append(el("tr", {}, el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, "Was"),
+    t.append(el("tr", {}, el("th", {}, "No."), el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, "Was"),
       el("th", {}, "Deleted"), el("th", {}, "")));
     for (const q of rows) {
       t.append(el("tr", {},
+        el("td", { style: "font-variant-numeric:tabular-nums;white-space:nowrap" }, `#${q.id}`),
         el("td", {}, q.customer || "—"),
         el("td", {}, q.title || `#${q.id}`),
         el("td", {}, q.status === "invoiced" ? "Invoice" : "Quote"),
@@ -130,7 +145,7 @@ export class QuotesView {
             this.list();
           } }, "Delete permanently"))));
     }
-    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "5", class: "pill-off" }, "trash is empty")));
+    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "6", class: "pill-off" }, "trash is empty")));
     return t;
   }
 
@@ -206,6 +221,9 @@ export class QuotesView {
     const custSel = el("select", { disabled: locked ? "disabled" : null });
     custSel.append(el("option", { value: "" }, "— pick saved customer —"),
       ...this.customers.map((c) => el("option", { value: c.id }, c.name)),
+      // an archived customer is hidden from the list but must still show on the quote it belongs to
+      q.customer_id && !this.customers.some((c) => c.id === q.customer_id)
+        ? el("option", { value: q.customer_id }, `${q.customer || "customer"} (archived)`) : null,
       el("option", { value: "__new__" }, "+ New customer…"));
     custSel.value = q.customer_id || "";
     custSel.addEventListener("change", () => {
