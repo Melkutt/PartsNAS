@@ -1,7 +1,9 @@
 // Quotes tab — invoice basis. Pick parts + qty for a customer; cost is a static
 // snapshot, a markup (default 50%, overridable per line) gives the sell price,
 // inc-VAT total rounds up. Tick "Stock" to deduct qty from inventory (reversible);
-// tick "Invoiced" to archive it to the Invoices list (reversible).
+// tick "Invoiced" to archive it to the Invoices list (reversible). "Locked"
+// freezes editing; deleting sends it to Trash (soft delete) instead of gone
+// for good — Trash can restore it or purge it permanently.
 import { api } from "./api.js";
 import { el, modal, toast, partSearch } from "./ui.js";
 import { parseNum } from "./units.js";
@@ -22,6 +24,10 @@ async function footerText() {
   return FOOTER_TEXT;
 }
 const HIDE_VAT_KEY = "partsnas.hideVatDefault";
+// "fee" is the stored line_type (unchanged, so existing quotes keep working);
+// "Other" is just a friendlier label for it than "Fee" everywhere it's shown.
+const LINE_TYPE_LABELS = { labor: "Labor", fee: "Other", shipping: "Shipping" };
+const lineTypeLabel = (t) => (LINE_TYPE_LABELS[t] || t).toUpperCase();
 
 export class QuotesView {
   constructor({ openId } = {}) {
@@ -41,22 +47,26 @@ export class QuotesView {
     const rows = await api(`/api/quotes?status=${this.tab}`);
     const panel = el("div", { class: "panel", style: "max-width:960px" });
     const seg = el("div", { class: "seg", style: "margin:10px 0 0 12px" });
-    for (const t of ["open", "invoiced"])
+    const labels = { open: "Quotes", invoiced: "Invoices", trash: "Trash" };
+    for (const t of ["open", "invoiced", "trash"])
       seg.append(el("button", { class: this.tab === t ? "active" : "",
-        onclick: () => { this.tab = t; this.list(); } }, t === "open" ? "Quotes" : "Invoices"));
+        onclick: () => { this.tab = t; this.list(); } }, labels[t]));
     panel.append(
-      el("h2", {}, this.tab === "open" ? "Quotes / invoice basis" : "Invoices"),
+      el("h2", {}, this.tab === "trash" ? "Trash" : this.tab === "open" ? "Quotes / invoice basis" : "Invoices"),
       el("div", { class: "panel-body" }, seg,
         this.tab === "open" ? el("button", { class: "primary", style: "margin:10px 0 0 6px", onclick: () => this.newQuote() }, "+ New quote") : null,
-        this._table(rows)),
+        this.tab === "trash" ? this._trashTable(rows) : this._table(rows)),
     );
     this.el.append(panel);
   }
 
+  _fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString() : "—"; }
+
   _table(rows) {
     const t = el("table", { class: "mini-table", style: "margin-top:12px" });
     t.append(el("tr", {},
-      el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, "Lines"),
+      el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, this.tab === "open" ? "Created" : "Invoiced"),
+      el("th", {}, "Lines"),
       el("th", { class: "num" }, "Sell ex"), el("th", { class: "num" }, "Inc VAT"),
       el("th", {}, "Stock"), el("th", {}, this.tab === "open" ? "Invoiced" : "Re-open"), el("th", {}, "")));
     for (const q of rows) {
@@ -79,21 +89,72 @@ export class QuotesView {
         } });
       t.append(el("tr", { style: "cursor:pointer", onclick: () => this.openQuote(q.id) },
         el("td", {}, q.customer || "—"),
-        el("td", {}, q.title || `#${q.id}`),
+        el("td", {}, q.title || `#${q.id}`, q.locked ? el("span", { class: "pill-off", title: "locked", style: "margin-left:6px" }, "🔒") : null),
+        el("td", {}, this._fmtDate(this.tab === "open" ? q.created_at : q.invoiced_at)),
         el("td", {}, String(q.line_count)),
         el("td", { class: "num" }, q.totals.sell_ex_vat),
         el("td", { class: "num" }, q.totals.inc_vat_ceil),
         el("td", {}, stockCb),
         el("td", {}, invCb),
-        el("td", {}, el("button", { class: "ghost", onclick: (e) => { e.stopPropagation(); this._del(q.id); } }, "✕"))));
+        el("td", {}, el("button", { class: "ghost", onclick: (e) => { e.stopPropagation(); this._del(q); } }, "✕"))));
     }
-    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "8", class: "pill-off" }, this.tab === "open" ? "no open quotes" : "no invoices")));
+    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "9", class: "pill-off" }, this.tab === "open" ? "no open quotes" : "no invoices")));
     return t;
   }
 
-  async _del(id) {
-    if (!confirm("Delete this quote?")) return;
-    await api(`/api/quotes/${id}`, { method: "DELETE" });
+  _trashTable(rows) {
+    const t = el("table", { class: "mini-table", style: "margin-top:12px" });
+    t.append(el("tr", {}, el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, "Was"),
+      el("th", {}, "Deleted"), el("th", {}, "")));
+    for (const q of rows) {
+      t.append(el("tr", {},
+        el("td", {}, q.customer || "—"),
+        el("td", {}, q.title || `#${q.id}`),
+        el("td", {}, q.status === "invoiced" ? "Invoice" : "Quote"),
+        el("td", {}, this._fmtDate(q.deleted_at)),
+        el("td", { style: "display:flex;gap:6px" },
+          el("button", { class: "ghost", onclick: async () => {
+            await api(`/api/quotes/${q.id}/restore`, { method: "POST" });
+            toast("Restored");
+            this.list();
+          } }, "Restore"),
+          el("button", { class: "ghost", onclick: async () => {
+            if (!await this._typedConfirm("Delete permanently",
+              `This can't be undone. Type DELETE to permanently remove "${q.title || "#" + q.id}".`)) return;
+            await api(`/api/quotes/${q.id}/purge`, { method: "DELETE" });
+            toast("Permanently deleted");
+            this.list();
+          } }, "Delete permanently"))));
+    }
+    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "5", class: "pill-off" }, "trash is empty")));
+    return t;
+  }
+
+  // typed-word confirmation for anything harder to undo than a normal delete
+  _typedConfirm(title, message) {
+    return new Promise((resolve) => {
+      let ok = false;
+      const inp = el("input", { type: "text", placeholder: "DELETE" });
+      modal({
+        title, body: el("div", { class: "modal-body" }, el("p", {}, message), inp),
+        confirmText: "Delete",
+        onConfirm: () => {
+          if (inp.value.trim() !== "DELETE") throw new Error('type "DELETE" exactly to confirm');
+          ok = true;
+        },
+        onClose: () => resolve(ok),
+      });
+    });
+  }
+
+  async _del(q) {
+    if (q.locked) {
+      if (!await this._typedConfirm("Delete locked invoice",
+        `"${q.title || "#" + q.id}" is locked. Type DELETE to move it to Trash anyway.`)) return;
+    } else if (!confirm("Delete this quote? (moves to Trash, can be restored)")) {
+      return;
+    }
+    await api(`/api/quotes/${q.id}`, { method: "DELETE" });
     this.list();
   }
 
@@ -130,13 +191,14 @@ export class QuotesView {
 
   _renderQuote() {
     const q = this.q;
+    const locked = q.locked;
     this.el.innerHTML = "";
     const panel = el("div", { class: "panel", style: "max-width:940px" });
     const head = el("div", { class: "panel-body", id: "quote-print" });
 
-    const cust = el("input", { type: "text", value: q.customer || "", placeholder: "customer name",
+    const cust = el("input", { type: "text", value: q.customer || "", placeholder: "customer name", disabled: locked ? "disabled" : null,
       onchange: (e) => this._patch({ customer: e.target.value, customer_id: null }) });
-    const custSel = el("select", {});
+    const custSel = el("select", { disabled: locked ? "disabled" : null });
     custSel.append(el("option", { value: "" }, "— pick saved customer —"),
       ...this.customers.map((c) => el("option", { value: c.id }, c.name)),
       el("option", { value: "__new__" }, "+ New customer…"));
@@ -153,23 +215,28 @@ export class QuotesView {
       const c = this.customers.find((x) => x.id === id);
       this._patch({ customer_id: id, customer: c ? c.name : q.customer });
     });
-    const title = el("input", { type: "text", value: q.title || "", placeholder: "title",
+    const title = el("input", { type: "text", value: q.title || "", placeholder: "title", disabled: locked ? "disabled" : null,
       onchange: (e) => this._patch({ title: e.target.value }) });
-    const markup = el("input", { type: "text", value: q.markup_percent, style: "width:70px",
+    const markup = el("input", { type: "text", value: q.markup_percent, style: "width:70px", disabled: locked ? "disabled" : null,
       onchange: (e) => this._patch({ markup_percent: parseNum(e.target.value) ?? 50 }) });
-    const vat = el("input", { type: "text", value: q.vat_percent, style: "width:70px",
+    const vat = el("input", { type: "text", value: q.vat_percent, style: "width:70px", disabled: locked ? "disabled" : null,
       onchange: (e) => this._patch({ vat_percent: parseNum(e.target.value) ?? 25 }) });
     if (q.hide_cost) head.classList.add("hide-cost-print");
-    const hideCostCb = el("input", { type: "checkbox", checked: q.hide_cost ? "checked" : null,
+    const hideCostCb = el("input", { type: "checkbox", checked: q.hide_cost ? "checked" : null, disabled: locked ? "disabled" : null,
       onchange: (e) => { head.classList.toggle("hide-cost-print", e.target.checked); this._patch({ hide_cost: e.target.checked }); } });
-    const hideVatCb = el("input", { type: "checkbox", checked: q.hide_vat ? "checked" : null,
+    const hideVatCb = el("input", { type: "checkbox", checked: q.hide_vat ? "checked" : null, disabled: locked ? "disabled" : null,
       onchange: (e) => { localStorage.setItem(HIDE_VAT_KEY, String(e.target.checked)); this._patch({ hide_vat: e.target.checked }); } });
+    const lockedCb = el("input", { type: "checkbox", checked: locked ? "checked" : null,
+      onchange: (e) => this._patch({ locked: e.target.checked }) });
     const docLabel = q.status === "invoiced" ? "Invoice" : "Quote";
 
     head.append(...[
       el("div", { class: "no-print", style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px" },
         el("button", { class: "ghost", onclick: () => this.list() }, "← all quotes"),
         el("span", { style: "flex:1" }),
+        el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
+          title: "Freeze this document against accidental edits — untick to edit again" },
+          lockedCb, "🔒 Locked"),
         el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
           title: "Omit cost/markup/source from print and CSV/Excel export — the on-screen view here always shows them" },
           hideCostCb, "Hide cost (customer copy)"),
@@ -189,6 +256,9 @@ export class QuotesView {
         this.logoUrl ? el("img", { src: this.logoUrl, class: "quote-logo" }) : null,
         el("h2", { style: "border:0;padding:0;text-transform:none;letter-spacing:0;color:var(--text);font-size:18px" },
           q.title || `${docLabel} #${q.id}`)),
+      el("div", { class: "no-print", style: "font-size:12px;color:var(--text-muted);margin:-2px 0 8px" },
+        `Created ${this._fmtDate(q.created_at)}`,
+        q.invoiced_at ? ` · Invoiced ${this._fmtDate(q.invoiced_at)}` : ""),
       q.stock_committed ? el("div", { class: "repl-banner no-print" },
         el("b", {}, "Stock deducted for this quote. "),
         el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
@@ -206,6 +276,8 @@ export class QuotesView {
               q.customer_info.email]
               .filter(Boolean).join("\n"))
         : el("div", { class: "print-only", style: "margin:6px 0 2px;color:#000" }, `Customer: ${q.customer || "—"}`),
+      el("div", { class: "print-only", style: "margin:0 0 2px;color:#000" },
+        q.invoiced_at ? `Invoice date: ${this._fmtDate(q.invoiced_at)}` : `Quote date: ${this._fmtDate(q.created_at)}`),
       el("div", { class: "print-only cost-col", style: "margin:0 0 6px;color:#000" }, `Markup: ${q.markup_percent}%`),
     ].filter(Boolean));
 
@@ -214,19 +286,19 @@ export class QuotesView {
       el("th", { class: "num cost-col" }, "Unit cost"), el("th", { class: "num cost-col" }, "Markup %"), el("th", { class: "cost-col" }, "Source"),
       el("th", { class: "num" }, "Sell/u ex"), el("th", { class: "num" }, "Line ex"), el("th", { class: "no-print" }, "")));
     for (const ln of q.lines) {
-      const qtyI = el("input", { type: "text", value: ln.qty, style: "width:56px",
+      const qtyI = el("input", { type: "text", value: ln.qty, style: "width:56px", disabled: locked ? "disabled" : null,
         onchange: (e) => this._patchLine(ln.id, { qty: parseNum(e.target.value) ?? 1 }) });
-      const costI = el("input", { type: "text", value: ln.unit_cost, style: "width:80px",
+      const costI = el("input", { type: "text", value: ln.unit_cost, style: "width:80px", disabled: locked ? "disabled" : null,
         title: "static snapshot — edit to override",
         onchange: (e) => this._patchLine(ln.id, { unit_cost: parseNum(e.target.value) ?? 0 }) });
-      const mkI = el("input", { type: "text", value: ln.markup_percent ?? "", placeholder: String(q.markup_percent), style: "width:60px",
+      const mkI = el("input", { type: "text", value: ln.markup_percent ?? "", placeholder: String(q.markup_percent), style: "width:60px", disabled: locked ? "disabled" : null,
         title: "blank = use the quote markup",
         onchange: (e) => this._patchLine(ln.id, { markup_percent: e.target.value.trim() === "" ? null : parseNum(e.target.value) }) });
       const noteI = el("input", { type: "text", value: ln.note || "", placeholder: "note (e.g. replaced R12)",
-        class: ln.note ? "" : "print-hide-empty",
+        class: ln.note ? "" : "print-hide-empty", disabled: locked ? "disabled" : null,
         style: "width:100%", onchange: (e) => this._patchLine(ln.id, { note: e.target.value }) });
       t.append(el("tr", {},
-        el("td", {}, ln.line_type && ln.line_type !== "part" ? el("span", { class: "pill-off" }, ln.line_type.toUpperCase()) : (ln.mpn || "")),
+        el("td", {}, ln.line_type && ln.line_type !== "part" ? el("span", { class: "pill-off" }, lineTypeLabel(ln.line_type)) : (ln.mpn || "")),
         el("td", {}, el("div", {}, ln.description), noteI),
         el("td", { class: "num" }, qtyI),
         el("td", { class: "num cost-col" }, costI),
@@ -234,13 +306,13 @@ export class QuotesView {
         el("td", { class: "cost-col", style: "color:var(--text-faint);font-size:11px" }, ln.cost_source || ""),
         el("td", { class: "num" }, ln.sell_unit_ex),
         el("td", { class: "num" }, ln.line_ex),
-        el("td", { class: "no-print" }, el("button", { class: "ghost", onclick: () => this._delLine(ln.id) }, "✕"))));
+        el("td", { class: "no-print" }, locked ? null : el("button", { class: "ghost", onclick: () => this._delLine(ln.id) }, "✕"))));
     }
     head.append(t);
 
     head.append(el("div", { class: "no-print", style: "margin-top:8px;display:flex;gap:8px" },
-      el("button", { onclick: () => this._addLine() }, "+ Add part"),
-      el("button", { class: "ghost", onclick: () => this._addFree() }, "+ Free line")));
+      el("button", { disabled: locked ? "disabled" : null, onclick: () => this._addLine() }, "+ Add part"),
+      el("button", { class: "ghost", disabled: locked ? "disabled" : null, onclick: () => this._addFree() }, "+ Free line")));
 
     const tt = q.totals;
     head.append(el("div", { style: "margin-top:14px;margin-left:auto;max-width:280px" },
@@ -254,7 +326,7 @@ export class QuotesView {
     head.append(...[
       el("div", { class: "no-print", style: "margin-top:14px" },
         el("label", { style: "display:block;margin-bottom:4px;color:var(--text-muted);font-size:12px" }, "Notes"),
-        el("textarea", { style: "width:100%;min-height:70px;resize:vertical",
+        el("textarea", { style: "width:100%;min-height:70px;resize:vertical", disabled: locked ? "disabled" : null,
           placeholder: "Notes for this quote — wraps automatically, Enter for a new line…",
           onchange: (e) => this._patch({ note: e.target.value }) }, q.note || "")),
       q.note ? el("div", { class: "print-only", style: "margin-top:10px;white-space:pre-wrap;color:#000" }, q.note) : null,
@@ -330,12 +402,13 @@ export class QuotesView {
     const typeSel = el("select", {},
       el("option", { value: "part" }, "Part (manual)"),
       el("option", { value: "labor" }, "Labor"),
-      el("option", { value: "fee" }, "Fee"),
+      el("option", { value: "fee" }, "Other"),
       el("option", { value: "shipping" }, "Shipping"));
     const desc = el("input", { type: "text", placeholder: "description" });
     const mpn = el("input", { type: "text", placeholder: "MPN (optional)" });
     const qty = el("input", { type: "text", value: "1", style: "width:70px" });
     const cost = el("input", { type: "text", value: "0", style: "width:90px" });
+    const markup = el("input", { type: "text", placeholder: String(this.q.markup_percent), style: "width:70px" });
     const qtyLabel = el("label", {}, "Qty");
     const costLabel = el("label", {}, "Unit cost ex VAT");
     const mpnRow = el("div", { class: "row" }, el("label", {}, "MPN"), mpn);
@@ -347,7 +420,7 @@ export class QuotesView {
         qty.disabled = false;
       } else if (typeSel.value === "fee") {
         qtyLabel.textContent = "Qty";
-        costLabel.textContent = "Fee amount ex VAT";
+        costLabel.textContent = "Amount ex VAT";
         mpnRow.style.display = "none";
         qty.value = "1";
         qty.disabled = true;
@@ -373,13 +446,15 @@ export class QuotesView {
         el("div", { class: "row" }, el("label", {}, "Description"), desc),
         mpnRow,
         el("div", { class: "row" }, qtyLabel, qty),
-        el("div", { class: "row" }, costLabel, cost)),
+        el("div", { class: "row" }, costLabel, cost),
+        el("div", { class: "row" }, el("label", { title: "blank = use the quote's markup" }, "Markup %"), markup)),
       confirmText: "Add",
       onConfirm: async () => {
         if (!desc.value.trim()) throw new Error("description required");
-        await api(`/api/quotes/${this.q.id}/lines`, { method: "POST",
-          body: { line_type: typeSel.value, description: desc.value.trim(), mpn: mpn.value.trim() || null,
-            qty: parseNum(qty.value) ?? 1, unit_cost: parseNum(cost.value) ?? 0 } });
+        const body = { line_type: typeSel.value, description: desc.value.trim(), mpn: mpn.value.trim() || null,
+          qty: parseNum(qty.value) ?? 1, unit_cost: parseNum(cost.value) ?? 0 };
+        if (markup.value.trim() !== "") body.markup_percent = parseNum(markup.value);
+        await api(`/api/quotes/${this.q.id}/lines`, { method: "POST", body });
         this.openQuote(this.q.id);
       },
     });

@@ -59,7 +59,9 @@ def get_stats(db: Session = Depends(get_db)):
     shipping_total = 0.0
     labor_hours_invoiced = 0.0
     labor_revenue_invoiced = 0.0
-    invoiced = db.scalars(select(Quote).where(Quote.status == "invoiced")).all()
+    invoiced = db.scalars(
+        select(Quote).where(Quote.status == "invoiced", Quote.deleted_at.is_(None))
+    ).all()
     for q in invoiced:
         qd = _quote_dict(db, q, full=True)
         sales_ex += qd["totals"]["sell_ex_vat"]

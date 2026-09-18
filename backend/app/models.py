@@ -458,7 +458,10 @@ class Quote(Base):
     status: Mapped[str] = mapped_column(String(12), default="open")  # open | invoiced
     stock_committed: Mapped[bool] = mapped_column(default=False)
     hide_cost: Mapped[bool] = mapped_column(default=False)  # omit cost/markup on print + export
-    hide_vat: Mapped[bool] = mapped_column(default=False)  # not VAT-registered - treat as 0%
+    hide_vat: Mapped[bool] = mapped_column(default=False)  # not VAT-registered - fold VAT into one price
+    locked: Mapped[bool] = mapped_column(default=False)  # freeze editing until unlocked again
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # soft delete -> Trash
+    invoiced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now

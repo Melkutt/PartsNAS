@@ -17,7 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -54,6 +54,7 @@ class QuotePatch(BaseModel):
     status: str | None = None
     hide_cost: bool | None = None
     hide_vat: bool | None = None
+    locked: bool | None = None
 
 
 class LineIn(BaseModel):
@@ -62,9 +63,10 @@ class LineIn(BaseModel):
     mpn: str | None = None
     qty: float = 1
     unit_cost: float | None = None  # override the snapshot
+    markup_percent: float | None = None  # None -> inherit the quote's
     supplier_link_id: int | None = None  # pin the price to this PartSupplier row
     note: str | None = None
-    line_type: str = "part"  # part | labor | fee
+    line_type: str = "part"  # part | labor | fee | shipping
 
 
 class LinePatch(BaseModel):
@@ -83,9 +85,21 @@ class BulkLine(BaseModel):
 
 def _need(db: Session, qid: int) -> Quote:
     q = db.get(Quote, qid)
-    if q is None:
+    if q is None or q.deleted_at is not None:
         raise HTTPException(404, "quote not found")
     return q
+
+
+def _need_trashed(db: Session, qid: int) -> Quote:
+    q = db.get(Quote, qid)
+    if q is None or q.deleted_at is None:
+        raise HTTPException(404, "quote not found in trash")
+    return q
+
+
+def _check_unlocked(q: Quote) -> None:
+    if q.locked:
+        raise HTTPException(423, "quote is locked — unlock it first")
 
 
 def snapshot_from_link(db: Session, link_id: int) -> tuple[float, str, str] | None:
@@ -176,8 +190,11 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
         "stock_committed": q.stock_committed,
         "hide_cost": q.hide_cost,
         "hide_vat": q.hide_vat,
+        "locked": q.locked,
         "line_count": len(q.lines),
         "created_at": q.created_at.isoformat() if q.created_at else None,
+        "invoiced_at": q.invoiced_at.isoformat() if q.invoiced_at else None,
+        "deleted_at": q.deleted_at.isoformat() if q.deleted_at else None,
         "totals": {
             "cost": cost_total,
             "markup": round(sell_ex_total - cost_total, 2),
@@ -195,9 +212,12 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
 
 @router.get("")
 def list_quotes(status: str = "open", db: Session = Depends(get_db)):
-    stmt = select(Quote).order_by(Quote.id.desc())
-    if status in ("open", "invoiced"):
-        stmt = stmt.where(Quote.status == status)
+    if status == "trash":
+        stmt = select(Quote).where(Quote.deleted_at.is_not(None)).order_by(Quote.deleted_at.desc())
+    else:
+        stmt = select(Quote).where(Quote.deleted_at.is_(None)).order_by(Quote.id.desc())
+        if status in ("open", "invoiced"):
+            stmt = stmt.where(Quote.status == status)
     qs = db.scalars(stmt).all()
     return [_quote_dict(db, q, full=False) for q in qs]
 
@@ -221,7 +241,10 @@ def get_quote(qid: int, db: Session = Depends(get_db)):
 @router.patch("/{qid}")
 def patch_quote(qid: int, body: QuotePatch, db: Session = Depends(get_db)):
     q = _need(db, qid)
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if q.locked and any(k != "locked" for k in data):
+        raise HTTPException(423, "quote is locked — unlock it first")
+    for k, v in data.items():
         setattr(q, k, v)
     db.commit()
     return {"ok": True}
@@ -229,13 +252,31 @@ def patch_quote(qid: int, body: QuotePatch, db: Session = Depends(get_db)):
 
 @router.delete("/{qid}")
 def delete_quote(qid: int, db: Session = Depends(get_db)):
-    db.delete(_need(db, qid))
+    # soft delete -> Trash; locked quotes can still be deleted (the extra
+    # friction lives in the UI's confirmation dialog, not a hard backend block)
+    q = _need(db, qid)
+    q.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{qid}/restore")
+def restore_quote(qid: int, db: Session = Depends(get_db)):
+    q = _need_trashed(db, qid)
+    q.deleted_at = None
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{qid}/purge")
+def purge_quote(qid: int, db: Session = Depends(get_db)):
+    db.delete(_need_trashed(db, qid))
     db.commit()
     return {"ok": True}
 
 
 def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, note,
-              supplier_link_id=None, line_type="part"):
+              supplier_link_id=None, line_type="part", markup_percent=None):
     if line_type not in _LINE_TYPES:
         raise HTTPException(400, f"unknown line_type {line_type!r}")
     order = (
@@ -269,7 +310,7 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
     ln = QuoteLine(
         quote_id=q.id, part_id=part_id, description=description, mpn=mpn,
         qty=qty, unit_cost=unit_cost, currency=cur, cost_source=src, note=note,
-        sort_order=order + 1, line_type=line_type,
+        sort_order=order + 1, line_type=line_type, markup_percent=markup_percent,
     )
     db.add(ln)
     return ln
@@ -278,8 +319,10 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
 @router.post("/{qid}/lines", status_code=201)
 def add_line(qid: int, body: LineIn, db: Session = Depends(get_db)):
     q = _need(db, qid)
+    _check_unlocked(q)
     ln = _add_line(db, q, body.part_id, body.description, body.mpn, body.qty,
-                   body.unit_cost, body.note, body.supplier_link_id, body.line_type)
+                   body.unit_cost, body.note, body.supplier_link_id, body.line_type,
+                   body.markup_percent)
     db.commit()
     return {"id": ln.id}
 
@@ -287,6 +330,7 @@ def add_line(qid: int, body: LineIn, db: Session = Depends(get_db)):
 @router.post("/{qid}/lines/bulk", status_code=201)
 def add_lines_bulk(qid: int, body: list[BulkLine], db: Session = Depends(get_db)):
     q = _need(db, qid)
+    _check_unlocked(q)
     n = 0
     for item in body:
         _add_line(db, q, item.part_id, None, None, item.qty, None, None)
@@ -300,6 +344,7 @@ def patch_line(qid: int, lid: int, body: LinePatch, db: Session = Depends(get_db
     ln = db.get(QuoteLine, lid)
     if ln is None or ln.quote_id != qid:
         raise HTTPException(404, "line not found")
+    _check_unlocked(ln.quote)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(ln, k, v)
     db.commit()
@@ -311,6 +356,7 @@ def delete_line(qid: int, lid: int, db: Session = Depends(get_db)):
     ln = db.get(QuoteLine, lid)
     if ln is None or ln.quote_id != qid:
         raise HTTPException(404, "line not found")
+    _check_unlocked(ln.quote)
     db.delete(ln)
     db.commit()
     return {"ok": True}
@@ -371,6 +417,7 @@ def invoice(qid: int, commit_stock_too: bool = True, db: Session = Depends(get_d
         commit_stock(qid, db)
         q = _need(db, qid)
     q.status = "invoiced"
+    q.invoiced_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
 
@@ -379,6 +426,7 @@ def invoice(qid: int, commit_stock_too: bool = True, db: Session = Depends(get_d
 def unarchive(qid: int, db: Session = Depends(get_db)):
     q = _need(db, qid)
     q.status = "open"
+    q.invoiced_at = None
     db.commit()
     return {"ok": True}
 
