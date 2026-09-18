@@ -7,6 +7,7 @@
 `DELETE /api/settings/logo`           removes it
 `GET  /api/settings/footer`           {text} — the seller's own name/address/payment info
 `PUT  /api/settings/footer`           body {text} — printed at the bottom of every quote/invoice
+`GET/PUT /api/settings/swish`         {number} — seller's Swish number, drives the invoice QR
 `GET  /api/settings/defaults`         {currency, vat_percent} — used whenever nothing more
 `PUT  /api/settings/defaults`         specific (a supplier price, a quote) says otherwise
 
@@ -146,6 +147,32 @@ def get_footer(db: Session = Depends(get_db)):
 def set_footer(body: FooterBody, db: Session = Depends(get_db)):
     set_kv(db, "branding:footer", body.text.strip())
     return {"ok": True}
+
+
+class SwishBody(BaseModel):
+    number: str = ""
+
+
+def normalise_swish(raw: str) -> str:
+    """Digits only, 10 of them (07XXXXXXXX). Accepts +46 7X… too; "" clears."""
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if digits.startswith("46") and len(digits) == 11:
+        digits = "0" + digits[2:]
+    if digits and len(digits) != 10:
+        raise HTTPException(400, "Swish number must be 10 digits, e.g. 0701234567")
+    return digits
+
+
+@router.get("/swish")
+def get_swish(db: Session = Depends(get_db)):
+    return {"number": get_kv(db, "branding:swish", "") or ""}
+
+
+@router.put("/swish")
+def set_swish(body: SwishBody, db: Session = Depends(get_db)):
+    number = normalise_swish(body.number)
+    set_kv(db, "branding:swish", number)
+    return {"ok": True, "number": number}
 
 
 class DefaultsBody(BaseModel):

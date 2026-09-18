@@ -6,7 +6,7 @@ import { parseNum } from "./units.js";
 const CURRENCIES = ["SEK", "NOK", "DKK", "EUR", "USD", "GBP", "CHF"];
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts, bomRules, logoData, footerData, defaultsData] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules, logoData, footerData, defaultsData, swishData] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
@@ -14,6 +14,7 @@ export async function openSettings() {
     api("/api/settings/logo"),
     api("/api/settings/footer"),
     api("/api/settings/defaults"),
+    api("/api/settings/swish"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
@@ -111,6 +112,21 @@ export async function openSettings() {
       toast("Footer saved");
     } }, footerData.text || "");
   body.append(footerTa);
+  const swishInp = el("input", { type: "text", inputmode: "tel", placeholder: "070-123 45 67", style: "width:170px",
+    value: swishData.number,
+    onchange: async () => {
+      try {
+        const r = await api("/api/settings/swish", { method: "PUT", body: { number: swishInp.value } });
+        swishInp.value = r.number;
+        toast(r.number ? "Swish number saved" : "Swish QR turned off");
+      } catch (e) {
+        toast("Error: " + e.message);
+      }
+    } });
+  body.append(el("div", { class: "row", style: "align-items:center;gap:10px;margin-top:6px" },
+    el("label", { title: "Invoices in SEK get a Swish QR in the footer's right corner, pre-filled with the total and the invoice number. Leave empty to turn it off." },
+      "Swish number"), swishInp,
+    el("span", { class: "hint", style: "padding:0" }, "adds a payment QR to printed invoices")));
 
   // ---- auto-categorisation rules ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Auto-categorisation rules"));

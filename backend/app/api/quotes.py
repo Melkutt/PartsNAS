@@ -18,15 +18,17 @@ import csv
 import io
 import math
 from datetime import datetime, timezone
+from urllib.parse import quote as urlquote
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
-from ..core.kv import get_default_currency, get_default_vat_percent
+from ..core.kv import get_default_currency, get_default_vat_percent, get_kv
+from ..labels import qr_png
 from ..models import Customer, Part, PartSupplier, Quote, QuoteLine, StockEntry
 from ..services import location_breakdown
 
@@ -216,8 +218,12 @@ def list_quotes(status: str = "open", db: Session = Depends(get_db)):
         stmt = select(Quote).where(Quote.deleted_at.is_not(None)).order_by(Quote.deleted_at.desc())
     else:
         stmt = select(Quote).where(Quote.deleted_at.is_(None)).order_by(Quote.id.desc())
-        if status in ("open", "invoiced"):
-            stmt = stmt.where(Quote.status == status)
+        if status == "open":
+            stmt = stmt.where(Quote.status == "open")
+        elif status == "invoiced":  # working invoices — locked ones live in the archive
+            stmt = stmt.where(Quote.status == "invoiced", Quote.locked.is_(False))
+        elif status == "archive":  # invoiced + locked = finalised history
+            stmt = stmt.where(Quote.status == "invoiced", Quote.locked.is_(True))
     qs = db.scalars(stmt).all()
     return [_quote_dict(db, q, full=False) for q in qs]
 
@@ -398,6 +404,7 @@ def commit_stock(qid: int, db: Session = Depends(get_db)):
 @router.post("/{qid}/uncommit-stock")
 def uncommit_stock(qid: int, db: Session = Depends(get_db)):
     q = _need(db, qid)
+    _check_unlocked(q)
     if not q.stock_committed:
         return {"ok": True, "already": True}
     grp = _mg(qid)
@@ -425,10 +432,27 @@ def invoice(qid: int, commit_stock_too: bool = True, db: Session = Depends(get_d
 @router.post("/{qid}/unarchive")
 def unarchive(qid: int, db: Session = Depends(get_db)):
     q = _need(db, qid)
+    _check_unlocked(q)  # a locked invoice is history — unlock it first
     q.status = "open"
     q.invoiced_at = None
     db.commit()
     return {"ok": True}
+
+
+@router.get("/{qid}/swish.png")
+def swish_qr(qid: int, db: Session = Depends(get_db)):
+    """Swish "C" payment QR: payee;amount;message, all locked. Amount is the
+    total the customer actually pays (inc VAT, rounded up); SEK only."""
+    q = _need(db, qid)
+    number = get_kv(db, "branding:swish", "") or ""
+    d = _quote_dict(db, q, full=False)
+    if not number:
+        raise HTTPException(404, "no Swish number configured")
+    if d["totals"]["currency"] != "SEK":
+        raise HTTPException(404, "Swish only handles SEK")
+    amount = f"{d['totals']['inc_vat_ceil']:.2f}".replace(".", ",")
+    payload = f"C{number};{amount};{urlquote(f'Invoice {q.id}')};0"
+    return Response(qr_png(payload), media_type="image/png")
 
 
 @router.get("/{qid}/export.xlsx")

@@ -31,10 +31,13 @@ from ..core.kv import get_kv, set_kv
 from ..models import (
     Attachment,
     Category,
+    Customer,
     DesignNote,
     DesignNoteLink,
     Part,
     PartSupplier,
+    Quote,
+    QuoteLine,
     Setting,
     StockEntry,
     StorageLocation,
@@ -114,6 +117,36 @@ def _part_record(db: Session, p: Part, paths: dict[int, str]) -> dict:
     }
 
 
+def _iso(dt) -> str | None:
+    return dt.isoformat() if dt else None
+
+
+def _customer_record(c: Customer) -> dict:
+    return {"id": c.id, "name": c.name, "address": c.address, "org_number": c.org_number,
+            "phone": c.phone, "email": c.email, "created_at": _iso(c.created_at)}
+
+
+def _quote_record(q: Quote) -> dict:
+    """Everything needed to rebuild a quote/invoice exactly — including lock,
+    trash and invoice-date state, since invoice history is the point."""
+    return {
+        "id": q.id, "customer": q.customer, "customer_id": q.customer_id,
+        "title": q.title, "note": q.note,
+        "markup_percent": q.markup_percent, "vat_percent": q.vat_percent,
+        "status": q.status, "stock_committed": q.stock_committed,
+        "hide_cost": q.hide_cost, "hide_vat": q.hide_vat, "locked": q.locked,
+        "created_at": _iso(q.created_at), "updated_at": _iso(q.updated_at),
+        "invoiced_at": _iso(q.invoiced_at), "deleted_at": _iso(q.deleted_at),
+        "lines": [
+            {"part_id": ln.part_id, "line_type": ln.line_type, "description": ln.description,
+             "mpn": ln.mpn, "qty": ln.qty, "unit_cost": ln.unit_cost,
+             "markup_percent": ln.markup_percent, "currency": ln.currency,
+             "cost_source": ln.cost_source, "note": ln.note, "sort_order": ln.sort_order}
+            for ln in q.lines
+        ],
+    }
+
+
 @router.get("/api/export/backup.zip")
 def export_backup(
     db: Session = Depends(get_db),
@@ -167,10 +200,17 @@ def export_backup(
         z.writestr("parts.json", json.dumps(records, ensure_ascii=False, indent=2))
         z.writestr("categories.json", json.dumps(cats, ensure_ascii=False, indent=2))
         z.writestr("locations.json", json.dumps(locs, ensure_ascii=False, indent=2))
+        z.writestr("customers.json", json.dumps(
+            [_customer_record(c) for c in db.scalars(select(Customer).order_by(Customer.id)).all()],
+            ensure_ascii=False, indent=2))
+        z.writestr("quotes.json", json.dumps(
+            [_quote_record(q) for q in db.scalars(select(Quote).order_by(Quote.id)).all()],
+            ensure_ascii=False, indent=2))
         logo_rel = get_kv(db, "branding:logo", None)
         z.writestr("branding.json", json.dumps({
             "logo_filename": Path(logo_rel).name if logo_rel else None,
             "footer": get_kv(db, "branding:footer", "") or "",
+            "swish": get_kv(db, "branding:swish", "") or "",
         }, ensure_ascii=False, indent=2))
         if logo_rel:
             logo_src = settings.data_dir / logo_rel
@@ -256,6 +296,80 @@ def _supplier_by_name(db: Session, name: str | None, s: dict) -> Supplier | None
     return sup
 
 
+def _dt(s: str | None):
+    return datetime.fromisoformat(s) if s else None
+
+
+def _restore_customers_and_quotes(db: Session, zf: zipfile.ZipFile, mode: str, s: dict) -> None:
+    """Quotes keep their original id (= the invoice number). A quote already
+    present with the same id AND created_at is the same document: merge leaves
+    it, update/replace overwrite it. Same id but a different created_at is some
+    other document — restored under a fresh id with a warning, never clobbered."""
+    s.update({"customers_created": 0, "quotes_created": 0, "quotes_updated": 0, "quotes_skipped": 0})
+    names = zf.namelist()
+
+    cust_map: dict[int, int] = {}  # id in the backup -> id here
+    if "customers.json" in names:
+        for cr in json.loads(zf.read("customers.json")):
+            hit = db.scalar(select(Customer).where(
+                func.lower(Customer.name) == (cr.get("name") or "").lower(),
+                func.coalesce(Customer.org_number, "") == (cr.get("org_number") or "")))
+            if hit is None:
+                hit = Customer(name=cr["name"], address=cr.get("address"), org_number=cr.get("org_number"),
+                               phone=cr.get("phone"), email=cr.get("email"))
+                if cr.get("created_at"):
+                    hit.created_at = _dt(cr["created_at"])
+                db.add(hit)
+                db.flush()
+                s["customers_created"] += 1
+            cust_map[cr["id"]] = hit.id
+
+    if "quotes.json" not in names:
+        return
+    for qr in json.loads(zf.read("quotes.json")):
+        existing = db.get(Quote, qr["id"])
+        same = existing is not None and _iso(existing.created_at) == qr.get("created_at")
+        if same and mode == "merge":
+            s["quotes_skipped"] += 1
+            continue
+        if same:
+            q = existing
+            for ln in list(q.lines):
+                db.delete(ln)
+            db.flush()
+            s["quotes_updated"] += 1
+        else:
+            q = Quote()
+            if existing is None:
+                q.id = qr["id"]
+            else:
+                s["warnings"].append(f"quote #{qr['id']} clashes with a different quote here — restored under a new number")
+            db.add(q)
+            s["quotes_created"] += 1
+        for k in ("customer", "title", "note", "markup_percent", "vat_percent", "status",
+                  "stock_committed", "hide_cost", "hide_vat", "locked"):
+            if k in qr:
+                setattr(q, k, qr[k])
+        q.customer_id = cust_map.get(qr.get("customer_id"))
+        q.created_at = _dt(qr.get("created_at")) or q.created_at
+        q.invoiced_at = _dt(qr.get("invoiced_at"))
+        q.deleted_at = _dt(qr.get("deleted_at"))
+        db.flush()
+        for ln in qr.get("lines") or []:
+            pid = ln.get("part_id")
+            if pid and db.get(Part, pid) is None:
+                pid = db.scalar(select(Part.id).where(func.lower(Part.mpn) == (ln.get("mpn") or "").lower())) \
+                    if ln.get("mpn") else None
+            db.add(QuoteLine(
+                quote_id=q.id, part_id=pid, line_type=ln.get("line_type") or "part",
+                description=ln["description"], mpn=ln.get("mpn"), qty=ln.get("qty", 1),
+                unit_cost=ln.get("unit_cost", 0), markup_percent=ln.get("markup_percent"),
+                currency=ln.get("currency") or "SEK", cost_source=ln.get("cost_source"),
+                note=ln.get("note"), sort_order=ln.get("sort_order", 0)))
+        db.flush()
+        q.updated_at = _dt(qr.get("updated_at")) or q.updated_at
+
+
 @router.post("/api/import/backup")
 async def import_backup(
     file: UploadFile = File(...),
@@ -295,6 +409,8 @@ async def import_backup(
         if not dry_run:
             if br.get("footer") is not None:
                 set_kv(db, "branding:footer", br["footer"])
+            if br.get("swish") is not None:
+                set_kv(db, "branding:swish", br["swish"])
             logo_name = br.get("logo_filename")
             if logo_name:
                 try:
@@ -465,6 +581,8 @@ async def import_backup(
             pp = db.get(Part, part_id)
             if pp:
                 pp.replaced_by_id = target
+
+    _restore_customers_and_quotes(db, zf, mode, s)
 
     s["categories_created"] = ccache.get("_created_cats", 0)
     s["locations_created"] = lcache.get("_created_locs", 0)

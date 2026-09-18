@@ -13,16 +13,12 @@ async function customersList(force) {
   if (!CUSTOMERS || force) CUSTOMERS = await api("/api/customers");
   return CUSTOMERS;
 }
-let LOGO_URL; // cached /api/settings/logo (undefined = not fetched yet)
-async function logoUrl() {
-  if (LOGO_URL === undefined) LOGO_URL = (await api("/api/settings/logo")).logo_url;
-  return LOGO_URL;
-}
-let FOOTER_TEXT; // cached /api/settings/footer (undefined = not fetched yet)
-async function footerText() {
-  if (FOOTER_TEXT === undefined) FOOTER_TEXT = (await api("/api/settings/footer")).text;
-  return FOOTER_TEXT;
-}
+// not cached: they're edited in Settings while a quote view can stay mounted,
+// and a stale logo/footer/Swish number on a printed invoice is worse than one
+// tiny extra request per opened quote
+async function logoUrl() { return (await api("/api/settings/logo")).logo_url; }
+async function footerText() { return (await api("/api/settings/footer")).text; }
+async function swishNumber() { return (await api("/api/settings/swish")).number; }
 const HIDE_VAT_KEY = "partsnas.hideVatDefault";
 // "fee" is the stored line_type (unchanged, so existing quotes keep working);
 // "Other" is just a friendlier label for it than "Fee" everywhere it's shown.
@@ -47,15 +43,18 @@ export class QuotesView {
     const rows = await api(`/api/quotes?status=${this.tab}`);
     const panel = el("div", { class: "panel", style: "max-width:960px" });
     const seg = el("div", { class: "seg", style: "margin:10px 0 0 12px" });
-    const labels = { open: "Quotes", invoiced: "Invoices", trash: "Trash" };
-    for (const t of ["open", "invoiced", "trash"])
+    const labels = { open: "Quotes", invoiced: "Invoices", archive: "Archive", trash: "Trash" };
+    const titles = { open: "Quotes / invoice basis", invoiced: "Invoices", trash: "Trash",
+      archive: "Archive — locked invoices" };
+    for (const t of ["open", "invoiced", "archive", "trash"])
       seg.append(el("button", { class: this.tab === t ? "active" : "",
+        title: t === "archive" ? "Invoices you've locked — finished history" : "",
         onclick: () => { this.tab = t; this.list(); } }, labels[t]));
     panel.append(
-      el("h2", {}, this.tab === "trash" ? "Trash" : this.tab === "open" ? "Quotes / invoice basis" : "Invoices"),
+      el("h2", {}, titles[this.tab]),
       el("div", { class: "panel-body" }, seg,
         this.tab === "open" ? el("button", { class: "primary", style: "margin:10px 0 0 6px", onclick: () => this.newQuote() }, "+ New quote") : null,
-        this.tab === "trash" ? this._trashTable(rows) : this._table(rows)),
+        this.tab === "trash" ? this._trashTable(rows) : this._table(rows)),  // archive reuses _table, read-only
     );
     this.el.append(panel);
   }
@@ -63,15 +62,18 @@ export class QuotesView {
   _fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString() : "—"; }
 
   _table(rows) {
+    const archive = this.tab === "archive"; // read-only history: no stock/re-open toggles
     const t = el("table", { class: "mini-table", style: "margin-top:12px" });
     t.append(el("tr", {},
       el("th", {}, "Customer"), el("th", {}, "Title"), el("th", {}, this.tab === "open" ? "Created" : "Invoiced"),
       el("th", {}, "Lines"),
       el("th", { class: "num" }, "Sell ex"), el("th", { class: "num" }, "Inc VAT"),
-      el("th", {}, "Stock"), el("th", {}, this.tab === "open" ? "Invoiced" : "Re-open"), el("th", {}, "")));
+      archive ? null : el("th", {}, "Stock"),
+      archive ? null : el("th", {}, this.tab === "open" ? "Invoiced" : "Re-open"), el("th", {}, "")));
     for (const q of rows) {
       const stockCb = el("input", { type: "checkbox", checked: q.stock_committed ? "checked" : null,
-        title: "deduct line quantities from inventory",
+        disabled: q.locked ? "disabled" : null,
+        title: q.locked ? "locked" : "deduct line quantities from inventory",
         onclick: async (e) => {
           e.stopPropagation();
           const ep = e.target.checked ? "commit-stock" : "uncommit-stock";
@@ -80,6 +82,7 @@ export class QuotesView {
           this.list();
         } });
       const invCb = el("input", { type: "checkbox", checked: this.tab === "invoiced" ? "checked" : null,
+        disabled: q.locked ? "disabled" : null,
         title: this.tab === "open" ? "archive to Invoices (also deducts stock)" : "move back to Quotes",
         onclick: async (e) => {
           e.stopPropagation();
@@ -94,11 +97,12 @@ export class QuotesView {
         el("td", {}, String(q.line_count)),
         el("td", { class: "num" }, q.totals.sell_ex_vat),
         el("td", { class: "num" }, q.totals.inc_vat_ceil),
-        el("td", {}, stockCb),
-        el("td", {}, invCb),
+        archive ? null : el("td", {}, stockCb),
+        archive ? null : el("td", {}, invCb),
         el("td", {}, el("button", { class: "ghost", onclick: (e) => { e.stopPropagation(); this._del(q); } }, "✕"))));
     }
-    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "9", class: "pill-off" }, this.tab === "open" ? "no open quotes" : "no invoices")));
+    const empty = { open: "no open quotes", invoiced: "no invoices", archive: "no locked invoices yet" }[this.tab];
+    if (!rows.length) t.append(el("tr", {}, el("td", { colspan: "9", class: "pill-off" }, empty)));
     return t;
   }
 
@@ -180,11 +184,12 @@ export class QuotesView {
   }
 
   async openQuote(id) {
-    [this.q, this.customers, this.logoUrl, this.footerText] = await Promise.all([
+    [this.q, this.customers, this.logoUrl, this.footerText, this.swishNumber] = await Promise.all([
       api(`/api/quotes/${id}`),
       customersList(),
       logoUrl(),
       footerText(),
+      swishNumber(),
     ]);
     this._renderQuote();
   }
@@ -261,7 +266,7 @@ export class QuotesView {
         q.invoiced_at ? ` · Invoiced ${this._fmtDate(q.invoiced_at)}` : ""),
       q.stock_committed ? el("div", { class: "repl-banner no-print" },
         el("b", {}, "Stock deducted for this quote. "),
-        el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
+        locked ? null : el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
       el("div", { class: "form-grid no-print", style: "max-width:520px;margin:8px 0" },
         el("label", {}, "Customer"), cust,
         el("label", {}, ""), custSel,
@@ -315,6 +320,18 @@ export class QuotesView {
       el("button", { class: "ghost", disabled: locked ? "disabled" : null, onclick: () => this._addFree() }, "+ Free line")));
 
     const tt = q.totals;
+    // Printed page footer (pinned to the bottom of every page by CSS): the
+    // seller's own details on the left, a Swish payment QR on the right. The
+    // QR only makes sense on a real invoice, in SEK, with something to pay.
+    const showSwish = !!this.swishNumber && q.status === "invoiced" && tt.currency === "SEK" && tt.inc_vat_ceil > 0;
+    const footer = this.footerText || showSwish
+      ? el("div", { class: "quote-footer print-only" },
+          el("div", { class: "quote-footer-text" }, this.footerText || ""),
+          showSwish ? el("div", { class: "quote-footer-swish" },
+            el("img", { src: `/api/quotes/${q.id}/swish.png?t=${Date.now()}`, alt: "Swish QR" }),
+            el("div", {}, `Swish ${tt.inc_vat_ceil} ${tt.currency}`),
+            el("div", {}, `Invoice ${q.id}`)) : null)
+      : null;
     head.append(el("div", { style: "margin-top:14px;margin-left:auto;max-width:280px" },
       ...[
         row("Cost", tt.cost, false, true), row("Markup", tt.markup, false, true),
@@ -330,11 +347,9 @@ export class QuotesView {
           placeholder: "Notes for this quote — wraps automatically, Enter for a new line…",
           onchange: (e) => this._patch({ note: e.target.value }) }, q.note || "")),
       q.note ? el("div", { class: "print-only", style: "margin-top:10px;white-space:pre-wrap;color:#000" }, q.note) : null,
-      this.footerText
-        ? el("div", { class: "print-only", style: "margin-top:24px;padding-top:8px;border-top:1px solid #999;white-space:pre-wrap;color:#000;font-size:12px" },
-            this.footerText)
-        : null,
+      footer,
     ].filter(Boolean));
+    if (footer) head.classList.add("has-footer");
 
     panel.append(head);
     this.el.append(panel);
@@ -491,7 +506,7 @@ export class QuotesView {
 
 // pick or create a quote, then add the given part ids (qty 1). Used by the Parts bulk bar.
 export async function addPartsToQuote(partIds) {
-  const quotes = await api("/api/quotes?status=open");
+  const quotes = (await api("/api/quotes?status=open")).filter((q) => !q.locked); // locked = frozen
   const sel = el("select");
   sel.append(el("option", { value: "__new__" }, "+ New quote…"),
     ...quotes.map((q) => el("option", { value: q.id }, `${q.title || "#" + q.id}${q.customer ? " — " + q.customer : ""}`)));

@@ -700,6 +700,27 @@ table.parts-table {
   #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
   #quote-print.hide-cost-print .cost-col { display: none !important; }
   #quote-print .print-hide-empty { display: none !important; }
+
+  /* invoice footer: pinned to the bottom edge of every printed page (position:
+     fixed repeats per page), with room reserved above it so content never
+     runs underneath. Seller details left, Swish QR in the right corner. */
+  #quote-print.has-footer { padding-bottom: 46mm; }
+  .quote-footer.print-only {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 10mm;
+    padding-top: 3mm;
+    border-top: 1px solid #999;
+    background: #fff;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .quote-footer-text { white-space: pre-wrap; }
+  .quote-footer-swish { flex: none; text-align: center; font-size: 9px; }
+  .quote-footer-swish img { display: block; width: 30mm; height: 30mm; image-rendering: pixelated; margin: 0 auto 1mm; }
 }
 
 /* single-part label print (Label tab, part detail) — #label-print is a
