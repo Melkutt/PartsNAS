@@ -150,9 +150,11 @@ def _quote_dict(db: Session, q: Quote, full: bool) -> dict:
     lines = [_line_row(ln, q.markup_percent) for ln in q.lines]
     cost_total = round(sum(ln.unit_cost * ln.qty for ln in q.lines), 2)
     sell_ex_total = round(sum(x["line_ex"] for x in lines), 2)
-    # not VAT-registered -> treat as 0% for the math, but keep the stored
-    # vat_percent untouched in case VAT applies again in the future
-    vat_pct = 0 if q.hide_vat else q.vat_percent
+    # not VAT-registered -> can't itemise VAT on the invoice, but the user
+    # still paid it on every part bought and can't reclaim it, so it's
+    # folded into one all-inclusive price rather than dropped (hide_vat is a
+    # pure display flag; the math below is unaffected either way)
+    vat_pct = q.vat_percent
     vat_amount = round(sell_ex_total * vat_pct / 100, 2)
     inc_total_ceil = math.ceil(sell_ex_total * (1 + vat_pct / 100) - 1e-9)
     d = {
@@ -416,8 +418,10 @@ def export_xlsx(qid: int, db: Session = Depends(get_db)):
     totals = []
     if not hide:
         totals += [("Cost", t["cost"]), ("Markup", t["markup"])]
-    totals.append(("Sell ex VAT", t["sell_ex_vat"]))
-    if not q.hide_vat:
+    if q.hide_vat:
+        totals.append(("Total", t["inc_vat_ceil"]))
+    else:
+        totals.append(("Sell ex VAT", t["sell_ex_vat"]))
         totals += [(f"VAT {t['vat_percent']}%", t["vat"]), ("Total inc VAT", t["inc_vat_ceil"])]
     label_col = 6 if hide else 8  # F vs H, matching the shorter/longer header row
     for label, val in totals:
@@ -468,8 +472,10 @@ def export_csv(qid: int, db: Session = Depends(get_db)):
     if not hide:
         w.writerow(pad + ["Cost", t["cost"]])
         w.writerow(pad + ["Markup", t["markup"]])
-    w.writerow(pad + ["Sell ex VAT", t["sell_ex_vat"]])
-    if not q.hide_vat:
+    if q.hide_vat:
+        w.writerow(pad + ["Total", t["inc_vat_ceil"]])
+    else:
+        w.writerow(pad + ["Sell ex VAT", t["sell_ex_vat"]])
         w.writerow(pad + [f"VAT {t['vat_percent']}%", t["vat"]])
         w.writerow(pad + ["Total inc VAT", t["inc_vat_ceil"]])
     buf.seek(0)

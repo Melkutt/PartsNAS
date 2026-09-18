@@ -113,6 +113,7 @@ header.topbar {
 main.body {
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 18px;
 }
 
@@ -287,7 +288,7 @@ main.body {
   color: var(--accent-contrast);
   font-weight: 600;
 }
-.rail-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 6px 8px; }
+.rail-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 4px 6px 8px; }
 .rail ul { list-style: none; margin: 0; padding: 0; }
 .rail ul ul { padding-left: 14px; }
 .rail .rnode {
@@ -326,6 +327,7 @@ main.body {
   background: var(--surface);
   max-height: 260px;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .facet-group { min-width: 148px; }
 .facet-group > h4 {
@@ -348,7 +350,7 @@ main.body {
 }
 /* fixed (not max-) height so every group is the same size regardless of how
    many options it has — only the list scrolls, the header/search stay put */
-.facet-list { height: 150px; overflow-y: auto; }
+.facet-list { height: 150px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .facet-opt {
   display: flex;
   align-items: center;
@@ -371,6 +373,10 @@ main.body {
 @media (max-width: 820px) {
   .parts-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .rail { max-height: 210px; }
+  /* same explicit-height idiom as .rail above — a bare `1fr` grid row can
+     leave iOS Safari unsure which nested box actually owns the touch-scroll
+     gesture, so give the list its own guaranteed scrollable height too */
+  .parts-main { min-height: 320px; }
 }
 .filters {
   display: flex;
@@ -386,6 +392,7 @@ main.body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -556,7 +563,7 @@ table.parts-table {
   padding: 7px 12px;
 }
 .detail-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
-.detail-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.detail-body { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 16px; }
 
 .form-grid { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: center; }
 .form-grid label { color: var(--text-muted); }

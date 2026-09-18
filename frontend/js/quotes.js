@@ -174,8 +174,14 @@ export class QuotesView {
           title: "Omit cost/markup/source from print and CSV/Excel export — the on-screen view here always shows them" },
           hideCostCb, "Hide cost (customer copy)"),
         el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
-          title: "Not VAT-registered — omit VAT entirely from totals, print and export. Remembered for new quotes." },
+          title: "Not VAT-registered — can't itemise VAT on the invoice, so it's folded into one all-inclusive price instead of broken out. Remembered for new quotes." },
           hideVatCb, "No VAT"),
+        q.status === "open" ? el("button", { class: "primary", title: "Also deducts stock, same as ticking Invoiced in the list",
+          onclick: async () => {
+            await api(`/api/quotes/${q.id}/invoice`, { method: "POST" });
+            toast("Marked as Invoice");
+            this.openQuote(q.id);
+          } }, "→ Invoice") : null,
         el("button", { onclick: () => window.print() }, "Print"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.csv`) }, "CSV"),
         el("button", { onclick: () => (window.location = `/api/quotes/${q.id}/export.xlsx`) }, "Excel")),
@@ -240,9 +246,9 @@ export class QuotesView {
     head.append(el("div", { style: "margin-top:14px;margin-left:auto;max-width:280px" },
       ...[
         row("Cost", tt.cost, false, true), row("Markup", tt.markup, false, true),
-        row("Sell ex VAT", tt.sell_ex_vat, true),
+        q.hide_vat ? null : row("Sell ex VAT", tt.sell_ex_vat, true),
         q.hide_vat ? null : row(`VAT ${tt.vat_percent}%`, tt.vat),
-        q.hide_vat ? null : row("Total inc VAT", tt.inc_vat_ceil, true),
+        row(q.hide_vat ? "Total" : "Total inc VAT", tt.inc_vat_ceil, true),
       ].filter(Boolean)));
 
     head.append(...[

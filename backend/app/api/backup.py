@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import io
 import json
+import secrets
 import zipfile
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -165,6 +167,15 @@ def export_backup(
         z.writestr("parts.json", json.dumps(records, ensure_ascii=False, indent=2))
         z.writestr("categories.json", json.dumps(cats, ensure_ascii=False, indent=2))
         z.writestr("locations.json", json.dumps(locs, ensure_ascii=False, indent=2))
+        logo_rel = get_kv(db, "branding:logo", None)
+        z.writestr("branding.json", json.dumps({
+            "logo_filename": Path(logo_rel).name if logo_rel else None,
+            "footer": get_kv(db, "branding:footer", "") or "",
+        }, ensure_ascii=False, indent=2))
+        if logo_rel:
+            logo_src = settings.data_dir / logo_rel
+            if logo_src.exists():
+                z.write(logo_src, f"branding/{Path(logo_rel).name}")
         if include_secrets:
             secrets = {}
             for prov in all_providers():
@@ -266,7 +277,7 @@ async def import_backup(
 
     s: dict = {"created": 0, "updated": 0, "skipped": 0, "images": 0,
                "supplier_links": 0, "design_notes": 0, "creds_restored": [],
-               "warnings": []}
+               "branding_restored": False, "warnings": []}
 
     if "secrets.json" in zf.namelist():
         sec = json.loads(zf.read("secrets.json")).get("providers", {})
@@ -278,6 +289,26 @@ async def import_backup(
                 s["creds_restored"].append(name)
             if blob.get("locale") and not dry_run:
                 set_kv(db, f"provider:{name}:locale", blob["locale"])
+
+    if "branding.json" in zf.namelist():
+        br = json.loads(zf.read("branding.json"))
+        if not dry_run:
+            if br.get("footer") is not None:
+                set_kv(db, "branding:footer", br["footer"])
+            logo_name = br.get("logo_filename")
+            if logo_name:
+                try:
+                    blob = zf.read(f"branding/{logo_name}")
+                except KeyError:
+                    blob = None
+                if blob:
+                    old = get_kv(db, "branding:logo", None)
+                    if old:
+                        (settings.data_dir / old).unlink(missing_ok=True)
+                    rel = f"branding/logo_{secrets.token_hex(8)}{Path(logo_name).suffix}"
+                    (settings.data_dir / rel).write_bytes(blob)
+                    set_kv(db, "branding:logo", rel)
+            s["branding_restored"] = True
     ccache: dict = {}
     lcache: dict = {}
 
