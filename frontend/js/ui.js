@@ -156,14 +156,18 @@ export function partSearch({ placeholder = "search part…", onPick } = {}) {
   wrap.append(input, list);
   let picked = null;
   let t;
+  let seq = 0; // bumped on every keystroke: a slower, older answer must not overwrite a newer one
 
   input.addEventListener("input", () => {
     picked = null;
     clearTimeout(t);
+    seq++;
     const q = input.value.trim();
     if (!q) return void (list.style.display = "none");
     t = setTimeout(async () => {
+      const mine = seq;
       const data = await api(`/api/parts?q=${encodeURIComponent(q)}&limit=12`);
+      if (mine !== seq) return;
       list.innerHTML = "";
       for (const p of data.items) {
         const row = el(

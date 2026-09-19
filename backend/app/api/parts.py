@@ -249,9 +249,20 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
     cat_class = category_class_map(db)
     schema = part_class_schema()
 
+    active_attrs = f.attr_groups()
+    _sets: dict = {}
+
     def parts_for(exclude: str | None):
-        ids = list(db.scalars(_query(db, f, exclude=exclude)).all())
-        return db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
+        # An attribute facet only drops its OWN filter, so for every attribute that
+        # isn't being filtered the result is the same set as "no exclusion". There
+        # are hundreds of attribute keys, and each used to re-run the query and
+        # reload every Part row (~3 s on 330 parts); compute each distinct set once.
+        if exclude and exclude.startswith("attr:") and exclude[5:] not in active_attrs:
+            exclude = None
+        if exclude not in _sets:
+            ids = list(db.scalars(_query(db, f, exclude=exclude)).all())
+            _sets[exclude] = db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
+        return _sets[exclude]
 
     def count(field_get, exclude, include_empty=False):
         c = Counter()
@@ -311,7 +322,7 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
     else:
         classes = {cat_class.get(p.category_id) for p in parts_for(None)} - {None}
     attr_facets: dict = {}
-    for cls in classes:
+    for cls in sorted(classes):  # a set's order changes per process; a shared key's label must not
         for fdef in schema.get(cls, {}).get("fields", []):
             key = fdef["key"]
             if key in attr_facets or not _KEY_RE.match(key) or fdef["type"] == "bool":

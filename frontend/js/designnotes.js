@@ -43,7 +43,10 @@ export class DesignNotesView {
 
   async reload() {
     const q = this.search.value.trim();
-    this.notes = await api(`/api/design-notes${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+    const seq = (this._reloadSeq = (this._reloadSeq || 0) + 1); // newest answer wins
+    const notes = await api(`/api/design-notes${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+    if (seq !== this._reloadSeq) return;
+    this.notes = notes;
     this.count.textContent = `${this.notes.length} note${this.notes.length === 1 ? "" : "s"}`;
     this._render();
   }

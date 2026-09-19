@@ -182,10 +182,12 @@ export class PartsView {
   // "All categories" / Unsorted / Locations mode all pass no category_id and
   // always come back unrestricted+non-editable (see backend/app/api/meta.py) —
   // only fetched fresh when the category actually changed, not on every reload
-  async _loadFacetConfig() {
+  async _loadFacetConfig(seq) {
     const catId = this.rail.mode === "categories" ? this.rail.id : null;
     if (this.facetConfig && this._facetConfigFor === catId) return;
-    this.facetConfig = await api(`/api/meta/facet-config${catId != null ? `?category_id=${catId}` : ""}`);
+    const cfg = await api(`/api/meta/facet-config${catId != null ? `?category_id=${catId}` : ""}`);
+    if (seq !== undefined && seq !== this._reloadSeq) return; // superseded: the newer reload fetches its own
+    this.facetConfig = cfg;
     this._facetConfigFor = catId;
   }
 
@@ -251,12 +253,18 @@ export class PartsView {
   }
 
   async reload() {
+    // Every click/keystroke starts a reload and the answers can come back out of
+    // order. Only the newest one may draw — otherwise an older, slower answer
+    // (e.g. the unfiltered "All categories" list) lands last and overwrites the
+    // category/search you're actually looking at.
+    const seq = (this._reloadSeq = (this._reloadSeq || 0) + 1);
     const qs = this._query().toString();
     const [list, facets] = await Promise.all([
       api(`/api/parts?${qs}&limit=1000`),
       api(`/api/parts/facets?${qs}`),
-      this._loadFacetConfig(),
+      this._loadFacetConfig(seq),
     ]);
+    if (seq !== this._reloadSeq) return;
     this.items = list.items;
     this.lastTotal = list.total;
     this.facets = facets;
