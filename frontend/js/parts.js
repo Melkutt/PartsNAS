@@ -10,11 +10,14 @@ import { addToLabelSheet } from "./labelcommon.js";
 // only ever link http(s): a datasheet URL is free text and could be javascript:...
 const httpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
 
-const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
+const FACET_ORDER = ["mount", "footprint", "datasheet", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
   mount: "Mount", footprint: "Footprint", manufacturer: "Manufacturer",
-  location: "Location", tags: "Tags", in_stock: "Stock",
+  location: "Location", tags: "Tags", in_stock: "Stock", datasheet: "Datasheet",
 };
+// facets that are a single yes/no choice (radio) rather than a multi-select
+const YESNO = new Set(["in_stock", "datasheet"]);
+const DS_LABEL = { yes: "Has datasheet", no: "Missing datasheet" };
 const MOUNT_LABEL = { smd: "SMD", tht: "THT", other: "Other", "": "Unknown" };
 
 // Attribute/footprint facets sort by numeric magnitude when their options
@@ -59,7 +62,7 @@ export class PartsView {
     this.scanSelect = false;
     this.rail = { mode: "categories", id: null };
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
-      location: new Set(), tags: new Set(), in_stock: null, attr: {} };
+      location: new Set(), tags: new Set(), in_stock: null, datasheet: null, attr: {} };
     this.facetConfig = null; // per-category visible/ordered/renamed facets, see _openFacetEditor()
     // "shopping cart" mode: opened from a quote's "Browse parts" - each row gets a
     // + Add button that puts the part straight into that quote
@@ -247,6 +250,7 @@ export class PartsView {
     for (const v of this.facetSel.location) p.append("location_id", v);
     for (const v of this.facetSel.tags) p.append("tag", v);
     if (this.facetSel.in_stock) p.set("in_stock", this.facetSel.in_stock);
+    if (this.facetSel.datasheet) p.set("datasheet", this.facetSel.datasheet);
     for (const [k, set] of Object.entries(this.facetSel.attr))
       for (const v of set) p.append("attr", `${k}:${v}`);
     return p;
@@ -399,7 +403,7 @@ export class PartsView {
   _facetGroup(id, label, options, kind, akey) {
     const g = el("div", { class: "facet-group" });
     g.append(el("h4", {}, label));
-    const sel = kind === "in_stock" ? null : this._selSet(kind, akey);
+    const sel = YESNO.has(kind) ? null : this._selSet(kind, akey);
     // keep a selected value visible even if it dropped to 0
     const shown = options.slice();
     if (sel) for (const v of sel) if (!shown.find((o) => o.value === v)) shown.push({ value: v, count: 0 });
@@ -421,21 +425,26 @@ export class PartsView {
       shown.sort((a, b) => naturalCompare(a.value, b.value));
     }
 
+    const emptyAt = shown.findIndex((o) => o.value === "");
+    if (emptyAt >= 0) shown.push(shown.splice(emptyAt, 1)[0]); // "Unknown" (not set) always last
+
     const listEl = el("div", { class: "facet-list" });
     const renderRows = (filterText) => {
       listEl.innerHTML = "";
       const f = (filterText || "").trim().toLowerCase();
       const qMag = byMagnitude && f ? leadingMagnitude(filterText.trim()) : null;
       for (const o of shown) {
-        const label2 = kind === "mount" ? (MOUNT_LABEL[o.value] || o.value) : o.value;
+        const label2 = kind === "mount" ? (MOUNT_LABEL[o.value] || o.value)
+          : kind === "datasheet" ? (DS_LABEL[o.value] || o.value)
+          : o.value === "" ? "Unknown" : o.value;
         if (f) {
           const substrHit = String(label2 ?? "").toLowerCase().includes(f);
           const magHit = qMag != null && magEq(leadingMagnitude(o.value), qMag);
           if (!substrHit && !magHit) continue;
         }
-        const isOn = kind === "in_stock" ? this.facetSel.in_stock === o.value : sel.has(o.value);
+        const isOn = YESNO.has(kind) ? this.facetSel[kind] === o.value : sel.has(o.value);
         listEl.append(el("label", { class: "facet-opt" + (o.count ? "" : " zero") + (isOn ? " on" : "") },
-          el("input", { type: kind === "in_stock" ? "radio" : "checkbox", name: "f-" + id,
+          el("input", { type: YESNO.has(kind) ? "radio" : "checkbox", name: "f-" + id,
             checked: isOn ? "checked" : null,
             onchange: () => this._toggleFacet(kind, akey, o.value) }),
           el("span", { class: "nm", title: label2 }, label2 || "—"),
@@ -452,8 +461,8 @@ export class PartsView {
   }
 
   _toggleFacet(kind, akey, value) {
-    if (kind === "in_stock") {
-      this.facetSel.in_stock = this.facetSel.in_stock === value ? null : value;
+    if (YESNO.has(kind)) {
+      this.facetSel[kind] = this.facetSel[kind] === value ? null : value;
     } else {
       const set = this._selSet(kind, akey);
       set.has(value) ? set.delete(value) : set.add(value);
@@ -467,12 +476,13 @@ export class PartsView {
     const add = (text, clear) => host.append(el("span", { class: "chip", onclick: () => { clear(); this.reload(); } }, text));
     for (const kind of ["mount", "footprint", "manufacturer", "tags"])
       for (const v of this.facetSel[kind])
-        add(`${FACET_LABEL[kind]}: ${kind === "mount" ? MOUNT_LABEL[v] || v : v}`, () => this.facetSel[kind].delete(v));
+        add(`${FACET_LABEL[kind]}: ${kind === "mount" ? MOUNT_LABEL[v] || v : v === "" ? "Unknown" : v}`, () => this.facetSel[kind].delete(v));
     for (const v of this.facetSel.location) {
       const nm = (this.facets.location || []).find((o) => String(o.id) === String(v))?.value || v;
       add(`Location: ${nm}`, () => this.facetSel.location.delete(v));
     }
     if (this.facetSel.in_stock) add(`Stock: ${this.facetSel.in_stock}`, () => (this.facetSel.in_stock = null));
+    if (this.facetSel.datasheet) add(DS_LABEL[this.facetSel.datasheet], () => (this.facetSel.datasheet = null));
     for (const [k, set] of Object.entries(this.facetSel.attr))
       for (const v of set) {
         const lbl = this.facets.attributes?.[k]?.label || k;

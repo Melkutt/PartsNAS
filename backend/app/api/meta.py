@@ -36,6 +36,7 @@ _BUILTIN_FACETS = [
     {"id": "location", "label": "Location"},
     {"id": "tags", "label": "Tags"},
     {"id": "in_stock", "label": "Stock"},
+    {"id": "datasheet", "label": "Datasheet"},
 ]
 
 

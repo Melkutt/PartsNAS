@@ -93,6 +93,7 @@ class PartFilter:
     manufacturers: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     in_stock: str | None = None  # "yes" | "no"
+    datasheet: str | None = None  # "yes" | "no" - has a datasheet URL or not
     attrs: list[str] = field(default_factory=list)  # "key:value"
     low_stock: bool = False
     no_category: bool = False
@@ -134,7 +135,17 @@ def _query(db: Session, f: PartFilter, *, exclude: str | None = None):
             conds.append(Part.mount.is_(None))
         stmt = stmt.where(or_(*conds))
     if f.footprints and exclude != "footprint":
-        stmt = stmt.where(Part.footprint_raw.in_(f.footprints))
+        # "" = the Unknown bucket: parts with no footprint (NULL or blank)
+        real = [x for x in f.footprints if x]
+        conds = []
+        if real:
+            conds.append(Part.footprint_raw.in_(real))
+        if "" in f.footprints:
+            conds.append(or_(Part.footprint_raw.is_(None), func.trim(Part.footprint_raw) == ""))
+        stmt = stmt.where(or_(*conds))
+    if f.datasheet and exclude != "datasheet":
+        has = func.length(func.trim(func.coalesce(Part.datasheet_url, ""))) > 0
+        stmt = stmt.where(has if f.datasheet == "yes" else ~has)
     if f.manufacturers and exclude != "manufacturer":
         stmt = stmt.where(Part.manufacturer.in_(f.manufacturers))
     if f.tags and exclude != "tags":
@@ -182,6 +193,7 @@ def _filter_params(
     manufacturer: list[str] = Query(default=[]),
     tag: list[str] = Query(default=[]),
     in_stock: str | None = None,
+    datasheet: str | None = None,
     attr: list[str] = Query(default=[]),
     low_stock: bool = False,
     no_category: bool = False,
@@ -189,7 +201,7 @@ def _filter_params(
     return PartFilter(
         q=q, category_id=category_id, with_subcats=with_subcats,
         location_ids=location_id, mounts=mount, footprints=footprint,
-        manufacturers=manufacturer, tags=tag, in_stock=in_stock, attrs=attr,
+        manufacturers=manufacturer, tags=tag, in_stock=in_stock, datasheet=datasheet, attrs=attr,
         low_stock=low_stock, no_category=no_category,
     )
 
@@ -282,7 +294,7 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
 
     result: dict = {
         "mount": count(lambda p: p.mount, "mount", include_empty=True),
-        "footprint": count(lambda p: p.footprint_raw, "footprint"),
+        "footprint": count(lambda p: p.footprint_raw if (p.footprint_raw or "").strip() else None, "footprint", include_empty=True),
         "manufacturer": count(lambda p: p.manufacturer, "manufacturer"),
     }
 
@@ -314,6 +326,14 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
     result["in_stock"] = [
         {"value": "yes", "count": yes},
         {"value": "no", "count": len(isp) - yes},
+    ]
+
+    # datasheet facet: is there a datasheet URL at all (finds the ones you forgot)
+    dsp = parts_for("datasheet")
+    has_ds = sum(1 for p in dsp if (p.datasheet_url or "").strip())
+    result["datasheet"] = [
+        {"value": "yes", "count": has_ds},
+        {"value": "no", "count": len(dsp) - has_ds},
     ]
 
     # which classes are in play -> their parameter fields
