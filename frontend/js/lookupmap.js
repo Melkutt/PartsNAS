@@ -23,6 +23,8 @@ export const ALIAS = {
   series: ["series", "productseries", "family"],
   lifetime_hours: ["lifetime", "loadlife", "usefullife", "operationallife"],
   breaking_capacity: ["breakingcapacity", "interruptingrating"],
+  resistor_type: ["resistortype", "composition", "resistivematerial", "technology"],
+  dimensions: ["sizedimension", "dimensions"],
   fuse_type: ["fusetype", "type", "response", "blowcharacteristic", "speed"],
   operating_temp_min: ["operatingtemperaturemin", "minimumoperatingtemperature", "tmin"],
   operating_temp_max: ["operatingtemperaturemax", "maximumoperatingtemperature", "tmax"],

@@ -61,6 +61,9 @@
           "Thin film",
           "Metal film",
           "Wirewound",
+          "Carbon film",
+          "Metal oxide",
+          "Foil",
           "Network"
         ]
       },
@@ -72,6 +75,15 @@
         "type": "text",
         "required": false,
         "api_source": "Manuell"
+      },
+      {
+        "key": "dimensions",
+        "label": "Size / Dimension",
+        "kicad_field": null,
+        "unit": null,
+        "type": "text",
+        "required": false,
+        "api_source": "Mouser/Digi-Key"
       }
     ]
   },

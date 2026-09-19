@@ -73,10 +73,22 @@ export async function openLookup(part, classFields, onApplied) {
     }
   }
 
+  // Text and enum fields keep the supplier's words ("2.3 mm x 6.3 mm" must not be
+  // parsed as the number 2.3); an enum is snapped to its option's spelling when one matches.
+  function convert(raw, field) {
+    const f = classFields.find((x) => x.key === field);
+    if (f && (f.type === "text" || f.type === "enum")) {
+      const s = String(raw ?? "").trim();
+      const opt = (f.options || []).find((o) => norm(o) === norm(s));
+      return opt || s;
+    }
+    return formatValue(raw, valueKind(cls, field));
+  }
+
   function mkRow(name, raw) {
     const { key: field, score } = scoreField(name, classFields);
     const kind = field ? valueKind(cls, field) : "num";
-    let converted = field ? formatValue(raw, kind) : String(raw);
+    let converted = field ? convert(raw, field) : String(raw);
     if (field === "tempchar" && /np0|c0g|npo/i.test(String(raw))) converted = "C0G (NP0)";
     return { name, raw, field, kind, converted, include: true, score };
   }
@@ -215,7 +227,7 @@ export async function openLookup(part, classFields, onApplied) {
 
   function recompute(row) {
     row.kind = row.field ? valueKind(cls, row.field) : "num";
-    row.converted = row.field ? formatValue(row.raw, row.kind) : String(row.raw);
+    row.converted = row.field ? convert(row.raw, row.field) : String(row.raw);
   }
 
   async function apply(btn) {
