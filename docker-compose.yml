@@ -15,5 +15,5 @@ services:
     environment:
       PARTSNAS_DEFAULT_CURRENCY: SEK
       PARTSNAS_DEFAULT_VAT_PERCENT: "25"
-      # set a token once the app is reachable outside localhost:
-      # PARTSNAS_API_TOKEN: "change-me"
+      # There is no login: keep the port on your LAN (or behind a VPN).
+      # PARTSNAS_API_TOKEN is reserved for the planned KiCad library and is not enforced yet.
