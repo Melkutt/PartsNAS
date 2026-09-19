@@ -86,6 +86,7 @@ def _mount_routers() -> None:
         locations,
         lookup,
         meta,
+        order,
         parts,
         quotes,
         settings_api,
@@ -109,6 +110,7 @@ def _mount_routers() -> None:
     app.include_router(meta.router)
     app.include_router(quotes.router)
     app.include_router(stats.router)
+    app.include_router(order.router)
     app.include_router(settings_api.router)
     app.include_router(lookup.router)
     app.include_router(imports.router)

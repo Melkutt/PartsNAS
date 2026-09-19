@@ -8,6 +8,7 @@ import { DesignNotesView } from "./designnotes.js";
 import { QuotesView } from "./quotes.js";
 import { BomView } from "./bom.js";
 import { AboutView } from "./about.js";
+import { OrderView } from "./order.js";
 import { initScanner } from "./scan.js";
 import { openImport, openExport } from "./importexport.js";
 import { openSettings } from "./settings.js";
@@ -30,6 +31,7 @@ const TABS = {
     mountTree("/api/locations", "location", "Storage locations", "New location", (node) =>
       gotoPartsFiltered({ location_id: node.id }),
     ),
+  order: mountOrder,
   notes: mountNotes,
   customers: mountCustomers,
   quotes: mountQuotes,
@@ -83,6 +85,30 @@ async function mountQuotes() {
   await v.mount(view);
 }
 
+async function mountOrder() {
+  clearView();
+  const v = new OrderView();
+  activeObj = v;
+  await v.mount(view);
+}
+
+// "Order (3)" on the tab itself, so running low is visible from anywhere
+async function updateOrderBadge() {
+  const btn = tabs.querySelector('[data-tab="order"]');
+  if (!btn) return;
+  try {
+    const { count, out } = await api("/api/order/count");
+    btn.innerHTML = "Order";
+    if (count) {
+      const b = document.createElement("span");
+      b.className = "tab-badge" + (out ? " out" : "");
+      b.textContent = count;
+      b.title = `${count} part(s) at or below Min stock` + (out ? `, ${out} out of stock` : "");
+      btn.append(" ", b);
+    }
+  } catch { /* offline: leave the plain label */ }
+}
+
 async function mountBom() {
   clearView();
   const v = new BomView();
@@ -116,6 +142,7 @@ function selectTab(name) {
   [...tabs.children].forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   location.hash = name;
   TABS[name]();
+  updateOrderBadge();
 }
 
 const TAB_LABELS = { bom: "BOM" };
@@ -138,6 +165,8 @@ async function main() {
   document.getElementById("btn-import").addEventListener("click", () => openImport(() => selectTab("parts")));
   document.getElementById("btn-export").addEventListener("click", openExport);
   document.getElementById("btn-settings").addEventListener("click", openSettings);
+  document.addEventListener("partsnas:orderchanged", updateOrderBadge);
+  window.addEventListener("focus", updateOrderBadge);
   document.addEventListener("partsnas:shop", (e) => {
     pendingShop = { quoteId: e.detail.quoteId };
     selectTab("parts");
