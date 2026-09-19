@@ -14,7 +14,7 @@ import re
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..catmatch import match_category
@@ -249,9 +249,17 @@ def apply_lookup(pid: str, body: ApplyBody, db: Session = Depends(get_db)):
             changed.append(f"image skipped ({reason})")
 
     if ap.supplier:
-        sup = db.scalar(
-            select(Supplier).where(Supplier.name == (r.get("provider") or "").title())
-        ) or db.scalar(select(Supplier).where(Supplier.name == "Mouser"))
+        # The supplier row is named after the provider's label ("Digi-Key"), not its id
+        # ("digikey"): .title() gave "Digikey", found nothing, and the link fell back to
+        # Mouser - a Digi-Key part number and price filed under Mouser.
+        prov = get_provider(r.get("provider") or "")
+        sup = None
+        if prov is not None:
+            sup = db.scalar(select(Supplier).where(func.lower(Supplier.name) == prov.label.lower()))
+            if sup is None:
+                sup = Supplier(name=prov.label, sort_order=100)
+                db.add(sup)
+                db.flush()
         if sup:
             up = r.get("unit_price") or {}
             link = db.scalar(

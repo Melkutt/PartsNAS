@@ -49,6 +49,7 @@ class LinkIn(BaseModel):
 
 
 class LinkPatch(BaseModel):
+    supplier_id: int | None = None  # move a link to another supplier
     sku: str | None = None
     url: str | None = None
     price: float | None = None
@@ -268,6 +269,8 @@ def patch_link(pid: str, lid: int, body: LinkPatch, db: Session = Depends(get_db
         raise HTTPException(404, "link not found")
     data = body.model_dump(exclude_unset=True)
     inc = data.pop("price_includes_vat", False)
+    if "supplier_id" in data and (data["supplier_id"] is None or db.get(Supplier, data["supplier_id"]) is None):
+        raise HTTPException(400, "unknown supplier_id")
     if "vat_percent" in data and data["vat_percent"] is not None:
         link.vat_percent = data.pop("vat_percent")
     if "price" in data:
