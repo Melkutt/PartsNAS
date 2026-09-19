@@ -64,7 +64,9 @@ def order_list(db: Session = Depends(get_db)):
             "on_hand": oh,
             "min_stock": p.min_stock,
             "short": short,                       # how far below the minimum
-            "suggested_qty": max(short, 1),        # editable in the UI
+            # what the qty box shows: the amount typed there last time, else how far below Min stock
+            "suggested_qty": p.order_qty or max(short, 1),
+            "order_qty": p.order_qty,             # None until the user has typed one
             "status": "out" if oh <= 0 else "low",
             "discontinued": p.discontinued,
             "replacement": p.replaced_by.name if p.replaced_by else (p.replacement_mpn or None),

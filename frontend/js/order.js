@@ -32,7 +32,6 @@ const csvCell = (v) => {
 export class OrderView {
   constructor() {
     this.el = el("div", { class: "panel", style: "max-width:1200px" });
-    this.qty = new Map(); // part id -> quantity typed in the list (survives redraws)
     this._seq = 0;
   }
 
@@ -50,7 +49,7 @@ export class OrderView {
     document.dispatchEvent(new CustomEvent("partsnas:orderchanged")); // refresh the tab badge
   }
 
-  _qtyOf(it) { return this.qty.get(it.id) ?? it.suggested_qty; }
+  _qtyOf(it) { return it.suggested_qty; } // the server returns the remembered quantity, else the shortfall
 
   // supplier name -> items; parts with no supplier link go last
   _groups() {
@@ -102,7 +101,8 @@ export class OrderView {
         onclick: async () => toast((await copyText(this._lines(d.items))) ? "Copied SKU + quantity for all parts" : "Couldn't copy") }, "Copy all"),
       el("button", { class: "primary", onclick: () => this._downloadCsv() }, "Download CSV")));
     body.append(el("div", { class: "hint", style: "padding-top:0" },
-      "Worst first. Order qty starts at how far below the minimum the part is (at least 1) — change it here before copying. " +
+      "Worst first. Order qty starts at how far below the minimum the part is (at least 1); type your own and it is remembered for that part " +
+      "(clear the box to go back). " +
       "The supplier is the ★ preferred one, else the cheapest priced link."));
 
     for (const [supplier, items] of this._groups()) {
@@ -130,11 +130,20 @@ export class OrderView {
         title: "Min stock — set 0 to stop watching this part",
         onchange: async (e) => {
           await api(`/api/parts/${it.id}`, { method: "PATCH", body: { min_stock: Math.max(0, Math.round(parseNum(e.target.value) ?? it.min_stock)) } });
-          this.qty.delete(it.id);
           this.reload();
         } });
       const qtyI = el("input", { type: "text", inputmode: "numeric", value: this._qtyOf(it), style: "width:60px",
-        onchange: (e) => { this.qty.set(it.id, Math.max(0, Math.round(parseNum(e.target.value) ?? it.suggested_qty))); this._render(); } });
+        title: it.order_qty ? "Remembered for this part — clear the box to go back to the suggestion" : "Type how many to order — it is remembered",
+        onchange: async (e) => {
+          const n = Math.round(parseNum(e.target.value) ?? 0);
+          try {
+            // saved on the part, so it is still there next time; empty/0 = back to "how far below the minimum"
+            await api(`/api/parts/${it.id}`, { method: "PATCH", body: { order_qty: n >= 1 ? n : null } });
+          } catch (err) {
+            toast(err.message);
+          }
+          this.reload();
+        } });
       t.append(el("tr", {},
         el("td", {}, el("span", { class: it.status === "out" ? "order-out" : "order-low" }, it.status === "out" ? "OUT" : "low")),
         el("td", {},

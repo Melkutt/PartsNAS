@@ -70,6 +70,7 @@ class PartPatch(BaseModel):
     kicad_footprint: str | None = None
     datasheet_url: str | None = None
     min_stock: int | None = None
+    order_qty: int | None = Field(default=None, ge=1)  # null clears it
     notes: str | None = None
     design_doc: str | None = None
     attributes: dict | None = None

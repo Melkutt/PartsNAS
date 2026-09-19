@@ -72,6 +72,7 @@ def _part_record(db: Session, p: Part, paths: dict[int, str]) -> dict:
         "kicad_footprint": p.kicad_footprint,
         "datasheet_url": p.datasheet_url,
         "min_stock": p.min_stock,
+        "order_qty": p.order_qty,
         "notes": p.notes,
         "design_doc": p.design_doc,
         "octopart_id": p.octopart_id,
@@ -486,6 +487,7 @@ async def import_backup(
             if rec.get(k) is not None:
                 setattr(p, k, rec[k])
         p.min_stock = int(rec.get("min_stock") or 0)
+        p.order_qty = int(rec["order_qty"]) if rec.get("order_qty") else None
         p.discontinued = bool(rec.get("discontinued"))
         p.category_id = _resolve_category(db, rec.get("category_path"), ccache)
 

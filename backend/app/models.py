@@ -127,6 +127,9 @@ class Part(Base):
 
     # stock helpers (ledger is the source of truth; this is just a warning level)
     min_stock: Mapped[int] = mapped_column(Integer, default=0)
+    # how many to buy when this part is on the Order list; remembered from the last
+    # time the quantity was typed there. NULL = suggest how far below Min stock it is.
+    order_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # lifecycle / replacement
     discontinued: Mapped[bool] = mapped_column(default=False)
