@@ -84,13 +84,17 @@ def _num(s: str) -> float | None:
         return None
 
 
+# a number as written in a description: "18", "0.18" or ".18" (the leading zero is often
+# dropped, and "\b" would then start the match after the dot and read .18 as 18)
+_NUM = r"(?:\d+(?:\.\d+)?|\.\d+)"
+
 _DESC_RULES = [
-    ("Capacitance", re.compile(r"\b(\d+(?:\.\d+)?\s?[pnuµ]?F)\b", re.I)),
-    ("Resistance", re.compile(r"\b(\d+(?:\.\d+)?\s?[kKMR]?\s?(?:OHM|OHMS|Ω))\b", re.I)),
-    ("Inductance", re.compile(r"\b(\d+(?:\.\d+)?\s?[pnuµm]?H)\b", re.I)),
+    ("Capacitance", re.compile(rf"(?<![\w.])({_NUM}\s?[pnuµ]?F)\b", re.I)),
+    ("Resistance", re.compile(rf"(?<![\w.])({_NUM}\s?[kKMR]?\s?(?:OHM|OHMS|Ω))\b", re.I)),
+    ("Inductance", re.compile(rf"(?<![\w.])({_NUM}\s?[pnuµm]?H)\b", re.I)),
     ("Voltage Rating", re.compile(r"\b(\d+(?:\.\d+)?\s?V(?:DC|AC)?)\b", re.I)),
     ("Tolerance", re.compile(r"(±?\s?\d+(?:\.\d+)?\s?%)")),
-    ("Power Rating", re.compile(r"\b(\d+/\d+\s?W|\d+(?:\.\d+)?\s?W)\b", re.I)),
+    ("Power Rating", re.compile(rf"(?<![\w.])(\d+/\d+\s?W|{_NUM}\s?W)\b", re.I)),
     ("Dielectric", re.compile(r"\b(X7R|X5R|X6S|X8R|C0G|NP0|NPO|Y5V|Z5U|Z7T)\b", re.I)),
     ("ESR", re.compile(r"\b(\d+(?:\.\d+)?\s?m?(?:OHM|OHMS|Ω))\s*ESR\b", re.I)),
     ("Ripple Current", re.compile(r"\b(\d+(?:\.\d+)?\s?m?A)\s*(?:RMS|RIPPLE)\b", re.I)),
