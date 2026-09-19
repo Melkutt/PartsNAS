@@ -69,6 +69,7 @@ class LineIn(BaseModel):
     supplier_link_id: int | None = None  # pin the price to this PartSupplier row
     note: str | None = None
     line_type: str = "part"  # part | labor | fee | shipping
+    merge: bool = False  # part already on the quote -> bump its qty instead of a 2nd line
 
 
 class LinePatch(BaseModel):
@@ -326,11 +327,18 @@ def _add_line(db: Session, q: Quote, part_id, description, mpn, qty, unit_cost, 
 def add_line(qid: int, body: LineIn, db: Session = Depends(get_db)):
     q = _need(db, qid)
     _check_unlocked(q)
+    if body.merge and body.part_id and body.line_type == "part":
+        same = db.scalar(select(QuoteLine).where(
+            QuoteLine.quote_id == q.id, QuoteLine.part_id == body.part_id, QuoteLine.line_type == "part"))
+        if same is not None:  # "shopping cart" behaviour: same item again = one more
+            same.qty += body.qty
+            db.commit()
+            return {"id": same.id, "qty": same.qty, "merged": True}
     ln = _add_line(db, q, body.part_id, body.description, body.mpn, body.qty,
                    body.unit_cost, body.note, body.supplier_link_id, body.line_type,
                    body.markup_percent)
     db.commit()
-    return {"id": ln.id}
+    return {"id": ln.id, "qty": ln.qty}
 
 
 @router.post("/{qid}/lines/bulk", status_code=201)

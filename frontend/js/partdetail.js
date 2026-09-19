@@ -189,7 +189,16 @@ export class PartDetail {
     field("Footprint", inp("footprint_raw"));
     field("KiCad symbol", inp("kicad_symbol"));
     field("KiCad footprint", inp("kicad_footprint"));
-    field("Datasheet URL", inp("datasheet_url"));
+    // clickable as soon as there's a valid http(s) URL (tracks what's being typed)
+    const dsLink = el("a", { target: "_blank", rel: "noopener noreferrer", style: "white-space:nowrap" }, "open \u2197");
+    const syncDs = () => {
+      const u = (draft.datasheet_url || "").trim();
+      if (/^https?:\/\//i.test(u)) { dsLink.href = u; dsLink.style.display = ""; }
+      else { dsLink.removeAttribute("href"); dsLink.style.display = "none"; }
+    };
+    syncDs();
+    field("Datasheet URL", el("div", { style: "display:flex;gap:10px;align-items:center" },
+      inp("datasheet_url", { style: "flex:1", oninput: (e) => { draft.datasheet_url = e.target.value; syncDs(); } }), dsLink));
     field("Min stock", inp("min_stock", { inputmode: "numeric" }));
     field("Tags", inp("tags", { placeholder: "comma, separated" }));
     field("Description", el("textarea", { class: "full", oninput: (e) => (draft.description = e.target.value) }, draft.description));

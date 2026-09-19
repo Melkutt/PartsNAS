@@ -223,6 +223,7 @@ def list_parts(
             "locations": locs.get(p.id, []),
             "tags": [t.name for t in p.tags],
             "image_path": p.image_path,
+            "datasheet_url": p.datasheet_url,
             "discontinued": p.discontinued,
             "replacement": (
                 p.replaced_by.name if p.replaced_by else (p.replacement_mpn or None)

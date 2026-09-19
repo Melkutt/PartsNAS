@@ -17,6 +17,8 @@ const tabs = document.getElementById("tabs");
 let activeObj = null;
 let pendingPartsFilter = null;
 let pendingNoteQuery = "";
+let pendingShop = null; // {quoteId}: open Parts as a shopping cart for that quote
+let pendingOpenQuote = null; // open the Quotes tab straight on this quote
 
 const TABS = {
   parts: mountParts,
@@ -44,8 +46,9 @@ function clearView() {
 
 async function mountParts() {
   clearView();
-  const v = new PartsView(pendingPartsFilter || {});
+  const v = new PartsView({ ...(pendingPartsFilter || {}), shop: pendingShop });
   pendingPartsFilter = null;
+  pendingShop = null;
   activeObj = v;
   await v.mount(view);
 }
@@ -74,7 +77,8 @@ async function mountCustomers() {
 
 async function mountQuotes() {
   clearView();
-  const v = new QuotesView({});
+  const v = new QuotesView({ openId: pendingOpenQuote });
+  pendingOpenQuote = null;
   activeObj = v;
   await v.mount(view);
 }
@@ -134,6 +138,14 @@ async function main() {
   document.getElementById("btn-import").addEventListener("click", () => openImport(() => selectTab("parts")));
   document.getElementById("btn-export").addEventListener("click", openExport);
   document.getElementById("btn-settings").addEventListener("click", openSettings);
+  document.addEventListener("partsnas:shop", (e) => {
+    pendingShop = { quoteId: e.detail.quoteId };
+    selectTab("parts");
+  });
+  document.addEventListener("partsnas:openquote", (e) => {
+    pendingOpenQuote = e.detail.id;
+    selectTab("quotes");
+  });
   document.addEventListener("partsnas:gototab", (e) => {
     const d = e.detail || {};
     if (d.tab === "notes") {

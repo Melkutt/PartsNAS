@@ -20,6 +20,8 @@ async function logoUrl() { return (await api("/api/settings/logo")).logo_url; }
 async function footerText() { return (await api("/api/settings/footer")).text; }
 async function swishNumber() { return (await api("/api/settings/swish")).number; }
 const HIDE_VAT_KEY = "partsnas.hideVatDefault";
+// hand over to the Parts tab in "shopping cart" mode for this quote (see app.js / parts.js)
+const startShopping = (quoteId) => document.dispatchEvent(new CustomEvent("partsnas:shop", { detail: { quoteId } }));
 // "fee" is the stored line_type (unchanged, so existing quotes keep working);
 // "Other" is just a friendlier label for it than "Fee" everywhere it's shown.
 const LINE_TYPE_LABELS = { labor: "Labor", fee: "Other", shipping: "Shipping" };
@@ -181,19 +183,22 @@ export class QuotesView {
     const cust = el("input", { type: "text", placeholder: "customer" });
     const title = el("input", { type: "text", placeholder: "job / title" });
     const markup = el("input", { type: "text", value: "50", style: "width:70px" });
+    const browse = el("input", { type: "checkbox", checked: "checked" });
     modal({
       title: "New quote",
       body: el("div", { class: "modal-body" },
         el("div", { class: "row" }, el("label", {}, "Customer"), cust),
         el("div", { class: "row" }, el("label", {}, "Title"), title),
-        el("div", { class: "row" }, el("label", {}, "Markup %"), markup)),
+        el("div", { class: "row" }, el("label", {}, "Markup %"), markup),
+        el("label", { class: "facet-opt", style: "margin-top:8px" }, browse, " then browse parts and click them into the quote")),
       confirmText: "Create",
       onConfirm: async () => {
         const hideVat = localStorage.getItem(HIDE_VAT_KEY) === "true";
         const { id } = await api("/api/quotes", { method: "POST",
           body: { customer: cust.value.trim() || null, title: title.value.trim() || null,
             markup_percent: parseNum(markup.value) ?? 50, hide_vat: hideVat } });
-        this.openQuote(id);
+        if (browse.checked) startShopping(id);
+        else this.openQuote(id);
       },
     });
   }
@@ -334,7 +339,10 @@ export class QuotesView {
     }
     head.append(t);
 
-    head.append(el("div", { class: "no-print", style: "margin-top:8px;display:flex;gap:8px" },
+    head.append(el("div", { class: "no-print", style: "margin-top:8px;display:flex;gap:8px;flex-wrap:wrap" },
+      el("button", { class: "primary", disabled: locked ? "disabled" : null,
+        title: "Browse categories and filters and click parts into this quote, like a web shop",
+        onclick: () => startShopping(q.id) }, "🛒 Browse parts"),
       el("button", { disabled: locked ? "disabled" : null, onclick: () => this._addLine() }, "+ Add part"),
       el("button", { class: "ghost", disabled: locked ? "disabled" : null, onclick: () => this._addFree() }, "+ Free line")));
 

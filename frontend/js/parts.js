@@ -7,6 +7,9 @@ import { addPartsToQuote } from "./quotes.js";
 import { openLookup } from "./lookup.js";
 import { addToLabelSheet } from "./labelcommon.js";
 
+// only ever link http(s): a datasheet URL is free text and could be javascript:...
+const httpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
+
 const FACET_ORDER = ["mount", "footprint", "manufacturer", "location", "tags", "in_stock"];
 const FACET_LABEL = {
   mount: "Mount", footprint: "Footprint", manufacturer: "Manufacturer",
@@ -58,6 +61,10 @@ export class PartsView {
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
       location: new Set(), tags: new Set(), in_stock: null, attr: {} };
     this.facetConfig = null; // per-category visible/ordered/renamed facets, see _openFacetEditor()
+    // "shopping cart" mode: opened from a quote's "Browse parts" - each row gets a
+    // + Add button that puts the part straight into that quote
+    this.shop = initial.shop ? { quoteId: initial.shop.quoteId, quote: null, open: false } : null;
+    this._badges = new Map(); // part id -> "x n in cart" element, repainted without re-rendering the table
   }
 
   async mount(container) {
@@ -72,6 +79,7 @@ export class PartsView {
     this.main = el("div", { class: "parts-main" });
     layout.append(railHost, this.main);
     this.main.append(
+      (this.shopHost = el("div")),
       this._topBar(),
       (this.activeHost = el("div", { class: "active-filters" })),
       (this.facetToolbar = el("div", { class: "facet-toolbar", hidden: "hidden" })),
@@ -86,7 +94,85 @@ export class PartsView {
     else if (this.initial.location_id) { this.rail = { mode: "locations", id: Number(this.initial.location_id) }; this.railCmp.setSelected("locations", this.rail.id); }
 
     document.addEventListener("partsnas:scan", this._onScan);
+    if (this.shop) {
+      try {
+        await this._loadShop();
+        this._renderShop();
+      } catch (e) {
+        toast("Can't open that quote for shopping: " + e.message);
+        this.shop = null;
+      }
+    }
     await this.reload();
+  }
+
+  // ---- shopping-cart mode ----
+  async _loadShop() { this.shop.quote = await api(`/api/quotes/${this.shop.quoteId}`); }
+
+  _shopQty(partId) {
+    return this.shop.quote.lines.filter((l) => l.part_id === partId && l.line_type === "part")
+      .reduce((n, l) => n + l.qty, 0);
+  }
+
+  _paintBadge(partId) {
+    const b = this._badges.get(partId);
+    if (!b || !this.shop) return;
+    const n = this._shopQty(partId);
+    b.textContent = n ? `\u00d7 ${n} in cart` : "";
+  }
+
+  async _shopRefresh() {
+    await this._loadShop();
+    this._renderShop();
+    for (const id of this._badges.keys()) this._paintBadge(id);
+  }
+
+  async _shopAdd(p) {
+    try {
+      await api(`/api/quotes/${this.shop.quoteId}/lines`, { method: "POST", body: { part_id: p.id, qty: 1, merge: true } });
+      await this._shopRefresh();
+    } catch (e) {
+      toast("Couldn't add: " + e.message);
+    }
+  }
+
+  async _shopSetQty(ln, qty) {
+    try {
+      const url = `/api/quotes/${this.shop.quoteId}/lines/${ln.id}`;
+      if (qty <= 0) await api(url, { method: "DELETE" });
+      else await api(url, { method: "PATCH", body: { qty } });
+      await this._shopRefresh();
+    } catch (e) {
+      toast("Error: " + e.message);
+    }
+  }
+
+  _renderShop() {
+    this.shopHost.innerHTML = "";
+    if (!this.shop) return;
+    const q = this.shop.quote;
+    const parts = q.lines.filter((l) => l.line_type === "part");
+    const items = parts.reduce((n, l) => n + l.qty, 0);
+    this.shopHost.append(el("div", { class: "shop-banner" },
+      el("b", {}, `\ud83d\uded2 Adding to ${q.title || "Quote #" + q.id}`),
+      el("span", { class: "shop-meta" }, `#${q.id} \u00b7 ${q.lines.length} line${q.lines.length === 1 ? "" : "s"} \u00b7 ${items} item${items === 1 ? "" : "s"}`),
+      el("span", { style: "flex:1" }),
+      el("button", { onclick: () => { this.shop.open = !this.shop.open; this._renderShop(); } }, `Cart ${this.shop.open ? "\u25b4" : "\u25be"}`),
+      el("button", { class: "primary", onclick: () => document.dispatchEvent(new CustomEvent("partsnas:openquote", { detail: { id: q.id } })) },
+        "Done \u2192 back to quote")));
+    if (!this.shop.open) return;
+    const cart = el("div", { class: "shop-cart" });
+    if (!q.lines.length) cart.append(el("div", { class: "hint" }, "Nothing in the cart yet \u2014 click \u201c+ Add\u201d on a part."));
+    for (const ln of q.lines) {
+      const isPart = ln.line_type === "part";
+      cart.append(el("div", { class: "shop-cart-row" },
+        el("span", { class: "shop-cart-name" }, ln.description, ln.mpn ? el("span", { class: "zero" }, `  ${ln.mpn}`) : null),
+        isPart ? el("button", { class: "ghost", title: "one less", onclick: () => this._shopSetQty(ln, ln.qty - 1) }, "\u2212") : null,
+        el("span", { class: "shop-cart-qty" }, String(ln.qty)),
+        isPart ? el("button", { class: "ghost", title: "one more", onclick: () => this._shopSetQty(ln, ln.qty + 1) }, "+") : null,
+        el("button", { class: "ghost", title: "remove from the quote", onclick: () => this._shopSetQty(ln, 0) }, "\u2715")));
+    }
+    this.shopHost.append(cart);
   }
 
   destroy() {
@@ -394,14 +480,16 @@ export class PartsView {
       order === "stock" ? (a, b) => b.on_hand - a.on_hand : (a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()),
     );
     this.tableWrap.innerHTML = "";
+    this._badges = new Map();
     const t = el("table", { class: "parts-table" });
     t.append(el("thead", {}, el("tr", {},
       el("th", {}, this._allChk(rows)),
-      el("th", {}, "Name"), el("th", {}, "MPN"), el("th", {}, "Category"),
+      this.shop ? el("th", {}, "Add") : null,
+      el("th", {}, "Name"), el("th", {}, "MPN"), el("th", { title: "Datasheet - opens in a new tab" }, "DS"), el("th", {}, "Category"),
       el("th", {}, "Footprint"), el("th", { class: "num" }, "On hand"), el("th", {}, "Locations"))));
     const tb = el("tbody");
     for (const p of rows) tb.append(this._row(p));
-    if (!rows.length) tb.append(el("tr", {}, el("td", { colspan: "7", class: "hint" }, "No parts match. Adjust filters, or use Import (top-right).")));
+    if (!rows.length) tb.append(el("tr", {}, el("td", { colspan: this.shop ? "9" : "8", class: "hint" }, "No parts match. Adjust filters, or use Import (top-right).")));
     t.append(tb);
     this.tableWrap.append(t);
   }
@@ -420,14 +508,30 @@ export class PartsView {
     const nameCell = el("td", { class: "name" }, p.name);
     if (p.replacement)
       nameCell.append(el("span", { class: "chip", style: "border-color:var(--warn);color:var(--warn)", title: "discontinued" }, "→ " + p.replacement));
+    let shopCell = null;
+    if (this.shop) {
+      const badge = el("span", { class: "shop-badge" });
+      this._badges.set(p.id, badge);
+      shopCell = el("td", { class: "shop-cell" },
+        el("button", { class: "primary", title: "Add 1 to the quote (click again for more)",
+          onclick: (e) => { e.stopPropagation(); this._shopAdd(p); } }, "+ Add"),
+        badge);
+    }
+    const ds = httpUrl(p.datasheet_url)
+      ? el("a", { class: "ds-link", href: p.datasheet_url.trim(), target: "_blank", rel: "noopener noreferrer",
+          title: "Open datasheet in a new tab", onclick: (e) => e.stopPropagation() }, "\ud83d\udcc4")
+      : null;
     const tr = el("tr", { class: checked ? "sel" : "", onclick: () => this.openDetail(p.id) },
       el("td", {}, cb),
+      shopCell,
       nameCell,
       el("td", {}, p.mpn || ""),
+      el("td", { class: "ds" }, ds),
       el("td", {}, p.category || el("span", { class: "zero" }, "—")),
       el("td", {}, p.footprint || ""),
       el("td", { class: "num " + (p.on_hand <= 0 ? "zero" : p.min_stock && p.on_hand <= p.min_stock ? "low" : "") }, String(p.on_hand)),
       el("td", { class: "locs" }, p.locations.map((l) => el("span", { class: "chip" }, `${l.location}: ${l.qty}`))));
+    if (this.shop) this._paintBadge(p.id);
     return tr;
   }
 
