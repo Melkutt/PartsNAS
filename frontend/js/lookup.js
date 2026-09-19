@@ -2,51 +2,7 @@
 import { api } from "./api.js";
 import { el, modal, toast, spinner, withBusy, treeOptions } from "./ui.js";
 import { formatValue, valueKind, awgToMm2, isAwg } from "./units.js";
-
-const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-const slug = (s) => norm(s).slice(0, 40) || "attr";
-
-// our field key -> normalised aliases seen in Mouser/other attribute names.
-// Mouser decorates names a lot ("Voltage - Supply", "Current - Output (Max)",
-// "Number of I/O") so entries are matched as substrings after norm().
-const ALIAS = {
-  value: ["resistance", "capacitance", "inductance", "frequency", "clockfrequency", "speed", "currentaveragerectified", "io"],
-  voltage: ["voltagerating", "voltage", "voltagedc", "ratedvoltage", "workingvoltage", "voltagereverse", "vr", "vrrm", "breakdownvoltage", "vdss", "drainsourcevoltage"],
-  tolerance: ["tolerance"],
-  power: ["powerrating", "power", "powermax", "powerdissipation", "ptot"],
-  tempchar: ["temperaturecoefficient", "tempchar", "dielectric"],
-  dielectric: ["dielectric", "dielectricmaterial", "dielectriccharacteristic"],
-  mounting: ["mountingstyle", "mounting", "mountingtype", "terminationstyle", "packagingtype", "packagetype"],
-  pitch: ["pitch", "leadpitch", "leadspacing", "pinpitch", "contactpitch"],
-  pincount: ["numberofpins", "pincount", "pins", "numberofcontacts", "numberofpositions", "numberofio", "numberofterminations", "numberofcircuits", "circuits"],
-  current_rating: ["currentrating", "currentcontinuous", "ratedcurrent", "currentoutput", "currentmax", "currentcontinuousdrain", "id", "if", "currentaveragerectified"],
-  esr: ["esr", "equivalentseriesresistance", "dcr", "dcresistance", "impedance"],
-  ripple_current: ["ripplecurrent", "ripple"],
-  series: ["series", "productseries", "family"],
-  lifetime_hours: ["lifetime", "loadlife", "usefullife", "operationallife"],
-  breaking_capacity: ["breakingcapacity", "interruptingrating"],
-  fuse_type: ["fusetype", "response", "blowcharacteristic", "speed"],
-  operating_temp_min: ["operatingtemperaturemin", "minimumoperatingtemperature", "tmin"],
-  operating_temp_max: ["operatingtemperaturemax", "maximumoperatingtemperature", "tmax"],
-  maxtemp: ["maxtemp"],
-  vcc_min: ["voltagesupplymin", "supplyvoltagemin", "vccmin", "vsmin"],
-  vcc_max: ["voltagesupplymax", "supplyvoltagemax", "vccmax", "vsmax"],
-  icc: ["currentsupply", "supplycurrent", "icc", "quiescentcurrent", "iq"],
-  frequency: ["frequency", "clockfrequency", "speed", "maxoperatingfrequency", "bandwidth", "coresize"],
-  flash: ["memorysize", "flashsize", "programmemorysize", "programmemory"],
-  ram: ["ramsize", "sramsize", "datamemorysize", "ram"],
-  interface: ["interface", "connectivity", "peripherals"],
-  function: ["function", "type", "amplifiertype", "regulatortopology", "coreprocessor"],
-  vds: ["vdss", "drainsourcevoltage", "vds"],
-  vgsth: ["vgsth", "gatethresholdvoltage"],
-  rdson: ["rdson", "drainsourceonresistance"],
-  vf: ["voltageforward", "vf"],
-  vz: ["voltagezener", "vz"],
-  body_diameter: ["diameter", "bodydiameter"],
-  body_length: ["bodylength", "length"],
-  body_width: ["bodywidth", "width"],
-  body_height: ["height", "heightseated", "bodyheight", "thickness"],
-};
+import { norm, slug, scoreField, resolveCollisions } from "./lookupmap.js";
 
 // Mouser attribute-name -> our "<base>" for a min/max field pair (if the class
 // has <base>_min and <base>_max), matched loosely.
@@ -54,16 +10,6 @@ const RANGE_BASES = {
   operating_temp: ["operatingtemperature", "temperaturerange", "temprange", "workingtemperature"],
   vcc: ["voltagesupply", "supplyvoltage", "voltagesupplyvccvdd"],
 };
-
-function guessField(attrName, fields) {
-  const a = norm(attrName);
-  const keys = new Set(fields.map((f) => f.key));
-  for (const f of fields) if (norm(f.label) === a || norm(f.key) === a) return f.key;
-  for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a === al)) return f.key;
-  for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a.includes(al) || al.includes(a))) return f.key;
-  for (const f of fields) if (norm(f.label) && (a.includes(norm(f.label)) || norm(f.label).includes(a))) return f.key;
-  return "";
-}
 
 function splitRange(v) {
   const m = String(v).match(/([-+]?\d+(?:\.\d+)?)\s*[^\d~.\-–—]*\s*(?:~|to|\.\.\.?|–|—|-)\s*([-+]?\d+(?:\.\d+)?)/i);
@@ -128,11 +74,11 @@ export async function openLookup(part, classFields, onApplied) {
   }
 
   function mkRow(name, raw) {
-    const field = guessField(name, classFields);
+    const { key: field, score } = scoreField(name, classFields);
     const kind = field ? valueKind(cls, field) : "num";
     let converted = field ? formatValue(raw, kind) : String(raw);
     if (field === "tempchar" && /np0|c0g|npo/i.test(String(raw))) converted = "C0G (NP0)";
-    return { name, raw, field, kind, converted, include: true };
+    return { name, raw, field, kind, converted, include: true, score };
   }
 
   function buildRows(r) {
@@ -145,6 +91,7 @@ export async function openLookup(part, classFields, onApplied) {
         const hi = mkRow(name + " (max)", rng[1]);
         lo.field = base + "_min";
         hi.field = base + "_max";
+        lo.score = hi.score = 5; // deliberate, not a guess
         recompute(lo);
         recompute(hi);
         rows.push(lo, hi, { ...mkRow(name, raw), include: false }); // keep the raw range, unchecked
@@ -155,11 +102,13 @@ export async function openLookup(part, classFields, onApplied) {
           if (mm2) {
             const extra = mkRow(name + " (mm²)", mm2);
             extra.field = classFields.some((f) => f.key === "cross_section") ? "cross_section" : "";
+            extra.score = 5;
             rows.push(extra);
           }
         }
       }
     }
+    resolveCollisions(rows, recompute);
   }
 
   function render(results) {
@@ -272,10 +221,17 @@ export async function openLookup(part, classFields, onApplied) {
   async function apply(btn) {
     if (!chosen) return;
     const attributes = {};
+    const from = {};
     for (const row of rows) {
       if (!row.include) continue;
       const key = row.field || slug(row.name);
+      if (key in attributes) {
+        const label = classFields.find((f) => f.key === key)?.label || key;
+        return toast(`“${from[key]}” and “${row.name}” both go to ${label} — the second would overwrite the first. ` +
+          "Untick one, or set it to ‘keep as …’.");
+      }
       attributes[key] = row.converted;
+      from[key] = row.name;
     }
     await withBusy(btn, async () => {
       const res = await api(`/api/parts/${part.id}/apply-lookup`, {
