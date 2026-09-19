@@ -7,6 +7,7 @@
 import { api } from "./api.js";
 import { el, modal, toast, partSearch } from "./ui.js";
 import { parseNum } from "./units.js";
+import { PartDetail } from "./partdetail.js";
 
 let CUSTOMERS = null; // cached /api/customers
 async function customersList(force) {
@@ -257,6 +258,8 @@ export class QuotesView {
     const lockedCb = el("input", { type: "checkbox", checked: locked ? "checked" : null,
       onchange: (e) => this._patch({ locked: e.target.checked }) });
     const docLabel = q.status === "invoiced" ? "Invoice" : "Quote";
+    // parts that were added while they had no price at all (they'd print as 0 / free)
+    const unpriced = q.lines.filter((l) => l.part_id && l.cost_source === "no price on file");
 
     head.append(...[
       el("div", { class: "no-print", style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px" },
@@ -273,6 +276,7 @@ export class QuotesView {
           hideVatCb, "No VAT"),
         q.status === "open" ? el("button", { class: "primary", title: "Also deducts stock, same as ticking Invoiced in the list",
           onclick: async () => {
+            if (unpriced.length && !confirm(`${unpriced.length} line(s) have no price and would print as 0. Invoice anyway?`)) return;
             await api(`/api/quotes/${q.id}/invoice`, { method: "POST" });
             toast("Marked as Invoice");
             this.openQuote(q.id);
@@ -288,6 +292,10 @@ export class QuotesView {
       el("div", { class: "no-print", style: "font-size:12px;color:var(--text-muted);margin:-2px 0 8px" },
         `Created ${this._fmtDate(q.created_at)}`,
         q.invoiced_at ? ` · Invoiced ${this._fmtDate(q.invoiced_at)}` : ""),
+      unpriced.length ? el("div", { class: "repl-banner no-print" },
+        el("b", {}, `\u26a0 ${unpriced.length} line${unpriced.length === 1 ? " has" : "s have"} no price: `),
+        unpriced.flatMap((l, i) => [i ? ", " : "", el("a", { href: "#", onclick: (e) => { e.preventDefault(); this._openPart(l.part_id); } }, l.mpn || l.description)]),
+        ". Click the article number to open the part and fetch prices \u2014 the line is priced when you close it.") : null,
       q.stock_committed ? el("div", { class: "repl-banner no-print" },
         el("b", {}, "Stock deducted for this quote. "),
         locked ? null : el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
@@ -326,8 +334,12 @@ export class QuotesView {
       const noteI = el("input", { type: "text", value: ln.note || "", placeholder: "note (e.g. replaced R12)",
         class: ln.note ? "" : "print-hide-empty", disabled: locked ? "disabled" : null,
         style: "width:100%", onchange: (e) => this._patchLine(ln.id, { note: e.target.value }) });
-      t.append(el("tr", {},
-        el("td", {}, ln.line_type && ln.line_type !== "part" ? el("span", { class: "pill-off" }, lineTypeLabel(ln.line_type)) : (ln.mpn || "")),
+      const mpnCell = ln.line_type && ln.line_type !== "part" ? el("span", { class: "pill-off" }, lineTypeLabel(ln.line_type))
+        : ln.part_id ? el("a", { href: "#", class: "mpn-link", title: "Open this part \u2014 edit it, look up prices",
+            onclick: (e) => { e.preventDefault(); this._openPart(ln.part_id); } }, ln.mpn || ln.description)
+        : (ln.mpn || "");
+      t.append(el("tr", { class: ln.part_id && ln.cost_source === "no price on file" ? "unpriced" : "" },
+        el("td", {}, mpnCell),
         el("td", {}, el("div", {}, ln.description), noteI),
         el("td", { class: "num" }, qtyI),
         el("td", { class: "num cost-col" }, costI),
@@ -385,6 +397,23 @@ export class QuotesView {
         style: "display:flex;justify-content:space-between;padding:2px 0" + (strong ? ";font-weight:700" : "") },
         el("span", {}, label), el("span", {}, `${val} ${tt.currency}`));
     }
+  }
+
+  // open the part on top of the quote; when it closes, price any lines that had
+  // no price (the user may have just run a supplier lookup) and redraw
+  async _openPart(partId) {
+    const q = this.q;
+    await new PartDetail(partId, {
+      onClose: async () => {
+        if (!q.locked) {
+          try {
+            const r = await api(`/api/quotes/${q.id}/reprice-missing`, { method: "POST" });
+            if (r.updated) toast(`Priced ${r.updated} line${r.updated === 1 ? "" : "s"} from the part's supplier prices`);
+          } catch { /* nothing to reprice / quote gone */ }
+        }
+        this.openQuote(q.id);
+      },
+    }).open();
   }
 
   async _patch(body) { await api(`/api/quotes/${this.q.id}`, { method: "PATCH", body }); this.openQuote(this.q.id); }

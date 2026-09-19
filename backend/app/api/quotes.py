@@ -381,6 +381,25 @@ def _mg(qid: int) -> str:
     return f"quote-{qid}"
 
 
+@router.post("/{qid}/reprice-missing")
+def reprice_missing(qid: int, db: Session = Depends(get_db)):
+    """Lines added while their part had no price carry the "no price on file"
+    marker (unit cost 0). After a supplier price lookup on the part, take the
+    part's price now. Only those lines are touched — a price you typed in, or a
+    snapshot from a real supplier, is never overwritten."""
+    q = _need(db, qid)
+    _check_unlocked(q)
+    n = 0
+    for ln in q.lines:
+        if ln.part_id and ln.line_type == "part" and ln.cost_source == "no price on file":
+            cost, cur, src, _vat = snapshot_cost(db, ln.part_id)
+            if src != "no price on file":
+                ln.unit_cost, ln.currency, ln.cost_source = cost, cur, src
+                n += 1
+    db.commit()
+    return {"ok": True, "updated": n}
+
+
 @router.post("/{qid}/commit-stock")
 def commit_stock(qid: int, db: Session = Depends(get_db)):
     q = _need(db, qid)

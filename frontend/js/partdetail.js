@@ -27,9 +27,10 @@ const MOUNTS = ["smd", "tht", "other"]; // fallback options before attr-values l
 const commaFix = (v) => (/^-?\d+,\d+$/.test(String(v).trim()) ? String(v).trim().replace(",", ".") : v);
 
 export class PartDetail {
-  constructor(id, { onChange } = {}) {
+  constructor(id, { onChange, onClose } = {}) {
     this.id = id;
     this.onChange = onChange || (() => {});
+    this.onClose = onClose || null; // runs once when the panel goes away, however it's closed
     this.tab = "details";
   }
 
@@ -48,6 +49,9 @@ export class PartDetail {
     document.removeEventListener("paste", this._onPaste);
     this.back?.remove();
     this.panel?.remove();
+    const cb = this.onClose;
+    this.onClose = null;
+    if (cb) cb();
   };
   _onPaste = (e) => {
     if (this.tab !== "design" || e.target?.tagName === "TEXTAREA") return;

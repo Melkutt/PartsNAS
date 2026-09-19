@@ -388,6 +388,11 @@ main.body {
 .filters .grow { flex: 1; }
 .count-tag { color: var(--text-muted); font-size: 12px; }
 
+/* quote lines: clickable article number, and parts that have no price yet */
+a.mpn-link { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.mini-table tr.unpriced td { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.mini-table tr.unpriced input { border-color: var(--warn); }
+
 /* datasheet link in the parts table */
 .parts-table td.ds { text-align: center; width: 1%; }
 .ds-link { text-decoration: none; font-size: 15px; }
@@ -723,6 +728,7 @@ table.parts-table {
   #quote-print input, #quote-print select { border: 0 !important; background: transparent !important; color: #000 !important; -webkit-appearance: none; appearance: none; }
   #quote-print.hide-cost-print .cost-col { display: none !important; }
   #quote-print .print-hide-empty { display: none !important; }
+  #quote-print a.mpn-link { text-decoration: none; }
 
   /* invoice footer: pinned to the bottom edge of every printed page (position:
      fixed repeats per page), with room reserved above it so content never
