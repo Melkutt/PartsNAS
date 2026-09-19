@@ -14,7 +14,7 @@ and tell you when a resistor drawer is running low. Inspired by
 [PartsBox](https://partsbox.com/) and the old open-source
 [ecDB](https://github.com/jwr/ecDB).
 
-Version **0.3.0** · Python / FastAPI / SQLite · vanilla JS, no build step
+Version **0.4.0** · Python / FastAPI / SQLite · vanilla JS, no build step
 
 ---
 
