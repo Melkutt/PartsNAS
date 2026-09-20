@@ -21,6 +21,19 @@ async function logoUrl() { return (await api("/api/settings/logo")).logo_url; }
 async function footerText() { return (await api("/api/settings/footer")).text; }
 async function swishNumber() { return (await api("/api/settings/swish")).number; }
 const HIDE_VAT_KEY = "partsnas.hideVatDefault";
+// A view preference, not part of the document: show how old the price behind each line is.
+// Screen only - it is never printed or exported.
+const PRICE_AGE_KEY = "partsnas.quotePriceAge";
+const STALE_PRICE_DAYS = 180;
+
+// "Mouser 2026-09-09" -> days since that date (null when the source carries no date)
+function priceAgeDays(costSource) {
+  const m = String(costSource || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const then = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  const now = new Date();
+  return Math.max(0, Math.round((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - then) / 86400000));
+}
 // hand over to the Parts tab in "shopping cart" mode for this quote (see app.js / parts.js)
 const startShopping = (quoteId) => document.dispatchEvent(new CustomEvent("partsnas:shop", { detail: { quoteId } }));
 // "fee" is the stored line_type (unchanged, so existing quotes keep working);
@@ -76,6 +89,15 @@ export class QuotesView {
   }
 
   _fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString() : "—"; }
+
+  // "priced 12 days ago" - screen only (no-print), red once it is older than STALE_PRICE_DAYS
+  _ageTag(ln) {
+    const d = priceAgeDays(ln.cost_source);
+    if (d == null) return el("div", { class: "no-print", style: "color:var(--warn)" }, ln.cost_source === "no price on file" ? "no price" : "no price date");
+    const old = d > STALE_PRICE_DAYS;
+    return el("div", { class: "no-print", title: `Supplier price from ${ln.cost_source}`,
+      style: old ? "color:var(--warn);font-weight:600" : "" }, `${d} d old${old ? " ⚠" : ""}`);
+  }
 
   _table(rows) {
     const archive = this.tab === "archive"; // read-only history: no stock/re-open toggles
@@ -258,6 +280,12 @@ export class QuotesView {
     const lockedCb = el("input", { type: "checkbox", checked: locked ? "checked" : null,
       onchange: (e) => this._patch({ locked: e.target.checked }) });
     const docLabel = q.status === "invoiced" ? "Invoice" : "Quote";
+    let showAge = false;
+    try { showAge = localStorage.getItem(PRICE_AGE_KEY) === "true"; } catch { /* private mode */ }
+    const ageCb = el("input", { type: "checkbox", checked: showAge ? "checked" : null,
+      onchange: (e) => { try { localStorage.setItem(PRICE_AGE_KEY, String(e.target.checked)); } catch { /* ignore */ } this.openQuote(q.id); } });
+    const aged = showAge ? q.lines.filter((l) => l.part_id).map((l) => ({ l, d: priceAgeDays(l.cost_source) })).filter((x) => x.d != null) : [];
+    const oldest = aged.length ? aged.reduce((a, b) => (b.d > a.d ? b : a)) : null;
     // parts that were added while they had no price at all (they'd print as 0 / free)
     const unpriced = q.lines.filter((l) => l.part_id && l.cost_source === "no price on file");
 
@@ -271,6 +299,9 @@ export class QuotesView {
         el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
           title: "Omit cost/markup/source from print and CSV/Excel export — the on-screen view here always shows them" },
           hideCostCb, "Hide cost (customer copy)"),
+        el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
+          title: "Show how old each line's supplier price is (from the date in its source). Only on screen: never printed or exported." },
+          ageCb, "Price age"),
         el("label", { style: "display:flex;gap:4px;align-items:center;font-size:12px;color:var(--text-muted)",
           title: "Not VAT-registered — can't itemise VAT on the invoice, so it's folded into one all-inclusive price instead of broken out. Remembered for new quotes." },
           hideVatCb, "No VAT"),
@@ -296,6 +327,9 @@ export class QuotesView {
         el("b", {}, `\u26a0 ${unpriced.length} line${unpriced.length === 1 ? " has" : "s have"} no price: `),
         unpriced.flatMap((l, i) => [i ? ", " : "", el("a", { href: "#", onclick: (e) => { e.preventDefault(); this._openPart(l.part_id); } }, l.mpn || l.description)]),
         ". Click the article number to open the part and fetch prices \u2014 the line is priced when you close it.") : null,
+      showAge && oldest ? el("div", { class: "hint no-print", style: "padding:0 0 6px" },
+        `Oldest price on this ${docLabel.toLowerCase()}: ${oldest.d} days (${oldest.l.mpn || oldest.l.description}, ${oldest.l.cost_source}).`,
+        oldest.d > STALE_PRICE_DAYS ? " Lines older than 6 months are marked." : "") : null,
       q.stock_committed ? el("div", { class: "repl-banner no-print" },
         el("b", {}, "Stock deducted for this quote. "),
         locked ? null : el("a", { href: "#", onclick: async (e) => { e.preventDefault(); await api(`/api/quotes/${q.id}/uncommit-stock`, { method: "POST" }); toast("Restored"); this.openQuote(q.id); } }, "Undo")) : null,
@@ -344,7 +378,8 @@ export class QuotesView {
         el("td", { class: "num" }, qtyI),
         el("td", { class: "num cost-col" }, costI),
         el("td", { class: "num cost-col" }, mkI),
-        el("td", { class: "cost-col", style: "color:var(--text-faint);font-size:11px" }, ln.cost_source || ""),
+        el("td", { class: "cost-col", style: "color:var(--text-faint);font-size:11px" }, ln.cost_source || "",
+          showAge && ln.part_id ? this._ageTag(ln) : null),
         el("td", { class: "num" }, ln.sell_unit_ex),
         el("td", { class: "num" }, ln.line_ex),
         el("td", { class: "no-print" }, locked ? null : el("button", { class: "ghost", onclick: () => this._delLine(ln.id) }, "✕"))));
