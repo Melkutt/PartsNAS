@@ -130,6 +130,10 @@ class Part(Base):
     # how many to buy when this part is on the Order list; remembered from the last
     # time the quantity was typed there. NULL = suggest how far below Min stock it is.
     order_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # bought but not here yet: set by "Mark ordered" on the Order tab, cleared by "Received"
+    on_order_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    on_order_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    on_order_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     # lifecycle / replacement
     discontinued: Mapped[bool] = mapped_column(default=False)

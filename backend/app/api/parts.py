@@ -473,6 +473,10 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "suppliers": [_link_row(x) for x in p.suppliers],
         "images": [image_row(a) for a in p.attachments],
         "design_note_count": len(p.design_notes),
+        "on_order": (
+            {"qty": p.on_order_qty, "at": p.on_order_at.isoformat() if p.on_order_at else None, "ref": p.on_order_ref}
+            if p.on_order_qty else None
+        ),
         "same_mpn": [_dup_row(db, x, category_path_map(db)) for x in parts_with_mpn(db, p.mpn, exclude=p.id)],
         "discontinued": p.discontinued,
         "replaced_by": (

@@ -73,6 +73,9 @@ def _part_record(db: Session, p: Part, paths: dict[int, str]) -> dict:
         "datasheet_url": p.datasheet_url,
         "min_stock": p.min_stock,
         "order_qty": p.order_qty,
+        "on_order_qty": p.on_order_qty,
+        "on_order_at": p.on_order_at.isoformat() if p.on_order_at else None,
+        "on_order_ref": p.on_order_ref,
         "notes": p.notes,
         "design_doc": p.design_doc,
         "octopart_id": p.octopart_id,
@@ -488,6 +491,14 @@ async def import_backup(
                 setattr(p, k, rec[k])
         p.min_stock = int(rec.get("min_stock") or 0)
         p.order_qty = int(rec["order_qty"]) if rec.get("order_qty") else None
+        p.on_order_qty = int(rec["on_order_qty"]) if rec.get("on_order_qty") else None
+        p.on_order_ref = rec.get("on_order_ref") if p.on_order_qty else None
+        p.on_order_at = None
+        if p.on_order_qty and rec.get("on_order_at"):
+            try:
+                p.on_order_at = datetime.fromisoformat(rec["on_order_at"])
+            except ValueError:
+                pass
         p.discontinued = bool(rec.get("discontinued"))
         p.category_id = _resolve_category(db, rec.get("category_path"), ccache)
 

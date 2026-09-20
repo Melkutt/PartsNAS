@@ -2,7 +2,7 @@
 // first, grouped by the supplier to buy from, with an editable quantity so the
 // list can be copied/exported straight into an order.
 import { api } from "./api.js";
-import { el, toast } from "./ui.js";
+import { el, modal, toast, treeOptions } from "./ui.js";
 import { PartDetail } from "./partdetail.js";
 import { parseNum } from "./units.js";
 
@@ -87,9 +87,12 @@ export class OrderView {
     const body = el("div", { class: "panel-body" });
     this.el.append(el("h2", {}, "Order list"), body);
 
+    if ((d.on_order || []).length) body.append(this._onOrder(d.on_order));
+
     if (!d.count) {
       body.append(el("div", { class: "hint" },
-        "Nothing to order — every part that has a Min stock is above it. Set a Min stock on a part (Details tab) and it is watched here."));
+        d.on_order?.length ? "Nothing more to order right now."
+          : "Nothing to order — every part that has a Min stock is above it. Set a Min stock on a part (Details tab) and it is watched here."));
       return;
     }
 
@@ -103,7 +106,8 @@ export class OrderView {
     body.append(el("div", { class: "hint", style: "padding-top:0" },
       "Worst first. Order qty starts at how far below the minimum the part is (at least 1); type your own and it is remembered for that part " +
       "(clear the box to go back). " +
-      "The supplier is the ★ preferred one, else the cheapest priced link."));
+      "The supplier is the ★ preferred one, else the cheapest priced link. After you have placed the order, press Ordered - it moves to " +
+      "'On order' until it arrives, and Received adds it to stock."));
 
     for (const [supplier, items] of this._groups()) {
       const est = items.reduce((n, it) => n + (it.supplier?.unit_price != null ? it.supplier.unit_price * this._qtyOf(it) : 0), 0);
@@ -114,16 +118,106 @@ export class OrderView {
           (est ? ` · about ${Math.round(est * 100) / 100} ${cur} ex VAT` : "")),
         el("span", { style: "flex:1" }),
         supplier.startsWith("No supplier") ? null
-          : el("button", { class: "ghost", onclick: async () => toast((await copyText(this._lines(items))) ? `Copied ${supplier} list` : "Couldn't copy") }, "Copy SKU + qty")));
+          : el("button", { class: "ghost", onclick: async () => toast((await copyText(this._lines(items))) ? `Copied ${supplier} list` : "Couldn't copy") }, "Copy SKU + qty"),
+        supplier.startsWith("No supplier") ? null
+          : el("button", { class: "ghost", title: "You have placed this order: the parts move to 'On order' until they arrive",
+              onclick: () => this._markDialog(items, supplier) }, "Mark all ordered…")));
       body.append(this._table(items, supplier.startsWith("No supplier")));
     }
+  }
+
+  async _markOrdered(lines, ref) {
+    try {
+      await api("/api/order/mark-ordered", { method: "POST", body: { items: lines, ref: ref || null } });
+      toast(`${lines.length} part${lines.length === 1 ? "" : "s"} marked as ordered`);
+    } catch (e) {
+      toast(e.message);
+    }
+    this.reload();
+  }
+
+  _markDialog(items, supplier) {
+    const ref = el("input", { type: "text", placeholder: `optional - e.g. your ${supplier} order number`, style: "flex:1" });
+    modal({
+      title: `Mark ${items.length} part${items.length === 1 ? "" : "s"} from ${supplier} as ordered`,
+      confirmText: "Mark ordered",
+      body: el("div", { class: "modal-body" },
+        el("div", { class: "hint" }, "The parts move to 'On order' with the quantities shown here. When the package arrives, press Received."),
+        el("div", { class: "row" }, el("label", {}, "Order ref"), ref)),
+      onConfirm: () => this._markOrdered(items.map((it) => ({ part_id: it.id, qty: this._qtyOf(it) })), ref.value.trim()),
+    });
+  }
+
+  // parts that are bought but not here yet
+  _onOrder(list) {
+    const wrap = el("div", {});
+    wrap.append(el("div", { style: "display:flex;gap:10px;align-items:baseline;margin:6px 6px 2px" },
+      el("h3", { style: "margin:0;font-size:14px" }, "On order"),
+      el("span", { class: "hint", style: "padding:0" }, `${list.length} part${list.length === 1 ? "" : "s"} waiting for delivery`)));
+    const t = el("table", { class: "mini-table" });
+    t.append(el("tr", {}, el("th", {}, "Part"), el("th", { class: "num" }, "On hand"), el("th", { class: "num" }, "Ordered"),
+      el("th", {}, "Supplier"), el("th", {}, "Ordered on"), el("th", {}, "Ref"), el("th", {}, "")));
+    for (const o of list) {
+      const when = o.ordered_at ? new Date(o.ordered_at).toLocaleDateString() : "—";
+      t.append(el("tr", {},
+        el("td", {}, el("a", { href: "#", class: "mpn-link", title: "Open the part",
+          onclick: (e) => { e.preventDefault(); new PartDetail(o.id, { onChange: () => this.reload() }).open(); } }, o.name),
+          o.mpn && o.mpn !== o.name ? el("span", { class: "zero" }, `  ${o.mpn}`) : null),
+        el("td", { class: "num" }, String(o.on_hand)),
+        el("td", { class: "num" }, String(o.qty)),
+        el("td", {}, o.supplier ? `${o.supplier.name}${o.supplier.sku ? " · " + o.supplier.sku : ""}` : el("span", { class: "zero" }, "—")),
+        el("td", {}, when, o.days != null ? el("span", { class: "zero" }, `  (${o.days} d)`) : null),
+        el("td", {}, o.ref || el("span", { class: "zero" }, "—")),
+        el("td", { style: "white-space:nowrap" },
+          el("button", { class: "primary", onclick: () => this._receiveDialog(o) }, "Received…"),
+          el("button", { class: "ghost", title: "Not ordered after all - put it back on the order list",
+            onclick: async () => { await api("/api/order/unmark-ordered", { method: "POST", body: { part_ids: [o.id] } }); this.reload(); } }, "Undo"))));
+    }
+    wrap.append(t);
+    return wrap;
+  }
+
+  _receiveDialog(o) {
+    const qty = el("input", { type: "text", inputmode: "numeric", value: o.qty, style: "width:7em" });
+    const loc = el("select");
+    treeOptions("/api/locations", { includeBlank: "— no location —" }).then((opts) => {
+      loc.append(...opts);
+      if (o.default_location_id) loc.value = String(o.default_location_id);
+    });
+    const price = el("input", { type: "text", inputmode: "decimal", style: "width:8em",
+      value: o.supplier?.unit_price ?? "", placeholder: "per unit" });
+    const upd = el("input", { type: "checkbox", checked: "checked" });
+    const ref = el("input", { type: "text", value: o.ref || "", style: "flex:1" });
+    const row = (label, ...c) => el("div", { class: "row" }, el("label", {}, label), ...c);
+    modal({
+      title: `Received: ${o.name}`,
+      confirmText: "Add to stock",
+      body: el("div", { class: "modal-body" },
+        el("div", { class: "hint" }, `${o.qty} were ordered. Fewer is fine - the rest stays on order.`),
+        row("Quantity", qty),
+        row("Location", loc),
+        row("Price paid", price, el("span", { style: "opacity:.7" }, `${o.supplier?.currency || ""} per unit, ex VAT`)),
+        el("label", { class: "facet-opt", style: "margin:2px 0 6px 6em" }, upd,
+          " Use this as the part's supplier price, so quotes are priced on what you actually paid"),
+        row("Order ref", ref)),
+      onConfirm: async () => {
+        const n = Math.round(parseNum(qty.value) ?? 0);
+        if (n < 1) throw new Error("Enter how many arrived");
+        const p = parseNum(price.value);
+        const r = await api("/api/order/receive", { method: "POST", body: {
+          part_id: o.id, qty: n, location_id: Number(loc.value) || null,
+          unit_price: p == null ? null : p, update_price: upd.checked, ref: ref.value.trim() || null } });
+        toast(`Added ${n} - now ${r.on_hand} on hand` + (r.still_on_order ? `, ${r.still_on_order} still on order` : ""));
+        this.reload();
+      },
+    });
   }
 
   _table(items, noSupplier) {
     const t = el("table", { class: "mini-table" });
     t.append(el("tr", {}, el("th", {}, ""), el("th", {}, "Part"), el("th", { class: "num" }, "On hand"),
       el("th", { class: "num" }, "Min"), el("th", { class: "num", title: "how many to order — editable" }, "Order qty"),
-      el("th", { class: "num" }, "Price ex VAT"), el("th", {}, "Supplier article no.")));
+      el("th", { class: "num" }, "Price ex VAT"), el("th", {}, "Supplier article no."), el("th", {}, "")));
     for (const it of items) {
       const sup = it.supplier;
       const minI = el("input", { type: "text", inputmode: "numeric", value: it.min_stock, style: "width:52px",
@@ -160,7 +254,9 @@ export class OrderView {
         el("td", { class: "num" }, sup?.unit_price != null ? `${sup.unit_price} ${sup.currency}` : el("span", { class: "zero" }, "—")),
         el("td", {}, sup?.sku
           ? (httpUrl(sup.url) ? el("a", { href: sup.url.trim(), target: "_blank", rel: "noopener noreferrer", title: "Open the product page" }, sup.sku) : sup.sku)
-          : el("span", { class: "zero" }, noSupplier ? "add a supplier link" : "—"))));
+          : el("span", { class: "zero" }, noSupplier ? "add a supplier link" : "—")),
+        el("td", {}, el("button", { class: "ghost", title: "You have ordered this: move it to 'On order' until it arrives",
+          onclick: async () => { await this._markOrdered([{ part_id: it.id, qty: this._qtyOf(it) }]); } }, "Ordered"))));
     }
     return t;
   }
