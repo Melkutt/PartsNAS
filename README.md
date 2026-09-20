@@ -14,7 +14,14 @@ and tell you when a resistor drawer is running low. Inspired by
 [PartsBox](https://partsbox.com/) and the old open-source
 [ecDB](https://github.com/jwr/ecDB).
 
-Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step
+Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [MIT license](LICENSE)
+
+> **Please read this first.** PartsNAS is a **hobby project**, shared as it is, free of charge and with
+> **no warranty of any kind**. It is **not** business, accounting or invoicing software. Use it at your
+> own risk: **you alone are responsible** for how you use it and for anything that follows from it —
+> including lost or wrong data, wrong prices, stock counts or totals, and anything you print, send or
+> file based on it. The author takes **no responsibility or liability** for that. See
+> [Disclaimer](#disclaimer) and the [LICENSE](LICENSE).
 
 ---
 
@@ -224,3 +231,32 @@ docs/            screenshots
 
 See [CLAUDE.md](CLAUDE.md) for the design notes, data model and roadmap. To start from
 scratch, delete the `data/` folder while the app is stopped.
+
+## Disclaimer
+
+PartsNAS is a private hobby project that the author uses at home and has chosen to share. It is
+provided **"as is"**, without warranty of any kind, and **you use it entirely at your own risk**.
+
+- **Not a business tool.** The quotes, invoices, VAT handling, Swish QR code and totals are conveniences
+  for a hobbyist. They are **not** a bookkeeping, tax or invoicing system and are not checked against
+  any accounting, tax or invoicing rules. If you issue invoices or rely on the numbers, you are
+  responsible for making sure they are correct and lawful where you live.
+- **Your data is your responsibility.** Software has bugs, disks fail and updates go wrong. Make
+  backups (see above), keep them somewhere else, and test that you can restore them. The author is not
+  liable for lost, damaged or wrong data.
+- **Supplier data can be wrong.** Specifications, prices, stock levels and part numbers fetched from
+  Mouser, Digi-Key or anywhere else come from third parties and may be incorrect or out of date.
+  Check them before you rely on them, especially before you buy, order or build something.
+- **No security promises.** There is no login. Keep it on a trusted network and never expose it to the
+  internet. API keys are stored in the database and in snapshots — keep those private.
+- **Third-party services.** You need your own accounts and API keys, and you must follow those
+  services' terms. PartsNAS is not affiliated with or endorsed by Mouser, Digi-Key, PartsBox, KiCad,
+  Synology or anyone else mentioned here; the names belong to their owners.
+
+To the fullest extent the law allows, the author is not responsible or liable for any claim, damage,
+loss or other consequence arising from the use of, or inability to use, this software.
+
+## License
+
+[MIT](LICENSE) © 2026 Melkutt. In short: you may use, copy, change and share it freely, but it comes
+with no warranty and no liability, as set out in the license text.
