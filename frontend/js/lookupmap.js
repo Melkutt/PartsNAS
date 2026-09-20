@@ -14,7 +14,7 @@ export const ALIAS = {
   power: ["powerrating", "power", "powermax", "powerdissipation", "ptot"],
   tempchar: ["temperaturecoefficient", "tempchar", "dielectric"],
   dielectric: ["dielectric", "dielectricmaterial", "dielectriccharacteristic"],
-  mounting: ["mountingstyle", "mounting", "mountingtype", "terminationstyle", "packagingtype", "packagetype"],
+  mounting: ["mountingstyle", "mounting", "mountingtype", "terminationstyle", "packagetype"],
   pitch: ["pitch", "leadpitch", "leadspacing", "pinpitch", "contactpitch"],
   pincount: ["numberofpins", "pincount", "pins", "numberofcontacts", "numberofpositions", "numberofio", "numberofterminations", "numberofcircuits", "circuits"],
   current_rating: ["currentrating", "currentcontinuous", "ratedcurrent", "currentoutput", "currentmax", "currentcontinuousdrain", "id", "if", "currentaveragerectified"],

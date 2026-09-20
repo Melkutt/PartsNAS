@@ -140,6 +140,20 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 5. **Try a quote.** On the **Quotes** tab, create one, press **Browse parts** and click
    a few parts in.
 
+### Running the tests
+
+```bash
+cd backend
+../.venv/Scripts/pip install -r requirements-dev.txt
+../.venv/Scripts/python -m pytest            # backend: runs against a throw-away database
+
+cd ..
+deno test --allow-read tests/js              # frontend: the supplier-attribute mapping
+```
+
+The backend tests never touch your `data/` folder. The mapping tests run against 399 real Mouser and
+Digi-Key attribute names, so a change to the alias table is checked against real vocabulary.
+
 ## Configuration
 
 Set these as environment variables (in `docker-compose.yml` under `environment:`).
