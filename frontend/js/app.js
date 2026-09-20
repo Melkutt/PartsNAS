@@ -187,7 +187,11 @@ async function main() {
 
   try {
     const info = await api("/api/health");
-    document.getElementById("ver").textContent = "v" + info.version;
+    const ver = document.getElementById("ver");
+    ver.textContent = `v${info.version} · ${info.build}`;
+    // the number after "v=" on app.js is the frontend's own cache-buster; the build id is what the server runs
+    const fe = (document.querySelector('script[src*="/js/app.js"]')?.getAttribute("src") || "").match(/v=(\d+)/)?.[1];
+    ver.title = `Version ${info.version}, build ${info.build}${fe ? `, frontend ${fe}` : ""} — the build id changes whenever the code does`;
   } catch {
     document.getElementById("ver").textContent = "offline";
   }

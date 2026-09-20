@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
+from .buildid import build_id
 from .core.config import get_settings
 from .core.db import Base, SessionLocal, engine, sync_columns
 from .seed import run_all
@@ -59,7 +60,7 @@ async def _no_cache_assets(request, call_next):
 
 @app.get("/api/health", tags=["meta"])
 def health():
-    return {"status": "ok", "version": __version__}
+    return {"status": "ok", "version": __version__, "build": build_id()}
 
 
 @app.get("/api/info", tags=["meta"])
