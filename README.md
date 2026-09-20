@@ -14,7 +14,7 @@ and tell you when a resistor drawer is running low. Inspired by
 [PartsBox](https://partsbox.com/) and the old open-source
 [ecDB](https://github.com/jwr/ecDB).
 
-Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [MIT license](LICENSE)
+Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [GPL-3.0 license](LICENSE)
 
 > **Please read this first.** PartsNAS is a **hobby project**, shared as it is, free of charge and with
 > **no warranty of any kind**. It is **not** business, accounting or invoicing software. Use it at your
@@ -258,5 +258,14 @@ loss or other consequence arising from the use of, or inability to use, this sof
 
 ## License
 
-[MIT](LICENSE) © 2026 Melkutt. In short: you may use, copy, change and share it freely, but it comes
-with no warranty and no liability, as set out in the license text.
+PartsNAS is **free software**: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License](LICENSE), version 3, as published by the Free Software Foundation.
+
+Copyright © 2026 SA1CKW.
+
+In short: you may use, study, change and share it, free of charge. If you share a copy, modified or
+not, you must pass it on under the same license and make the source available, so it stays free for
+everyone. This program is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**;
+without even the implied warranty of merchantability or fitness for a particular purpose. See the
+[LICENSE](LICENSE) for the details, including the disclaimer of warranty and the limitation of
+liability (sections 15 and 16).
