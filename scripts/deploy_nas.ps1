@@ -4,8 +4,8 @@
   ask the running app whether it is on the same build.
 
 .EXAMPLE
-  .\scripts\deploy_nas.ps1 -Target \\NAS\docker\PartsNAS-v0.4.0
-  .\scripts\deploy_nas.ps1 -Target \\NAS\docker\PartsNAS-v0.4.0 -Url http://192.168.1.72:8770
+  .\scripts\deploy_nas.ps1 -Target \\NAS\docker\PartsNAS
+  .\scripts\deploy_nas.ps1 -Target \\NAS\docker\PartsNAS -Url http://your-nas:8770
 
   Copies code only. data\ is never touched, and nothing on the target is deleted.
   After the copy: Container Manager -> delete the project's container and image, then create
