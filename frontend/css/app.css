@@ -370,13 +370,24 @@ main.body {
 .active-filters .chip::after { content: " ✕"; }
 .facet-toolbar { display: flex; justify-content: flex-end; margin: 2px 0 6px; }
 
+.filters-toggle { display: none; }
+
+/* Phone / tablet. The page scrolls (main.body); nothing depends on a chain of percentage
+   heights any more. Categories and filters sit behind the Filters button, and the list is a box
+   of its own with a definite height - so it scrolls under a finger in Safari, and it can never be
+   squeezed to a few pixels by the filter panel above it (which is what happened before). */
 @media (max-width: 820px) {
-  .parts-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .rail { max-height: 210px; }
-  /* same explicit-height idiom as .rail above — a bare `1fr` grid row can
-     leave iOS Safari unsure which nested box actually owns the touch-scroll
-     gesture, so give the list its own guaranteed scrollable height too */
-  .parts-main { min-height: 320px; }
+  .parts { height: auto; }
+  .parts-layout { height: auto; grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .parts-main { min-height: 0; }
+  .filters-toggle { display: inline-flex; }
+  .parts:not(.filters-open) .rail,
+  .parts:not(.filters-open) .facets,
+  .parts:not(.filters-open) .facet-toolbar { display: none; }
+  .rail { max-height: 240px; }
+  .facets { max-height: 300px; }
+  /* .parts prefix: .table-wrap is declared again further down (flex: 1), which would win otherwise */
+  .parts .table-wrap { flex: none; height: 72vh; height: 72dvh; min-height: 300px; }
 }
 .filters {
   display: flex;
@@ -692,10 +703,9 @@ table.parts-table {
   header.topbar { gap: 6px 8px; }
   .topbar .brand { font-size: 15px; }
 
-  .parts-layout { grid-template-rows: auto 1fr; }
-  .rail { max-height: 170px; }
+  .rail { max-height: 200px; }
 
-  .facets { max-height: 220px; gap: 4px 12px; }
+  .facets { max-height: 260px; gap: 4px 12px; }
   .facet-group { min-width: 46%; }
   .facet-list { height: 130px; }
   .facet-opt { line-height: 1.9; }            /* bigger tap target */

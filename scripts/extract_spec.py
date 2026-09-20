@@ -1,7 +1,7 @@
 """Generate the English seed/*.json from the (Swedish) source workbooks.
 
-    python scripts/extract_spec.py "C:/Users/Melker/Desktop/komponentspec.xlsx" \
-                                   "C:/Users/Melker/Downloads/partsbox.xlsx"
+    python scripts/extract_spec.py path/to/komponentspec.xlsx \
+                                   path/to/partsbox.xlsx
 
 The second argument is optional; give it to (re)generate storage_locations.json.
 

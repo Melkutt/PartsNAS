@@ -21,3 +21,6 @@ Thumbs.db
 *.part
 *.ytdl
 tempCodeRunnerFile.*
+
+# local editor / preview config
+.claude/

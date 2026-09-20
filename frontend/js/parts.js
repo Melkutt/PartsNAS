@@ -77,7 +77,11 @@ export class PartsView {
     this.el.append(layout);
 
     const railHost = el("div", { style: "min-height:0;display:flex" });
-    this.railCmp = new CatRail({ onSelect: ({ mode, id, name }) => { this.rail = { mode, id, name }; this.reload(); } });
+    this.railCmp = new CatRail({ onSelect: ({ mode, id, name }) => {
+      this.rail = { mode, id, name };
+      if (window.matchMedia("(max-width: 820px)").matches) this._setFiltersOpen(false); // show the list you just picked
+      this.reload();
+    } });
     await this.railCmp.mount(railHost);
 
     this.main = el("div", { class: "parts-main" });
@@ -214,6 +218,11 @@ export class PartsView {
       .catch(() => toast(`No part matches "${code}"`));
   };
 
+  _setFiltersOpen(open) {
+    this.el.classList.toggle("filters-open", open);
+    if (this.filtersBtn) this.filtersBtn.textContent = open ? "Filters ▴" : "Filters ▾";
+  }
+
   _topBar() {
     const bar = el("div", { class: "filters" });
     this.qInput = el("input", { type: "search", placeholder: "Search name / MPN / description",
@@ -226,13 +235,16 @@ export class PartsView {
     const dupL = el("label", { title: "parts that share their MPN with another part - a part may already be in the database" },
       (this.dupChk = el("input", { type: "checkbox",
         onchange: (e) => { this.dupOnly = e.target.checked; this.reload(); } })), " Same MPN");
+    // small screens: categories and filters live behind this button, so the list gets the room
+    this.filtersBtn = el("button", { class: "ghost filters-toggle", title: "Categories and filters",
+      onclick: () => this._setFiltersOpen(!this.el.classList.contains("filters-open")) }, "Filters ▾");
     const scanL = el("label", { title: "Scanned codes tick the row instead of opening it" },
       el("input", { type: "checkbox", onchange: (e) => (this.scanSelect = e.target.checked) }), " Scan→select");
     this.orderSel = el("select", { onchange: () => this._renderTable() },
       el("option", { value: "name" }, "Sort: name"), el("option", { value: "stock" }, "Sort: stock"));
     this.countTag = el("span", { class: "count-tag" });
     const addBtn = el("button", { class: "primary", onclick: () => this._newPart() }, "+ New part");
-    bar.append(this.qInput, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), addBtn, this.countTag);
+    bar.append(this.qInput, this.filtersBtn, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), addBtn, this.countTag);
     return bar;
   }
 
