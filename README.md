@@ -78,7 +78,8 @@ Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step
   or a **BOM exported from KiCad** (with matching against your stock).
 
 **Yours to keep**
-- Light, Gray and Dark themes, and a layout that works on a phone or tablet.
+- Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
+  filters sit behind a **Filters** button there, so the list gets the screen).
 - **Snapshot backup**: one ZIP that is an exact copy of everything — database, images,
   logo, settings — and a restore that puts it all back.
 - **Automatic backup** (Settings, off by default): a snapshot every day into a folder you choose,
@@ -156,14 +157,15 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 ```bash
 cd backend
 ../.venv/Scripts/pip install -r requirements-dev.txt
-../.venv/Scripts/python -m pytest            # backend: runs against a throw-away database
+../.venv/Scripts/python -m pytest                    # backend, against a throw-away database
 
 cd ..
-deno test --allow-read tests/js              # frontend: the supplier-attribute mapping
+deno test --allow-read --allow-run tests/js          # frontend (Deno: https://deno.com)
 ```
 
-The backend tests never touch your `data/` folder. The mapping tests run against 399 real Mouser and
-Digi-Key attribute names, so a change to the alias table is checked against real vocabulary.
+The backend tests never touch your `data/` folder. The frontend tests check the supplier-attribute
+mapping against 399 real Mouser and Digi-Key attribute names, the resistor colour code, and that every
+module still parses.
 
 ## Configuration
 
@@ -181,6 +183,10 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
   somewhere other than the NAS. (It contains your supplier API keys, so keep it private.)
 - **Restore:** *Import → Restore a snapshot instead…* replaces everything with the
   snapshot. A safety copy of what was there is saved on the server first.
+- **Automatic backup:** *Settings → Automatic backup* saves a snapshot every day at the hour you
+  choose and keeps the newest few (default folder: `data/backups/auto`, next to your data). To save
+  in another NAS folder, map it as a volume in `docker-compose.yml` (there is a commented example)
+  and enter its container path. The last result, or the error, is shown in Settings.
 - **Portable backup:** the other export in the same dialog is a data export you can merge
   into another database.
 - **Update:** take a snapshot, replace the code on the server with the new version, and
@@ -207,10 +213,13 @@ FastAPI, SQLAlchemy 2.0 and SQLite (WAL) on the backend; plain HTML, CSS and ES 
 on the frontend, so there is nothing to build. One container serves both.
 
 ```
-backend/app/   FastAPI app, models, importers, supplier lookups
-frontend/      the browser app (index.html, css/, js/)
-seed/          starter categories, footprint aliases, part-class fields
-docs/          screenshots
+backend/app/     FastAPI app, models, importers, supplier lookups
+backend/tests/   pytest
+frontend/        the browser app (index.html, css/, js/)
+tests/js/        Deno tests for the frontend logic
+seed/            starter categories, footprint aliases, part-class fields
+scripts/         seed generator, deploy_nas.ps1
+docs/            screenshots
 ```
 
 See [CLAUDE.md](CLAUDE.md) for the design notes, data model and roadmap. To start from

@@ -41,6 +41,10 @@ Frontend is plain HTML/CSS/ES-modules under `frontend/`, served by FastAPI at
 First run creates `data/partsnas.db` (SQLite, WAL) and seeds the category tree +
 footprint aliases from `seed/*.json`.
 
+Tests (`README.md` → *Running the tests*): `cd backend && ../.venv/Scripts/python -m pytest` (throw-away
+DB via `PARTSNAS_DATA_DIR`, see `backend/tests/conftest.py`) and
+`deno test --allow-read --allow-run tests/js`. Every bug found in real use gets a regression test.
+
 Regenerate the seed from the spec workbook:
 
 ```bash
@@ -122,6 +126,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   a Build turns into negative `StockEntry` rows.
 - **BulkOp** — audit + one-click undo payload for bulk edits.
 - **Setting** — key/JSON (theme sync, currency, VAT, API keys later).
+- **Part.order_qty** — the quantity last typed on the Order tab (NULL = suggest the shortfall).
+  **Part.on_order_qty / on_order_at / on_order_ref** — bought but not delivered yet: set by
+  `POST /api/order/mark-ordered`, cleared (or reduced, for a partial delivery) by
+  `POST /api/order/receive`, which writes an ordinary `add` `StockEntry` through
+  `stock.add_entry` and, when a price is given, updates the supplier link to what was paid.
+  A part that is on order leaves the "to order" list.
 
 ### Conventions
 
@@ -137,9 +147,22 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - New frontend file → it's imported by `app.js` (ES modules). Assets are served
   `Cache-Control: no-store`, so no `?v=` juggling is needed for sub-imports; the
   `?v=N` on the top-level `app.js`/css in `index.html` is belt-and-braces.
-- Responsive: `app.css` `@media (max-width: 900px)` (tablet) + `600px` (phone) —
-  wrapping topbar, scrolling tabs, stacked rail, full-screen overlays, single-col
-  forms. Test at ~390px.
+- Responsive: `app.css` `@media (max-width: 900px)` (tablet) + `600px` (phone) — wrapping
+  topbar, scrolling tabs, full-screen overlays, single-col forms. At <= 820px the Parts view
+  is a normal scrolling page: rail and facets hide behind the **Filters** button and
+  `.parts .table-wrap` is a box with a *definite* height. Do not go back to a chain of
+  percentage heights there: iOS Safari does not resolve it and the list collapsed to a few px.
+  Test at ~390px.
+- **Supplier attribute -> field mapping** lives in `frontend/js/lookupmap.js` (`scoreField`,
+  `resolveCollisions`, the `ALIAS` table). Rules: an alias shorter than 4 characters only matches
+  the whole name; a substring alias must start and end on a word boundary of the original name
+  ("tmax" must not match "Voltage - Input (Max)"); two ticked rows never fill the same field.
+  Change it together with `tests/js/lookupmap.test.js`.
+- **Build id** (`app/buildid.py`): a hash of backend + frontend + seed, shown in the top bar and in
+  `/api/health`. `scripts/deploy_nas.ps1` copies, verifies each file and compares it. On Synology,
+  Start re-uses the old image: remove the container and image to get new code.
+- Duplicate MPNs (`app/dupes.py`, case/punctuation ignored) are only ever *reported*: list chip,
+  `Same MPN` filter, part banner, `GET /api/parts/check-mpn`, `GET /api/parts/duplicates`.
 
 ## API surface so far
 
@@ -208,6 +231,13 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   (`PartSupplier.preferred`) is the price source and skips the picker.
 - Settings: per-provider `price_enabled` (Setting `provider:<name>:price_enabled`,
   default true) — the "search prices from here" checkbox; gates `refresh-prices`.
+
+- `/api/order` (to order + `on_order`), `/api/order/count`, `/api/order/mark-ordered`,
+  `/unmark-ordered`, `/receive` — see *Data model*.
+- `/api/settings/autosnapshot` (GET/PUT, `POST .../run`) — the daily snapshot
+  (`app/autosnapshot.py`: a scheduler thread, `.partial` file then rename, prunes only its own
+  `partsnas-auto-*.zip`, folder must be writable and not inside `data/` except `backups/`).
+- `PATCH /api/parts/{id}/suppliers/{link}` also takes `supplier_id` (move a link).
 
 ### Supplier providers (`app/providers/`)
 
