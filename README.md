@@ -30,6 +30,10 @@ Version **0.4.0** · Python / FastAPI / SQLite · vanilla JS, no build step
   You can also filter for parts that are **missing a footprint or a datasheet**, so
   the gaps in your data are easy to find.
 - One click on the datasheet icon opens the datasheet in a new tab.
+- Parts that share a manufacturer part number are pointed out (never merged or deleted): a chip
+  in the list, a **Same MPN** filter, a banner on the part, and a warning in **+ New part** if the
+  part you are typing already exists somewhere. Case and punctuation are ignored.
+- A through-hole resistor shows its **colour bands**, drawn from the value and tolerance.
 - Pictures, notes, tags, replacement/discontinued links, and design notes such as
   "with this regulator use these resistors for 5 V".
 - Barcode and QR labels you can print (also for label printers such as a DYMO), and
@@ -41,7 +45,12 @@ Version **0.4.0** · Python / FastAPI / SQLite · vanilla JS, no build step
 - Give a part a *Min stock*. When it reaches it, it lands on the **Order** tab, worst
   first, grouped by supplier, with a red counter on the tab itself.
 - Set the quantity, then **Copy SKU + qty** for a supplier's quick-order page, or
-  download a CSV.
+  download a CSV. The quantity you type is remembered for that part, so a resistor you always buy
+  in tens stays at 50 instead of resetting to "one short".
+- When you have placed the order, press **Ordered** (or **Mark all ordered…** for a whole supplier).
+  The parts move to **On order** and are not ordered twice. When the package arrives, **Received…**
+  asks for the quantity, the box it goes into and the price you paid, adds the stock, and can make
+  that price the part's supplier price — so a later quote uses what you really paid.
 
 ![The Order tab](docs/screenshots/order-list.png)
 
@@ -72,6 +81,8 @@ Version **0.4.0** · Python / FastAPI / SQLite · vanilla JS, no build step
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet.
 - **Snapshot backup**: one ZIP that is an exact copy of everything — database, images,
   logo, settings — and a restore that puts it all back.
+- **Automatic backup** (Settings, off by default): a snapshot every day into a folder you choose,
+  keeping the newest few, with the last result or error shown in Settings.
 
 ![A part in detail](docs/screenshots/part-detail.png)
 
@@ -174,7 +185,11 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
   into another database.
 - **Update:** take a snapshot, replace the code on the server with the new version, and
   rebuild the project (*Container Manager → Project → Build*, or
-  `docker compose up -d --build`). The `data/` folder is left alone.
+  `docker compose up -d --build`). The `data/` folder is left alone. On Synology, starting an
+  existing project again re-uses the old image, so remove the container and image first if the
+  new code does not show up. The version and a **build id** in the top bar (a fingerprint of the
+  code that is running) tell you which code the server really runs;
+  `scripts/deploy_nas.ps1` copies the files, checks each one, and compares that id.
 
 ## Good to know
 

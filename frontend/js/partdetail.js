@@ -1,4 +1,5 @@
 // Part detail panel: Details (edit) / Stock / Suppliers / Notes, in a right-side overlay.
+import { ohmsOf, resistorBands, resistorSvg, toleranceOf } from "./colorcode.js";
 import { api } from "./api.js";
 import { el, modal, toast, treeOptions, partSearch, withBusy, selectWithAdd } from "./ui.js";
 import { openLookup } from "./lookup.js";
@@ -93,6 +94,7 @@ export class PartDetail {
           el("h3", {}, p.discontinued ? p.name + "  ⚠" : p.name),
           el("div", { class: "sub" }, [p.mpn, p.manufacturer, p.category].filter(Boolean).join("  ·  ") || "—"),
           el("div", { class: "on-hand" }, `On hand: ${p.on_hand}`),
+          this._colorCode(),
         ),
         el("button", { class: "ghost", onclick: () => this.close() }, "✕"),
       ),
@@ -160,6 +162,24 @@ export class PartDetail {
   }
   _designCount() {
     return this._designAssets().length + (this.p.design_doc ? 1 : 0);
+  }
+
+  // The colour bands for a through-hole resistor, drawn from its value and tolerance. Not shown for
+  // SMD parts (they are printed with digits) or when the value is not a plain number.
+  _colorCode() {
+    const p = this.p;
+    if (p.part_class !== "resistor") return null;
+    const a = p.attributes || {};
+    const smd = /^(smd|surface)/i.test(p.mount || "") || /surface|smd/i.test(a.mounting || "") ||
+      /^\d{4}\b|smd|surface/i.test(a.packagecase || "") || /^(0201|0402|0603|0805|1206|1210|1812|2010|2512)\b/.test(p.footprint_raw || "");
+    if (smd) return null;
+    const ohms = ohmsOf(a.value);
+    const cc = ohms == null ? null : resistorBands(ohms, toleranceOf(a.tolerance));
+    if (!cc) return null;
+    return el("div", { class: "colorcode", style: "display:flex;align-items:center;gap:10px;margin-top:6px",
+      title: `${cc.count}-band colour code${cc.note ? " — " + cc.note : ""}` },
+      resistorSvg(cc.bands),
+      el("span", { class: "zero", style: "font-size:12px" }, cc.bands.map((b) => b.name).join(" · ") + (cc.note ? `  (${cc.note})` : "")));
   }
 
   _replLabel() {
