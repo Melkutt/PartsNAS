@@ -59,6 +59,7 @@ export class PartsView {
     this.q = "";
     this.low = false;
     this.noCat = false;
+    this.dupOnly = false;
     this.scanSelect = false;
     this.rail = { mode: "categories", id: null };
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
@@ -222,13 +223,16 @@ export class PartsView {
     const noCatL = el("label", { title: "parts with no category / in Unsorted — for triage" },
       (this.noCatChk = el("input", { type: "checkbox",
         onchange: (e) => { this.noCat = e.target.checked; this.reload(); } })), " Uncategorized");
+    const dupL = el("label", { title: "parts that share their MPN with another part - a part may already be in the database" },
+      (this.dupChk = el("input", { type: "checkbox",
+        onchange: (e) => { this.dupOnly = e.target.checked; this.reload(); } })), " Same MPN");
     const scanL = el("label", { title: "Scanned codes tick the row instead of opening it" },
       el("input", { type: "checkbox", onchange: (e) => (this.scanSelect = e.target.checked) }), " Scan→select");
     this.orderSel = el("select", { onchange: () => this._renderTable() },
       el("option", { value: "name" }, "Sort: name"), el("option", { value: "stock" }, "Sort: stock"));
     this.countTag = el("span", { class: "count-tag" });
     const addBtn = el("button", { class: "primary", onclick: () => this._newPart() }, "+ New part");
-    bar.append(this.qInput, lowL, noCatL, scanL, this.orderSel, el("span", { class: "grow" }), addBtn, this.countTag);
+    bar.append(this.qInput, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), addBtn, this.countTag);
     return bar;
   }
 
@@ -242,6 +246,7 @@ export class PartsView {
     if (this.q) p.set("q", this.q);
     if (this.low) p.set("low_stock", "true");
     if (this.noCat) p.set("no_category", "true");
+    if (this.dupOnly) p.set("duplicates", "true");
     if (this.rail.mode === "categories" && this.rail.id) p.set("category_id", this.rail.id);
     if (this.rail.mode === "locations" && this.rail.id) p.append("location_id", this.rail.id);
     for (const v of this.facetSel.mount) p.append("mount", v);
@@ -543,7 +548,9 @@ export class PartsView {
       el("td", {}, cb),
       shopCell,
       nameCell,
-      el("td", {}, p.mpn || ""),
+      el("td", {}, p.mpn || "",
+        p.dup ? el("span", { class: "chip", style: "margin-left:6px;border-color:var(--warn);color:var(--warn)",
+          title: `${p.dup} other part${p.dup === 1 ? "" : "s"} with the same MPN - it may already be in the database` }, "⚠ same MPN") : null),
       el("td", { class: "ds" }, ds),
       el("td", {}, p.category || el("span", { class: "zero" }, "—")),
       el("td", {}, p.footprint || ""),
@@ -699,6 +706,28 @@ export class PartsView {
       if (this.rail.mode === "locations" && this.rail.id) loc.value = String(this.rail.id);
     });
 
+    // Warn (never block) when this MPN is already in the database - it is easy to forget a part
+    // that lives in another box. Punctuation and case are ignored by the server.
+    const dupWarn = el("div", { class: "hint", style: "color:var(--warn);display:none" });
+    let dupTimer = null;
+    const checkDup = async () => {
+      const v = mpn.value.trim();
+      if (!v) { dupWarn.style.display = "none"; return; }
+      try {
+        const { matches } = await api(`/api/parts/check-mpn?mpn=${encodeURIComponent(v)}`);
+        if (mpn.value.trim() !== v) return; // typed on since
+        dupWarn.innerHTML = "";
+        if (!matches.length) { dupWarn.style.display = "none"; return; }
+        dupWarn.append(el("b", {}, "Already in the database: "),
+          ...matches.flatMap((m, i) => [i ? ", " : "",
+            el("a", { href: "#", onclick: (e) => { e.preventDefault(); handle.close(); this.openDetail(m.id); } },
+              `${m.name} (${m.on_hand} in stock${m.category ? ", " + m.category : ""})`)]),
+          " — you can still create another one.");
+        dupWarn.style.display = "";
+      } catch { /* the warning is a convenience */ }
+    };
+    mpn.addEventListener("input", () => { clearTimeout(dupTimer); dupTimer = setTimeout(checkDup, 300); });
+
     // A scan while this modal is open fills a field instead of doing the
     // normal parts-list scan lookup: a pure-digit code -> Qty (a count you
     // scanned or keyed on the scanner), anything else -> MPN.
@@ -709,6 +738,7 @@ export class PartsView {
         toast(`Scanned qty: ${code}`);
       } else {
         mpn.value = code;
+        checkDup();
         if (!name.value.trim()) name.value = code;
         toast(`Scanned MPN: ${code}`);
       }
@@ -740,6 +770,7 @@ export class PartsView {
         el("div", { class: "hint" }, "📷 Scanner ready — a scanned number fills Qty, anything else fills MPN."),
         row("Name *", name),
         row("MPN", mpn, lookupBtn),
+        dupWarn,
         row("Manufacturer", mfr),
         row("Description", desc),
         row("Category", cat),

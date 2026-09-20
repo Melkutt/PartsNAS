@@ -97,6 +97,20 @@ export class PartDetail {
         el("button", { class: "ghost", onclick: () => this.close() }, "✕"),
       ),
     );
+    if ((p.same_mpn || []).length) {
+      // only a heads-up: nothing is merged or removed
+      this.panel.append(
+        el("div", { class: "repl-banner" },
+          el("b", {}, "Same MPN as another part. "),
+          "It may already be in the database: ",
+          ...p.same_mpn.flatMap((o, i) => [
+            i ? ", " : "",
+            el("a", { href: "#", title: [o.category, `on hand ${o.on_hand}`].filter(Boolean).join(" · "),
+              onclick: (e) => { e.preventDefault(); this.close(); new PartDetail(o.id, { onChange: this.onChange }).open(); } },
+              `${o.name} (${o.on_hand} in stock)`),
+          ])),
+      );
+    }
     const repl = this._replLabel();
     if (repl && (p.discontinued || p.on_hand <= 0)) {
       this.panel.append(

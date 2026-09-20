@@ -22,6 +22,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
+from ..dupes import duplicate_counts, duplicate_ids, norm_mpn, parts_with_mpn
 from ..models import Category, Part, StockEntry, Tag
 from ..partschema import fields_for, part_class_schema
 from ..services import (
@@ -98,6 +99,7 @@ class PartFilter:
     attrs: list[str] = field(default_factory=list)  # "key:value"
     low_stock: bool = False
     no_category: bool = False
+    duplicates: bool = False  # only parts that share their MPN with another part
 
     def attr_groups(self) -> dict[str, list[str]]:
         groups: dict[str, list[str]] = {}
@@ -181,6 +183,9 @@ def _matching_ids(db: Session, f: PartFilter) -> list[str]:
         onhand = on_hand_map(db, ids)
         mins = dict(db.execute(select(Part.id, Part.min_stock).where(Part.id.in_(ids))).all())
         ids = [i for i in ids if mins.get(i, 0) > 0 and onhand.get(i, 0) <= mins.get(i, 0)]
+    if f.duplicates:
+        dup = duplicate_ids(db)
+        ids = [i for i in ids if i in dup]
     return ids
 
 
@@ -198,12 +203,13 @@ def _filter_params(
     attr: list[str] = Query(default=[]),
     low_stock: bool = False,
     no_category: bool = False,
+    duplicates: bool = False,
 ) -> PartFilter:
     return PartFilter(
         q=q, category_id=category_id, with_subcats=with_subcats,
         location_ids=location_id, mounts=mount, footprints=footprint,
         manufacturers=manufacturer, tags=tag, in_stock=in_stock, datasheet=datasheet, attrs=attr,
-        low_stock=low_stock, no_category=no_category,
+        low_stock=low_stock, no_category=no_category, duplicates=duplicates,
     )
 
 
@@ -221,6 +227,7 @@ def list_parts(
     rows = db.scalars(select(Part).where(Part.id.in_(ids))).all() if ids else []
     paths = category_path_map(db)
     locs = location_breakdown_bulk(db, ids)
+    dups = duplicate_counts(db)
     out = [
         {
             "id": p.id,
@@ -238,6 +245,7 @@ def list_parts(
             "image_path": p.image_path,
             "datasheet_url": p.datasheet_url,
             "discontinued": p.discontinued,
+            "dup": dups.get(p.id, 0),  # other parts with the same MPN
             "replacement": (
                 p.replaced_by.name if p.replaced_by else (p.replacement_mpn or None)
             ),
@@ -375,6 +383,42 @@ def facets(db: Session = Depends(get_db), f: PartFilter = Depends(_filter_params
     return result
 
 
+def _dup_row(db: Session, p: Part, paths: dict) -> dict:
+    return {
+        "id": p.id,
+        "name": p.name,
+        "mpn": p.mpn,
+        "manufacturer": p.manufacturer,
+        "category": paths.get(p.category_id, ""),
+        "on_hand": on_hand_map(db, [p.id]).get(p.id, 0),
+    }
+
+
+@router.get("/check-mpn")
+def check_mpn(mpn: str, exclude: str | None = None, db: Session = Depends(get_db)):
+    """Parts that already carry this MPN (punctuation / case ignored) - for the New part
+    form and MPN edits, so a part that was forgotten about gets noticed. Only reports."""
+    paths = category_path_map(db)
+    return {"matches": [_dup_row(db, p, paths) for p in parts_with_mpn(db, mpn, exclude=exclude)]}
+
+
+@router.get("/duplicates")
+def duplicates(db: Session = Depends(get_db)):
+    """Every group of parts that share an MPN."""
+    paths = category_path_map(db)
+    groups: dict[str, list[Part]] = {}
+    for p in db.scalars(select(Part).order_by(Part.name)).all():
+        n = norm_mpn(p.mpn)
+        if n:
+            groups.setdefault(n, []).append(p)
+    out = [
+        {"mpn": ps[0].mpn, "parts": [_dup_row(db, p, paths) for p in ps]}
+        for ps in groups.values() if len(ps) > 1
+    ]
+    out.sort(key=lambda g: (g["mpn"] or "").lower())
+    return {"count": len(out), "groups": out}
+
+
 @router.get("/lookup")
 def lookup(code: str, db: Session = Depends(get_db)):
     """Scanner entry point: try id, then exact MPN, then exact name."""
@@ -429,6 +473,7 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "suppliers": [_link_row(x) for x in p.suppliers],
         "images": [image_row(a) for a in p.attachments],
         "design_note_count": len(p.design_notes),
+        "same_mpn": [_dup_row(db, x, category_path_map(db)) for x in parts_with_mpn(db, p.mpn, exclude=p.id)],
         "discontinued": p.discontinued,
         "replaced_by": (
             {
