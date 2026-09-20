@@ -19,7 +19,7 @@ export function el(tag, props = {}, ...kids) {
 export function modal({ title, body, confirmText = "OK", onConfirm, onClose, wide }) {
   const back = el("div", { class: "modal-back" });
   const box = el("div", { class: "modal" });
-  if (wide) box.style.width = "min(760px, 94vw)";
+  if (wide) box.style.width = typeof wide === "string" ? wide : "min(760px, 94vw)";
   const actions = el("div", { class: "actions" });
   const cancel = el("button", { onclick: close }, "Cancel");
   const ok = el("button", { class: "primary", onclick: doConfirm }, confirmText);

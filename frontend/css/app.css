@@ -859,3 +859,26 @@ table.parts-table {
   padding: 10px;
   resize: vertical;
 }
+
+/* ---------- BOM ---------- */
+/* nothing may stick out of the frame: the part picker used to stretch the table past the panel */
+.bom-panel { overflow-x: auto; }
+.bom-table { width: 100%; }
+.bom-table td.bom-part { min-width: 240px; max-width: 460px; }
+.bom-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; margin-top: 4px; }
+.bom-controls > select { max-width: 100%; min-width: 0; }
+.bom-controls > div { min-width: 140px; }
+.bom-where { font-size: 12px; color: var(--text-muted); }
+.bom-where.none { color: var(--warn); }
+
+@media print {
+  .bom-panel { overflow: visible; }
+  .bom-print-head h2 { margin: 0 0 2px; }
+  .bom-print-head { margin-bottom: 8px; }
+  .bom-table { font-size: 12px; }
+  .bom-where { color: #000 !important; font-size: 12px; }
+  /* .print-only is display:block above, which would break a table cell */
+  td.print-only, th.print-only { display: table-cell; }
+  td.pick-col { text-align: center; font-size: 15px; width: 1%; }
+  .bom-table tr { break-inside: avoid; }
+}

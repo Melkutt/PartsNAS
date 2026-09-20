@@ -13,8 +13,8 @@ import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
 
 const CERTAIN = ["mpn", "remembered", "new"];
 const badge = (score, kind) => {
-  const cls = CERTAIN.includes(kind) ? "ok" : score >= 70 ? "warn" : "low";
-  const label = kind === "mpn" ? "MPN exact" : kind === "remembered" ? "Remembered"
+  const cls = CERTAIN.includes(kind) || kind === "manual" ? "ok" : score >= 70 ? "warn" : "low";
+  const label = kind === "mpn" ? "MPN exact" : kind === "remembered" ? "Remembered" : kind === "manual" ? "Picked"
     : kind === "new" ? "New part" : kind === "none" ? "No match" : `~${score}% match`;
   return el("span", { class: `match-badge ${cls}` }, label);
 };
@@ -102,7 +102,7 @@ export class BomView {
       remember: false,
     }));
     const nameInp = el("input", { type: "text", value: data.suggested_name, style: "max-width:320px" });
-    const panel = el("div", { class: "panel", style: "max-width:1100px" });
+    const panel = el("div", { class: "panel bom-panel", style: "max-width:1100px" });
     const body = el("div", { class: "panel-body" });
     panel.append(
       el("h2", {}, "Review BOM"),
@@ -111,9 +111,10 @@ export class BomView {
     body.append(
       el("div", { class: "row" }, el("label", {}, "Project name"), nameInp),
       el("div", { class: "hint" },
-        "Green = exact (MPN, or a previously-confirmed match). Amber/grey = a guess from footprint + value — pick the right part or tick Remember once you're sure, and it'll apply on its own next time."),
+        "Green = exact (MPN, or a previously-confirmed match). Amber/grey = a guess from footprint + value — pick the right part or tick Remember once you're sure, and it'll apply on its own next time. " +
+        "A BOM rarely says which voltage, dielectric (NP0/X7R) or fuse style it means, so press Change on any line to pick another part, or Browse to see the parts that fit."),
     );
-    const table = el("table", { class: "mini-table" });
+    const table = el("table", { class: "mini-table bom-table" });
     table.append(el("tr", {}, el("th", {}, "Refdes"), el("th", {}, "Value"), el("th", {}, "Footprint"),
       el("th", { class: "num" }, "Qty"), el("th", {}, "Match"), el("th", {}, "Part"), el("th", {}, "Remember")));
     this.reviewLines.forEach((ln) => table.append(this._reviewRow(ln)));
@@ -135,7 +136,7 @@ export class BomView {
         const c = ln.match.candidates.find((c) => c.id === ln.part_id);
         const name = c?.name || ln.match.part_name || ln.part_id;
         const summary = c?.summary || ln.match.summary;
-        partCell.append(el("div", {}, name), summary ? el("div", { class: "hint", style: "padding:0" }, summary) : null);
+        partCell.append(...[el("div", {}, name), summary ? el("div", { class: "hint", style: "padding:0" }, summary) : null].filter(Boolean));
       } else {
         partCell.append(el("span", { class: "pill-off" }, "— pick —"));
       }
@@ -147,30 +148,49 @@ export class BomView {
       onchange: (e) => (ln.remember = e.target.checked),
     });
 
-    const controls = el("span", { style: "display:flex;gap:6px;align-items:center" });
+    const controls = el("span", { class: "bom-controls" });
+    let editing = !CERTAIN.includes(ln.match.kind);
+    // a part was chosen by hand (search, the list or Browse): show it, and offer to remember it
+    const picked = (p) => {
+      ln.part_id = p.id;
+      ln.match = { ...ln.match, kind: "manual", score: 100, part_id: p.id, part_name: p.name, summary: null };
+      renderPartCell();
+      rememberChk.disabled = false;
+      badgeCell.innerHTML = "";
+      badgeCell.append(badge(100, "manual"));
+    };
     const buildControls = () => {
       controls.innerHTML = "";
-      if (CERTAIN.includes(ln.match.kind)) {
-        // already certain — nothing to pick, remembering it again is redundant
+      if (!editing) {
+        // exact / remembered: nothing to pick unless this board needs something else
         rememberChk.disabled = true;
+        controls.append(el("button", { class: "ghost",
+          title: ln.match.kind === "remembered"
+            ? "Remembered for this Value + Footprint. Use another part this time (tick Remember to change it for good)."
+            : "Use another part for this line",
+          onclick: () => { editing = true; rememberChk.disabled = !ln.part_id; buildControls(); } }, "Change…"));
         return;
       }
       if (ln.match.candidates.length > 1) {
         const sel = el("select", {
-          onchange: (e) => { ln.part_id = e.target.value || null; renderPartCell(); rememberChk.disabled = !ln.part_id; },
+          onchange: (e) => {
+            const c = ln.match.candidates.find((x) => x.id === e.target.value);
+            if (c) picked(c);
+            else { ln.part_id = null; renderPartCell(); rememberChk.disabled = true; }
+          },
         }, el("option", { value: "" }, "— pick manually —"), ...ln.match.candidates.map((c) =>
           el("option", { value: c.id }, `${c.name} — ${c.summary} (~${c.score}%)`)));
         sel.value = ln.part_id || "";
         controls.append(sel);
       } else {
-        const ps = partSearch({
-          placeholder: "search part…",
-          onPick: (p) => { ln.part_id = p.id; renderPartCell(); rememberChk.disabled = false; },
-        });
+        const ps = partSearch({ placeholder: "search part…", onPick: picked });
         if (ln.part_id) ps.set({ id: ln.part_id, name: ln.match.part_name });
         controls.append(ps.el);
       }
-      controls.append(el("button", { class: "ghost", onclick: () => this._newPartFor(ln, onCreated) }, "+ New part"));
+      controls.append(
+        el("button", { class: "ghost", title: "Browse the parts that fit this line (value and size are filled in) - like the shopping cart",
+          onclick: () => this._browseFor(ln, picked) }, "Browse…"),
+        el("button", { class: "ghost", onclick: () => this._newPartFor(ln, onCreated) }, "+ New part"));
     };
     const onCreated = (part) => {
       ln.part_id = part.id;
@@ -192,8 +212,31 @@ export class BomView {
       el("td", { style: "max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, ln.footprint || ""),
       el("td", { class: "num" }, String(ln.qty)),
       badgeCell,
-      el("td", {}, partCell, controls.childNodes.length ? el("div", {}, controls) : null),
+      el("td", { class: "bom-part" }, partCell, controls.childNodes.length ? el("div", {}, controls) : null),
       el("td", {}, rememberChk));
+  }
+
+  // The Parts list in a window, filtered to what this BOM line asks for (its value and, when the
+  // footprint names one, the package size); Use puts the part on the line. Both ways of choosing -
+  // the drop-down and the shop-style list - end up in the same place.
+  async _browseFor(ln, onPick) {
+    const { PartsView } = await import("./parts.js");
+    const host = el("div", { style: "height:70vh;min-height:340px" });
+    let view = null;
+    const size = String(ln.footprint || "").match(/(?<![0-9])(0201|0402|0603|0805|1206|1210|1812|2010|2512)(?![0-9])/)?.[1];
+    const m = modal({
+      title: `Pick a part for ${ln.refdes} — ${[ln.value, ln.footprint].filter(Boolean).join("  ·  ")}`,
+      wide: "min(1180px, 96vw)",
+      confirmText: "Close",
+      body: host,
+      onClose: () => view && view.destroy(),
+    });
+    view = new PartsView({
+      q: ln.value || "",
+      footprint: size || null,
+      pick: { onPick: (p) => { onPick({ id: p.id, name: p.name, mpn: p.mpn }); m.close(); } },
+    });
+    await view.mount(host);
   }
 
   // Create a part on the spot for a BOM line with no good match — category
@@ -252,21 +295,31 @@ export class BomView {
     this.mode = "detail";
     const data = await api(`/api/bom/projects/${id}?boards=${boards}`);
     this.el.innerHTML = "";
-    const panel = el("div", { class: "panel", style: "max-width:1100px" });
+    const panel = el("div", { class: "panel bom-panel", style: "max-width:1100px" });
     const boardsInp = el("input", { type: "number", min: 1, value: boards, style: "width:5em",
       onchange: (e) => this.showDetail(id, Number(e.target.value) || 1) });
-    const table = el("table", { class: "mini-table" });
-    table.append(el("tr", {}, el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
+    const table = el("table", { class: "mini-table bom-table" });
+    table.append(el("tr", {}, el("th", { class: "print-only pick-col" }, "✓"), el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
+      el("th", {}, "Where it is"),
       el("th", { class: "num" }, "Per board"), el("th", { class: "num" }, `Needed (${boards})`),
       el("th", { class: "num" }, "On hand"), el("th", { class: "num" }, "Short")));
-    for (const ln of data.lines) {
+    // a pick list: walk the shelves once instead of hunting for each line
+    const firstLoc = (ln) => (ln.locations && ln.locations[0] ? ln.locations[0].location : "\uffff");
+    const lines = this.sortByLocation
+      ? [...data.lines].sort((a, b) => firstLoc(a).localeCompare(firstLoc(b), undefined, { numeric: true }) ||
+          (a.refdes || "").localeCompare(b.refdes || "", undefined, { numeric: true }))
+      : data.lines;
+    for (const ln of lines) {
       const short = ln.short;
+      const where = !ln.part_id ? "—" : ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join("  ·  ") : "none in stock";
       table.append(el("tr", {},
+        el("td", { class: "print-only pick-col" }, "☐"),
         el("td", {}, ln.refdes || ""),
         el("td", {}, ln.part_name
           ? el("div", {}, el("div", {}, ln.part_name), ln.part_summary ? el("div", { class: "hint", style: "padding:0" }, ln.part_summary) : null)
           : el("span", { class: "match-badge low" }, ln.unresolved_mpn || "unresolved")),
         el("td", {}, ln.value || ""),
+        el("td", { class: ln.part_id && !ln.locations.length ? "bom-where none" : "bom-where" }, where),
         el("td", { class: "num" }, String(ln.qty_per_board)),
         el("td", { class: "num" }, String(ln.needed)),
         el("td", { class: "num" }, ln.part_id ? String(ln.on_hand) : "—"),
@@ -280,15 +333,24 @@ export class BomView {
         this.showDetail(id, Number(boardsInp.value) || 1);
       });
     } }, "Build (deduct stock)");
+    const sortChk = el("input", { type: "checkbox", checked: this.sortByLocation ? "checked" : null,
+      onchange: (e) => { this.sortByLocation = e.target.checked; this.showDetail(id, boards); } });
     panel.append(
-      el("div", { style: "display:flex;align-items:center;gap:10px" },
+      el("div", { class: "no-print", style: "display:flex;align-items:center;gap:10px" },
         el("button", { class: "ghost", onclick: () => this.showList() }, "← Projects"),
         el("h2", { style: "margin:0" }, data.name)),
+      el("div", { class: "print-only bom-print-head" },
+        el("h2", {}, data.name),
+        el("div", {}, `${boards} board${boards === 1 ? "" : "s"} · pick list ${new Date().toLocaleDateString()}`)),
       el("div", { class: "panel-body" },
-        el("div", { class: "row" }, el("label", {}, "Boards to build"), boardsInp, buildBtn),
+        el("div", { class: "row no-print" }, el("label", {}, "Boards to build"), boardsInp, buildBtn,
+          el("span", { style: "flex:1" }),
+          el("label", { title: "Order the lines by shelf, so you can collect the parts in one round" }, sortChk, " Sort by location"),
+          el("button", { onclick: () => window.print() }, "Print pick list")),
         table,
-        el("div", { class: "section-title" }, "Build history"),
-        this._buildsTable(id, data.builds, boards)),
+        el("div", { class: "no-print" },
+          el("div", { class: "section-title" }, "Build history"),
+          this._buildsTable(id, data.builds, boards))),
     );
     this.el.append(panel);
   }

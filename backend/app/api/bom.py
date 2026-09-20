@@ -21,7 +21,7 @@ from ..bommatch import Matcher, part_summary, remember
 from ..bomparse import parse_bom_csv
 from ..core.db import get_db
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
-from ..services import location_breakdown, on_hand_map
+from ..services import location_breakdown, location_breakdown_bulk, on_hand_map
 
 router = APIRouter(prefix="/api/bom", tags=["bom"])
 
@@ -107,6 +107,7 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
         raise HTTPException(404, "project not found")
     part_ids = [ln.part_id for ln in proj.bom_lines if ln.part_id]
     on_hand = on_hand_map(db, part_ids)
+    where = location_breakdown_bulk(db, part_ids)   # part id -> [{location, qty}], biggest first
     lines = []
     for ln in proj.bom_lines:
         needed = ln.qty_per_board * boards
@@ -124,6 +125,7 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "qty_per_board": ln.qty_per_board,
             "needed": needed,
             "on_hand": have,
+            "locations": [{"location": r["location"], "qty": r["qty"]} for r in where.get(ln.part_id, [])] if ln.part_id else [],
             "short": max(0, needed - have) if ln.part_id else None,
         })
     return {
@@ -210,6 +212,25 @@ def list_match_rules(db: Session = Depends(get_db)):
          "created_at": r.created_at.isoformat()}
         for r in rules
     ]
+
+
+class RulePatch(BaseModel):
+    part_id: str
+
+
+@router.patch("/match-rules/{rid}")
+def change_match_rule(rid: int, body: RulePatch, db: Session = Depends(get_db)):
+    """Point a remembered Value+Footprint at another part (the BOM does not say which voltage,
+    dielectric or fuse style it means - the answer can change)."""
+    r = db.get(BomMatchRule, rid)
+    if r is None:
+        raise HTTPException(404, "rule not found")
+    part = db.get(Part, body.part_id)
+    if part is None:
+        raise HTTPException(400, "unknown part")
+    r.part_id = part.id
+    db.commit()
+    return {"ok": True, "part_name": part.name}
 
 
 @router.delete("/match-rules/{rid}")

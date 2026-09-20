@@ -68,6 +68,9 @@ export class PartsView {
     // "shopping cart" mode: opened from a quote's "Browse parts" - each row gets a
     // + Add button that puts the part straight into that quote
     this.shop = initial.shop ? { quoteId: initial.shop.quoteId, quote: null, open: false } : null;
+    // "pick" mode: opened from the BOM review to choose ONE part for a line - a Use button per row,
+    // and clicking a row picks it instead of opening it
+    this.pick = initial.pick ? { onPick: initial.pick.onPick } : null;
     this._badges = new Map(); // part id -> "x n in cart" element, repainted without re-rendering the table
   }
 
@@ -100,6 +103,8 @@ export class PartsView {
     if (this.initial.q) { this.q = this.initial.q; this.qInput.value = this.initial.q; }
     if (this.initial.category_id) { this.rail = { mode: "categories", id: Number(this.initial.category_id) }; this.railCmp.setSelected("categories", this.rail.id); }
     else if (this.initial.location_id) { this.rail = { mode: "locations", id: Number(this.initial.location_id) }; this.railCmp.setSelected("locations", this.rail.id); }
+
+    if (this.initial.footprint) this.facetSel.footprint.add(this.initial.footprint);
 
     document.addEventListener("partsnas:scan", this._onScan);
     if (this.shop) {
@@ -520,11 +525,12 @@ export class PartsView {
     t.append(el("thead", {}, el("tr", {},
       el("th", {}, this._allChk(rows)),
       this.shop ? el("th", {}, "Add") : null,
+      this.pick ? el("th", {}, "Use") : null,
       el("th", {}, "Name"), el("th", {}, "MPN"), el("th", { title: "Datasheet - opens in a new tab" }, "DS"), el("th", {}, "Category"),
       el("th", {}, "Footprint"), el("th", { class: "num" }, "On hand"), el("th", {}, "Locations"))));
     const tb = el("tbody");
     for (const p of rows) tb.append(this._row(p));
-    if (!rows.length) tb.append(el("tr", {}, el("td", { colspan: this.shop ? "9" : "8", class: "hint" }, "No parts match. Adjust filters, or use Import (top-right).")));
+    if (!rows.length) tb.append(el("tr", {}, el("td", { colspan: this.shop || this.pick ? "9" : "8", class: "hint" }, "No parts match. Adjust filters, or use Import (top-right).")));
     t.append(tb);
     this.tableWrap.append(t);
   }
@@ -556,9 +562,14 @@ export class PartsView {
       ? el("a", { class: "ds-link", href: p.datasheet_url.trim(), target: "_blank", rel: "noopener noreferrer",
           title: "Open datasheet in a new tab", onclick: (e) => e.stopPropagation() }, "\ud83d\udcc4")
       : null;
-    const tr = el("tr", { class: checked ? "sel" : "", onclick: () => this.openDetail(p.id) },
+    const pickCell = this.pick
+      ? el("td", {}, el("button", { class: "primary", title: "Use this part",
+          onclick: (e) => { e.stopPropagation(); this.pick.onPick(p); } }, "Use"))
+      : null;
+    const tr = el("tr", { class: checked ? "sel" : "", onclick: () => (this.pick ? this.pick.onPick(p) : this.openDetail(p.id)) },
       el("td", {}, cb),
       shopCell,
+      pickCell,
       nameCell,
       el("td", {}, p.mpn || "",
         p.dup ? el("span", { class: "chip", style: "margin-left:6px;border-color:var(--warn);color:var(--warn)",

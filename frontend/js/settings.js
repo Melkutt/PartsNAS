@@ -1,6 +1,6 @@
 // Settings modal: supplier API credentials + auto-categorisation rules.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions, selectWithAdd } from "./ui.js";
+import { el, modal, toast, treeOptions, selectWithAdd, partSearch } from "./ui.js";
 import { parseNum } from "./units.js";
 
 const CURRENCIES = ["SEK", "NOK", "DKK", "EUR", "USD", "GBP", "CHF"];
@@ -243,7 +243,24 @@ export async function openSettings() {
         el("td", {}, r.value),
         el("td", { style: "max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, r.footprint),
         el("td", {}, r.part_name),
-        el("td", {}, el("button", { class: "ghost", onclick: async () => {
+        el("td", { style: "white-space:nowrap" },
+          el("button", { class: "ghost", title: "Point this Value + Footprint at another part (voltage, NP0 / X7R, fuse style ...)",
+            onclick: (e) => {
+              const cell = e.target.closest("tr").children[2];
+              cell.innerHTML = "";
+              cell.append(partSearch({ placeholder: "search part…", onPick: async (p) => {
+                try {
+                  await api(`/api/bom/match-rules/${r.id}`, { method: "PATCH", body: { part_id: p.id } });
+                  r.part_id = p.id;
+                  r.part_name = p.name;
+                  toast(`${r.value} · ${r.footprint} now uses ${p.name}`);
+                } catch (err) {
+                  toast(err.message);
+                }
+                renderBomRules();
+              } }).el);
+            } }, "Change…"),
+          el("button", { class: "ghost", onclick: async () => {
           await api(`/api/bom/match-rules/${r.id}`, { method: "DELETE" });
           bomRules.splice(bomRules.indexOf(r), 1);
           renderBomRules();
