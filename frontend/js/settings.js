@@ -6,7 +6,7 @@ import { parseNum } from "./units.js";
 const CURRENCIES = ["SEK", "NOK", "DKK", "EUR", "USD", "GBP", "CHF"];
 
 export async function openSettings() {
-  const [rows, ruleData, catOpts, bomRules, logoData, footerData, defaultsData, swishData] = await Promise.all([
+  const [rows, ruleData, catOpts, bomRules, logoData, footerData, defaultsData, swishData, autoData] = await Promise.all([
     api("/api/settings/providers"),
     api("/api/meta/attr-rules"),
     treeOptions("/api/categories", { includeBlank: "— category —" }),
@@ -15,6 +15,7 @@ export async function openSettings() {
     api("/api/settings/footer"),
     api("/api/settings/defaults"),
     api("/api/settings/swish"),
+    api("/api/settings/autosnapshot"),
   ]);
   const body = el("div", { class: "modal-body" });
   body.append(
@@ -73,6 +74,72 @@ export async function openSettings() {
       priceChk, " search prices from here"));
     body.append(block);
   }
+
+  // ---- automatic backup ----
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Automatic backup"));
+  body.append(el("div", { class: "hint" },
+    "Once a day the app saves a full snapshot (the same file as Export → Snapshot) into a folder and keeps the newest few. " +
+    "The folder is a path inside the container: the default sits next to your data on the NAS. To save to another NAS folder, " +
+    "map it as a volume in docker-compose.yml and enter its container path here. The snapshot contains your API keys — keep the folder private."));
+  const autoOn = el("input", { type: "checkbox" });
+  const autoFolder = el("input", { type: "text", style: "flex:1", placeholder: autoData.default_folder });
+  const autoKeep = el("input", { type: "text", inputmode: "numeric", style: "width:4em" });
+  const autoHour = el("select");
+  for (let h = 0; h < 24; h++) autoHour.append(el("option", { value: String(h) }, `${String(h).padStart(2, "0")}:00`));
+  const autoStatus = el("div", { class: "hint", style: "padding:4px 0" });
+  const autoFiles = el("div", { class: "hint", style: "padding:0 0 4px" });
+  const fmtBytes = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const paintAuto = (d) => {
+    autoOn.checked = !!d.config.enabled;
+    autoFolder.value = d.config.folder;
+    autoKeep.value = String(d.config.keep);
+    autoHour.value = String(d.config.hour);
+    const st = d.state || {};
+    autoStatus.innerHTML = "";
+    autoStatus.style.color = st.last_error ? "var(--warn)" : "";
+    if (st.last_error) autoStatus.append(el("b", {}, "Last backup failed: "), st.last_error);
+    else if (st.last_ok_at) autoStatus.append(`Last backup: ${new Date(st.last_ok_at).toLocaleString()} · ${st.last_file} (${fmtBytes(st.last_bytes || 0)})`);
+    else autoStatus.append(d.config.enabled ? "Waiting for the first backup." : "Off - no automatic backups are made.");
+    autoFiles.textContent = d.files.length
+      ? `${d.files.length} in ${d.folder_resolved}: ` + d.files.slice(0, 4).map((f) => `${f.name.replace(/^partsnas-auto-|\.zip$/g, "")} (${fmtBytes(f.bytes)})`).join(" · ") + (d.files.length > 4 ? " …" : "")
+      : `Folder: ${d.folder_resolved}`;
+  };
+  paintAuto(autoData);
+  const saveAuto = async () => {
+    try {
+      const d = await api("/api/settings/autosnapshot", { method: "PUT", body: {
+        enabled: autoOn.checked, folder: autoFolder.value.trim() || autoData.default_folder,
+        keep: Math.max(1, Math.round(parseNum(autoKeep.value) ?? 7)), hour: Number(autoHour.value) } });
+      paintAuto(d);
+      toast(d.config.enabled ? "Automatic backup saved" : "Automatic backup is off");
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+  const runAuto = async (btn) => {
+    btn.disabled = true;
+    try {
+      await saveAuto();   // back up into the folder as it is entered now
+      const d = await api("/api/settings/autosnapshot/run", { method: "POST" });
+      paintAuto(d);
+      toast(`Backup saved: ${d.file} (${fmtBytes(d.bytes)})`);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  const runBtn = el("button", { onclick: () => runAuto(runBtn) }, "Back up now");
+  body.append(
+    el("div", { class: "row", style: "align-items:center;gap:10px" },
+      el("label", { style: "display:flex;gap:6px;align-items:center" }, autoOn, "Back up every day at"), autoHour,
+      el("span", { class: "hint", style: "padding:0" }, "(the NAS's clock)")),
+    el("div", { class: "row", style: "align-items:center;gap:10px" }, el("label", {}, "Folder"), autoFolder),
+    el("div", { class: "row", style: "align-items:center;gap:10px" }, el("label", {}, "Keep the newest"), autoKeep,
+      el("span", { class: "hint", style: "padding:0" }, "backups; older ones are deleted"),
+      el("span", { style: "flex:1" }),
+      el("button", { class: "primary", onclick: saveAuto }, "Save backup settings"), runBtn),
+    autoStatus, autoFiles);
 
   // ---- company logo ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Company logo"));

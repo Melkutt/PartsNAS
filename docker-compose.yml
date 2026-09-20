@@ -12,6 +12,9 @@ services:
     volumes:
       # keep the database + images on the NAS volume, outside the container
       - ./data:/data
+      # Automatic backups (Settings -> Automatic backup) go to /data/backups/auto by default, next to
+      # your data. To save them in another NAS folder, map it here and enter /backups as the folder:
+      # - /volume1/homes/you/partsnas-backups:/backups
     environment:
       PARTSNAS_DEFAULT_CURRENCY: SEK
       PARTSNAS_DEFAULT_VAT_PERCENT: "25"

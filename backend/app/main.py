@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
+from .autosnapshot import start_scheduler as start_autosnapshot
 from .buildid import build_id
 from .core.config import get_settings
 from .core.db import Base, SessionLocal, engine, sync_columns
@@ -33,6 +34,7 @@ async def lifespan(_app: FastAPI):
         print(f"[migrate] added columns: {', '.join(added)}")
     with SessionLocal() as db:
         run_all(db)
+    start_autosnapshot()
     yield
 
 
@@ -74,6 +76,7 @@ def info():
 
 def _mount_routers() -> None:
     from .api import (
+        autosnapshot,
         backup,
         bom,
         bulk,
@@ -118,6 +121,7 @@ def _mount_routers() -> None:
     app.include_router(exports.router)
     app.include_router(backup.router)
     app.include_router(snapshot.router)
+    app.include_router(autosnapshot.router)
     # kicad -> next milestone
 
 
