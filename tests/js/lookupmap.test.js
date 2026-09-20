@@ -58,6 +58,36 @@ Deno.test("resistor: the everyday attributes", () => {
   for (const [name, field] of Object.entries(want)) eq(guessField(name, F("resistor")), field, name);
 });
 
+Deno.test("an alias must not match in the middle of a word", () => {
+  // "Voltage - Input (Max)" is "...inputmax" = "...tmax": it was offered as "Operating temp max"
+  const ic = F("ic");
+  eq(guessField("Voltage - Input (Max)", ic), "", "Voltage - Input (Max)");
+  eq(guessField("Voltage - Dropout (Max)", ic), "", "Voltage - Dropout (Max)");
+  eq(guessField("Height (Max)", ic), "", "Height (Max)");
+  eq(guessField("Current - Output (Max)", ic), "", "Current - Output (Max)");
+  // ...while the real temperature range still maps
+  eq(guessField("Operating Temperature", ic).startsWith("operating_temp"), true, "Operating Temperature");
+  // "Bandwidth" contains "width", "Wavelength" contains "length"
+  eq(guessField("Bandwidth", F("capacitor")), "", "Bandwidth");
+  eq(guessField("Wavelength", F("resistor")), "", "Wavelength");
+  eq(guessField("Serial Interfaces", ic), "interface", "Serial Interfaces");
+  // a lone junction temperature ("150°C (TJ)") is a ceiling: it filled "min" on 13 parts
+  eq(guessField("Operating Temperature - Junction", F("transistor_bjt")), "operating_temp_max", "junction");
+});
+
+Deno.test("every alias table entry belongs to a field some class really has", () => {
+  // `current_rating` was written for a field that is called `currentrating`: the aliases never applied
+  const real = new Set(Object.values(CLASSES).flatMap((c) => c.fields.map((f) => f.key)));
+  const dead = Object.keys(ALIAS).filter((k) => !real.has(k));
+  eq(dead, ["function"], "alias keys that no class has (known: 'function')");
+});
+
+Deno.test("real-life inductor / connector current rating", () => {
+  eq(guessField("Current Rating (Amps)", F("inductor")), "currentrating");
+  eq(guessField("Current Rating (Amps)", F("connector")), "currentrating");
+  eq(guessField("Output", F("connector")), "", "a bare 'Output' is not a current");
+});
+
 Deno.test("no alias shorter than 4 characters may match by substring", () => {
   for (const [cls, c] of Object.entries(CLASSES)) {
     for (const name of ["Composition", "Size / Dimension", "Number of Terminations", "Operating Temperature - Junction"]) {

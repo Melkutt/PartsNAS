@@ -17,7 +17,7 @@ export const ALIAS = {
   mounting: ["mountingstyle", "mounting", "mountingtype", "terminationstyle", "packagetype"],
   pitch: ["pitch", "leadpitch", "leadspacing", "pinpitch", "contactpitch"],
   pincount: ["numberofpins", "pincount", "pins", "numberofcontacts", "numberofpositions", "numberofio", "numberofterminations", "numberofcircuits", "circuits"],
-  current_rating: ["currentrating", "currentcontinuous", "ratedcurrent", "currentoutput", "currentmax", "currentcontinuousdrain", "id", "if", "currentaveragerectified"],
+  currentrating: ["currentrating", "currentcontinuous", "ratedcurrent", "currentmax", "id", "if", "currentaveragerectified"],
   esr: ["esr", "equivalentseriesresistance", "dcr", "dcresistance", "impedance"],
   ripple_current: ["ripplecurrent", "ripple"],
   series: ["series", "productseries", "family"],
@@ -27,7 +27,8 @@ export const ALIAS = {
   dimensions: ["sizedimension", "dimensions"],
   fuse_type: ["fusetype", "type", "response", "blowcharacteristic", "speed"],
   operating_temp_min: ["operatingtemperaturemin", "minimumoperatingtemperature", "tmin"],
-  operating_temp_max: ["operatingtemperaturemax", "maximumoperatingtemperature", "tmax"],
+  // a single "150°C (TJ)" is a ceiling, not a range: it belongs in max
+  operating_temp_max: ["operatingtemperaturemax", "maximumoperatingtemperature", "operatingtemperaturejunction", "junctiontemperature", "tmax"],
   maxtemp: ["maxtemp"],
   vcc_min: ["voltagesupplymin", "supplyvoltagemin", "vccmin", "vsmin"],
   vcc_max: ["voltagesupplymax", "supplyvoltagemax", "vccmax", "vsmax"],
@@ -36,7 +37,7 @@ export const ALIAS = {
   frequency: ["frequency", "clockfrequency", "speed", "maxoperatingfrequency", "bandwidth", "coresize"],
   flash: ["memorysize", "flashsize", "programmemorysize", "programmemory"],
   ram: ["ramsize", "sramsize", "datamemorysize", "ram"],
-  interface: ["interface", "connectivity", "peripherals"],
+  interface: ["interface", "serialinterfaces", "connectivity", "peripherals"],
   function: ["function", "type", "amplifiertype", "regulatortopology", "coreprocessor"],
   vds: ["vdss", "drainsourcevoltage", "vds"],
   vgsth: ["vgsth", "gatethresholdvoltage"],
@@ -56,19 +57,38 @@ const MIN_ALIAS_SUBSTR = 4;
 // ...and an attribute name that is merely a fragment of an alias needs to be long enough to mean it
 const MIN_NAME_FRAGMENT = 5;
 
+// "Voltage - Input (Max)" is "voltageinputmax" once normalised, which contains the alias "tmax" -
+// so every LDO's input voltage was offered as "Operating temp max", and "Height (Max)" too.
+// An alias that sits inside the name only counts if it starts and ends on a word boundary of
+// the original name.
+function wordIndex(attrName) {
+  const words = String(attrName || "").toLowerCase().match(/[a-z0-9]+/g) || [];
+  const bounds = new Set([0]);
+  let n = 0;
+  for (const w of words) { n += w.length; bounds.add(n); }
+  return { text: words.join(""), bounds };
+}
+
+function hasWord(idx, needle) {
+  for (let i = idx.text.indexOf(needle); i >= 0; i = idx.text.indexOf(needle, i + 1))
+    if (idx.bounds.has(i) && idx.bounds.has(i + needle.length)) return true;
+  return false;
+}
+
 // how sure the guess is: 4 label/key equals the name, 3 exact alias, 2 alias inside the name, 1 label inside the name
 export function scoreField(attrName, fields) {
   const a = norm(attrName);
+  const idx = wordIndex(attrName);
   for (const f of fields) if (norm(f.label) === a || norm(f.key) === a) return { key: f.key, score: 4 };
   for (const f of fields) if ((ALIAS[f.key] || []).some((al) => a === al)) return { key: f.key, score: 3 };
   for (const f of fields) {
     const hit = (ALIAS[f.key] || []).some((al) =>
-      (al.length >= MIN_ALIAS_SUBSTR && a.includes(al)) || (a.length >= MIN_NAME_FRAGMENT && al.includes(a)));
+      (al.length >= MIN_ALIAS_SUBSTR && hasWord(idx, al)) || (a.length >= MIN_NAME_FRAGMENT && al.includes(a)));
     if (hit) return { key: f.key, score: 2 };
   }
   for (const f of fields) {
     const l = norm(f.label);
-    if (l && ((l.length >= MIN_ALIAS_SUBSTR && a.includes(l)) || (a.length >= MIN_NAME_FRAGMENT && l.includes(a))))
+    if (l && ((l.length >= MIN_ALIAS_SUBSTR && hasWord(idx, l)) || (a.length >= MIN_NAME_FRAGMENT && l.includes(a))))
       return { key: f.key, score: 1 };
   }
   return { key: "", score: 0 };

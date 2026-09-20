@@ -62,3 +62,11 @@ def test_order_qty_is_remembered_and_can_be_cleared(client, part):
     assert client.patch(f"/api/parts/{part}", json={"order_qty": None}).status_code == 200
     assert _order_row(client, part)["suggested_qty"] == 2
     assert client.patch(f"/api/parts/{part}", json={"order_qty": 0}).status_code == 422
+
+
+# -- every class has the shared parameters ---------------------------------------------------
+
+def test_every_class_has_size_dimension(client):
+    classes = client.get("/api/meta/part-classes").json()
+    missing = [cid for cid, c in classes.items() if not any(f["key"] == "dimensions" for f in c["fields"])]
+    assert missing == []

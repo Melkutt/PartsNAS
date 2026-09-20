@@ -1,6 +1,7 @@
 {
   "_shared": [
     { "key": "series", "label": "Series", "type": "text" },
+    { "key": "dimensions", "label": "Size / Dimension", "type": "text" },
     { "key": "operating_temp_min", "label": "Operating temp min", "unit": "°C", "type": "number" },
     { "key": "operating_temp_max", "label": "Operating temp max", "unit": "°C", "type": "number" },
     { "key": "cross_section", "label": "Cross section", "unit": "mm²", "type": "number" }
