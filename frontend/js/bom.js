@@ -10,7 +10,7 @@
 // matches an old rule, since the rule is keyed on the value too.
 import { api } from "./api.js";
 import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
-import { splitRefs } from "./refdes.js";
+import { compactRefs, splitRefs } from "./refdes.js";
 import { PcbView } from "./pcbview.js";
 
 const CERTAIN = ["mpn", "remembered", "new"];
@@ -524,7 +524,9 @@ export class BomView {
       const tr = el("tr", { class: `${hasView ? "bom-line-link" : ""}${ln.ignored ? " bom-skipped no-print" : ""}${ln.placed && !ln.ignored ? " bom-placed" : ""}`, onclick: hasView ? () => pickLine(ln, false) : null },
         el("td", { class: "print-only pick-col c-pick" }, ln.placed && !ln.ignored ? "☑" : "☐"),
         el("td", { class: "no-print" }, placedBox),
-        el("td", { class: "c-refdes" }, ln.refdes || ""),
+        // on paper the references are ranges, one per line (C3-8 / C10-11 / C13): narrow, and easy to read down
+        el("td", { class: "c-refdes" }, el("span", { class: "ref-screen" }, ln.refdes || ""),
+          el("div", { class: "ref-print" }, ...compactRefs(ln.refdes).map((r) => el("div", {}, r)))),
         el("td", { class: "c-part" }, ln.part_name
           ? el("div", {}, el("div", {}, ln.part_name), ln.part_summary ? el("div", { class: "hint", style: "padding:0" }, ln.part_summary) : null)
           : el("span", { class: "match-badge low" }, ln.unresolved_mpn || "unresolved")),

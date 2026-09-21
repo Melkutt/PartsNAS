@@ -864,6 +864,7 @@ table.parts-table {
 /* nothing may stick out of the frame: the part picker used to stretch the table past the panel */
 .bom-panel { overflow-x: auto; }
 .bom-table { width: 100%; }
+.bom-table .ref-print { display: none; }
 .bom-table td.bom-part { min-width: 240px; max-width: 460px; }
 .bom-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; margin-top: 4px; }
 .bom-controls > select { max-width: 100%; min-width: 0; }
@@ -880,6 +881,11 @@ table.parts-table {
   .bom-table { font-size: 10.5px; width: 100%; table-layout: auto; }
   .bom-table th, .bom-table td { padding: 2px 4px; white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
   .bom-table td.bom-part { min-width: 0; max-width: none; }
+  .bom-table th { white-space: nowrap; }
+  .bom-table td.num { white-space: nowrap; }
+  .bom-table .ref-screen { display: none; }
+  .bom-table .ref-print { display: block; white-space: nowrap; }
+  .bom-table td.c-refdes { width: 1%; }
   .bom-table .hint { font-size: 9px; }
   .bom-where { color: #000 !important; font-size: 10px; }
   /* the columns left out in the print dialog */

@@ -113,7 +113,8 @@ matched against what you actually have in stock.
 7. **Print pick list.** Choose which columns go on the paper (tick box, reference, part, value, where it is,
    per board, needed, on hand, short), and print just the list or the board on page 1 and the list from
    page 2, with front and/or back and the reference names (C1, R2 …) drawn on it. The board is printed
-   light, for paper, as you have turned it on screen. Optionally add a **price summary** at the end: what the
+   light, for paper, as you have turned it on screen. On paper the references are written as ranges, one per
+   line (C3-8, C10-11, C13), so the list stays narrow. Optionally add a **price summary** at the end: what the
    parts cost, and what they sell for with a margin you set, each ex and inc VAT, using the same supplier
    prices a quote would use (lines without a price are counted and left out). Skipped lines are not printed,
    and your choices are remembered.
