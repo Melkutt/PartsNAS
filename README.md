@@ -83,16 +83,46 @@ Version **0.6.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
   or a **BOM exported from KiCad** (with matching against your stock).
-- **BOM tab.** *Import BOM* takes KiCad's BOM file (`.csv`): it is matched against your parts,
-  shows what is short, deducts stock when you build, and prints a pick list with where each part is kept.
-  Add the project's **board file** (`.kicad_pcb`) and PartsNAS **draws the board itself** next to the list: turn it,
-  flip it to the back, zoom, click a line to light up the parts on the board, click a part on the board to see
-  what it is, its value and where it is stored. It reads KiCad's own file format directly (no plugin needed) and
-  keeps the drawing (a few hundred KB per board) and a compressed copy of the file. Silkscreen text is drawn, and a clicked part lights up in
-  neon green on the side it sits on. Saved lines can be edited afterwards (**Change…** picks another part,
-  **Skip** leaves out holes, fiducials, logos and do-not-fit parts: kept in the list, but not counted, built or
-  printed), and **Print pick list** can put the board on page 1 and the list from page 2.
-  Projects can be renamed, and each line has a **Placed** tick (kept, and shown in blue on the board) for building a board over several evenings.
+
+**Build a board from a KiCad project (the BOM tab)**
+
+The BOM tab turns a KiCad project into a to-do list you can shop, build and solder from,
+matched against what you actually have in stock.
+
+1. **Import BOM.** Choose the BOM file KiCad writes (`.csv`: in the schematic editor, *Tools →
+   Generate BOM*, or the *Export BOM* button). Optionally add the project's board file
+   (`<project>.kicad_pcb`) in the same dialog. Nothing is saved until you press *Save project*.
+2. **Review the match.** Every line is matched against your parts. An exact MPN, or a
+   value + footprint you confirmed before, is picked automatically; anything else is only a
+   *suggestion* with a score and the reasons. *Change…* opens a search, and *Browse…* opens the
+   parts list with the right category and footprint already chosen, the way the quote cart does.
+   Tick *Remember* to reuse your choice for the same value + footprint in the next BOM. The BOM
+   does not say voltage, dielectric or fuse type: you decide which real part a "100n" is.
+3. **Skip what is not built in.** Mounting holes, fiducials, logos and similar (`H`, `MH`, `FID`,
+   `G`, `LOGO`, `SYM`, `NT`) are ticked *Skip* from the start; tick or untick any line. Skipped
+   lines stay in the project but are not counted in shortages, builds or the pick list, and are
+   hidden behind *Show N skipped*.
+4. **The project.** Set how many boards to build to see what each line needs, what you have,
+   where it is stored and what is **short**. Rows can be sorted by storage location, so you walk the
+   shelves once. *Build (deduct stock)* takes the parts out of stock, and can be undone.
+5. **Edit later.** A saved line can be changed at any time (*Change…* to pick another part, *Skip* /
+   *Use*), and the project can be renamed with ✎. Nothing needs to be imported again.
+6. **Placed.** Tick a line as you solder it on. The tick is saved, the row fades, and on the
+   board the part turns blue, so you see what is left and can pick the job up again another evening.
+   *Clear placed* starts over for the next board.
+7. **Print pick list.** Print just the list, or the board on page 1 and the list from page 2,
+   with front and/or back and the reference names (C1, R2 …) drawn on it. The board is printed
+   light, for paper, as you have turned it on screen. Skipped lines are not printed.
+
+*The board view.* With a `.kicad_pcb` attached, PartsNAS draws the board itself next to the list,
+straight from KiCad's own file (KiCad 6 to 10, no plugin and no 3D models): outline, pads,
+silkscreen and its text, tracks and zones. Turn it, flip it to the back, zoom and pan, and switch
+layers. **Click a line** and its parts light up in neon green on the side they sit on; **click a
+part on the board** and the list jumps to its line, with what it is and where you keep it.
+PartsNAS keeps the drawing (a few hundred KB per board) and a compressed copy of the file, so
+the drawing can be redone when PartsNAS learns to show more. The BOM works without a board, and a
+board that PartsNAS cannot read never breaks the BOM. If a board was saved before PartsNAS could
+draw text, use *Replace board…* once with the same file.
 
 **Yours to keep**
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
@@ -221,8 +251,8 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
   open the page can read and change everything.
 - The Swish QR code only handles SEK. Currency and VAT are configurable, but the wording
   and a few defaults lean Swedish.
-- KiCad integration today means importing a BOM from KiCad's schematic editor. A KiCad
-  HTTP Library is planned, not built.
+- KiCad integration today means the **BOM tab**: import a BOM from KiCad's schematic editor and
+  draw the board from its `.kicad_pcb` file. A KiCad HTTP Library is planned, not built.
 
 ## Under the hood
 

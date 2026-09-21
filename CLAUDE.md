@@ -166,8 +166,16 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   reference` and `property "Reference"`) into board-frame drawing primitives - outline, footprints with pads and
   silk/fab/courtyard lines, tracks, vias, zone fills - about 90 KB for a 320 KB file, 530 KB for a 2.7 MB one.
   Endpoints: `POST /api/bom/board/parse` (review step, nothing saved), `POST/GET/DELETE /api/bom/projects/{id}/board`
-  (`data/pcb/<id>.json`, the drawing only). `pcbview.js` draws it on a canvas (pan, zoom, turn, flip, layers,
-  highlight, click to pick); its geometry is pure and tested in `tests/js/pcbview.test.js`.
+  (`data/pcb/<id>.json` = the drawing, plus `<id>.kicad_pcb.gz` = the uploaded file). The drawing has a `format`
+  number (`kicadpcb.FORMAT`, now 2 = silkscreen/fab text): `GET .../board` redraws it from the gz when it is older,
+  and boards saved before the gz existed show a "Replace board…" hint. Bump FORMAT whenever extract_board() learns
+  to output more. Text is drawn as Courier New at the file's height/width (KiCad's stroke font is not available);
+  `PcbView.renderImage()` draws a light print version for the pick list. `pcbview.js` draws it on a canvas (pan, zoom,
+  turn, flip, layers, highlight in neon green only on the part's own side, blue for *placed*, click to pick); its
+  geometry is pure and tested in `tests/js/pcbview.test.js`.
+  Other BOM-line state: `BomLine.ignored` (Skip: out of shortages/builds/pick list; AUTO_SKIP refdes in `bom.js`),
+  `BomLine.placed`; `PATCH /api/bom/projects/{id}` (rename), `PATCH .../lines/{lid}` (part, ignored, placed, qty),
+  `POST .../placed` (bulk). The Interactive HTML BOM import was removed in 0.6.0 (the board view replaces it).
   **Conventions that were easy to get wrong** (verified against pcbnew on 19 real boards, back-side parts
   included): a pad's angle in the file is its angle on the BOARD and an omitted angle means 0 (not the footprint's);
   a back-side footprint is stored already mirrored; KiCad turns counter-clockwise on screen (y down);
