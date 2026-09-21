@@ -161,6 +161,18 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - **Build id** (`app/buildid.py`): a hash of backend + frontend + seed, shown in the top bar and in
   `/api/health`. `scripts/deploy_nas.ps1` copies, verifies each file and compares it. On Synology,
   Start re-uses the old image: remove the container and image to get new code.
+- **Board view, our own** (`backend/app/kicadpcb.py`, `frontend/js/pcbview.js`): the BOM tab accepts the
+  project's `.kicad_pcb`. `kicadpcb.extract_board()` parses KiCad's S-expression text (KiCad 6-10: `fp_text
+  reference` and `property "Reference"`) into board-frame drawing primitives - outline, footprints with pads and
+  silk/fab/courtyard lines, tracks, vias, zone fills - about 90 KB for a 320 KB file, 530 KB for a 2.7 MB one.
+  Endpoints: `POST /api/bom/board/parse` (review step, nothing saved), `POST/GET/DELETE /api/bom/projects/{id}/board`
+  (`data/pcb/<id>.json`, the drawing only). `pcbview.js` draws it on a canvas (pan, zoom, turn, flip, layers,
+  highlight, click to pick); its geometry is pure and tested in `tests/js/pcbview.test.js`.
+  **Conventions that were easy to get wrong** (verified against pcbnew on 19 real boards, back-side parts
+  included): a pad's angle in the file is its angle on the BOARD and an omitted angle means 0 (not the footprint's);
+  a back-side footprint is stored already mirrored; KiCad turns counter-clockwise on screen (y down);
+  `F&B.Cu` is a pad layer name. `scripts/kicad_truth.py` dumps pcbnew's own numbers (run with KiCad's python) and
+  `scripts/kicad_make_mini_board.py` rebuilds `backend/tests/fixtures/mini.kicad_pcb`.
 - **Import IBOM** (`frontend/js/ibomlink.js`): the BOM tab reads the parts list out of an Interactive HTML BOM
   file in the browser (its `pcbdata`), sends it to `POST /api/bom/match` (same review as a CSV) and keeps the
   file with the project (`data/ibom/<id>.html`, `POST/GET/DELETE /api/bom/projects/{id}/ibom`) for the board

@@ -888,12 +888,31 @@ table.parts-table {
 .bom-import-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; background: var(--surface-sunken); }
 .bom-import-card .hint { padding: 8px 0 0; line-height: 1.45; }
 
-.bom-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.bom-split { display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); gap: 12px; align-items: start; }
 .bom-lines { min-width: 0; overflow-x: auto; }
 .bom-board { position: sticky; top: 0; min-width: 0; }
-.ibom-frame { width: 100%; height: 72vh; min-height: 360px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
+.ibom-frame { width: 100%; height: calc(100vh - 230px); min-height: 420px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
 .ibom-info { font-size: 13px; padding: 6px 2px 8px; min-height: 3.2em; }
 .bom-line-link { cursor: pointer; }
 .bom-line-link:hover { background: var(--surface-raised); }
 tr.board-hit { background: var(--accent-soft); outline: 1px solid var(--accent); }
 @media (max-width: 1100px) { .bom-split { grid-template-columns: minmax(0, 1fr); } .bom-board { position: static; } }
+
+/* our own board drawing (pcbview.js) */
+.pcbview { display: flex; flex-direction: column; min-height: 0; }
+.pcbview-bar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 4px 2px 6px; font-size: 12px; }
+.pcbview-bar label { display: flex; gap: 3px; align-items: center; color: var(--text-muted); cursor: pointer; }
+.pcbview-canvas { flex: 1 1 0; height: 0; width: 100%; min-height: 0; display: block; border: 1px solid var(--border); border-radius: var(--radius); background: #12191a; cursor: grab; touch-action: none; }
+.pcbview-canvas:active { cursor: grabbing; }
+.bom-board-host { height: calc(100vh - 250px); min-height: 420px; }
+/* in the review the board stays in view while you go down the list */
+.bom-panel-sticky { overflow: visible; }
+.bom-boardbar { position: sticky; top: 0; z-index: 6; height: 42vh; min-height: 300px; background: var(--surface); padding-bottom: 6px; }
+/* wide screens: the review is the list on the left and the board, tall and always in view, on the right */
+@media (min-width: 1100px) {
+  .panel-body.has-board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 38%); column-gap: 14px; align-items: start; }
+  .panel-body.has-board > * { grid-column: 1; min-width: 0; }
+  .panel-body.has-board > .bom-boardbar { grid-column: 2; grid-row: 1 / span 30; height: calc(100vh - 110px); min-height: 420px; top: 4px; }
+}
+@media print { .bom-boardbar, .bom-board { display: none !important; } }
+@media (max-width: 820px) { .bom-board-host { height: 60vh; } .bom-boardbar { height: 45vh; } }

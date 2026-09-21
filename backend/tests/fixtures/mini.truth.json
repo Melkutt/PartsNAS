@@ -1,0 +1,752 @@
+{
+ "footprints": [
+  {
+   "ref": "R1",
+   "value": "R_0603",
+   "pos": [
+    20.0,
+    20.0
+   ],
+   "orient": 0.0,
+   "side": "F",
+   "pads": [
+    {
+     "num": "1",
+     "pos": [
+      19.0,
+      20.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 0.0,
+     "shape": "roundrect",
+     "drill": 0.0,
+     "on_front": true,
+     "on_back": false,
+     "box": [
+      18.55,
+      19.4,
+      19.45,
+      20.6
+     ]
+    },
+    {
+     "num": "2",
+     "pos": [
+      21.0,
+      20.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 0.0,
+     "shape": "rect",
+     "drill": 0.0,
+     "on_front": true,
+     "on_back": false,
+     "box": [
+      20.55,
+      19.4,
+      21.45,
+      20.6
+     ]
+    }
+   ],
+   "graphics": [
+    {
+     "layer": "F.Silkscreen",
+     "shape": "Line",
+     "start": [
+      19.5,
+      19.2
+     ],
+     "end": [
+      20.5,
+      19.2
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "F.Courtyard",
+     "shape": "Line",
+     "start": [
+      18.2,
+      19.0
+     ],
+     "end": [
+      21.8,
+      19.0
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "F.Courtyard",
+     "shape": "Line",
+     "start": [
+      21.8,
+      19.0
+     ],
+     "end": [
+      21.8,
+      21.0
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "F.Fab",
+     "shape": "Line",
+     "start": [
+      18.4,
+      19.2
+     ],
+     "end": [
+      21.6,
+      19.2
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "F.Fab",
+     "shape": "Line",
+     "start": [
+      21.6,
+      19.2
+     ],
+     "end": [
+      21.6,
+      20.8
+     ],
+     "width": 0.12
+    }
+   ]
+  },
+  {
+   "ref": "J1",
+   "value": "Conn_2",
+   "pos": [
+    40.0,
+    20.0
+   ],
+   "orient": -90.0,
+   "side": "F",
+   "pads": [
+    {
+     "num": "1",
+     "pos": [
+      40.0,
+      18.73
+     ],
+     "size": [
+      1.7,
+      1.7
+     ],
+     "orient": 270.0,
+     "shape": "circle",
+     "drill": 1.0,
+     "on_front": true,
+     "on_back": true,
+     "box": [
+      39.15,
+      17.88,
+      40.85,
+      19.58
+     ]
+    },
+    {
+     "num": "2",
+     "pos": [
+      40.0,
+      21.27
+     ],
+     "size": [
+      1.7,
+      2.2
+     ],
+     "orient": 270.0,
+     "shape": "oval",
+     "drill": 1.0,
+     "on_front": true,
+     "on_back": true,
+     "box": [
+      38.9,
+      20.42,
+      41.1,
+      22.12
+     ]
+    }
+   ],
+   "graphics": []
+  },
+  {
+   "ref": "C1",
+   "value": "C_0603",
+   "pos": [
+    20.0,
+    30.0
+   ],
+   "orient": 45.0,
+   "side": "F",
+   "pads": [
+    {
+     "num": "1",
+     "pos": [
+      19.2929,
+      30.7071
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 45.0,
+     "shape": "roundrect",
+     "drill": 0.0,
+     "on_front": true,
+     "on_back": false,
+     "box": [
+      18.6436,
+      30.0578,
+      19.9422,
+      31.3564
+     ]
+    },
+    {
+     "num": "2",
+     "pos": [
+      20.7071,
+      29.2929
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 45.0,
+     "shape": "rect",
+     "drill": 0.0,
+     "on_front": true,
+     "on_back": false,
+     "box": [
+      19.9646,
+      28.5504,
+      21.4496,
+      30.0354
+     ]
+    }
+   ],
+   "graphics": [
+    {
+     "layer": "F.Silkscreen",
+     "shape": "Line",
+     "start": [
+      19.0808,
+      29.7879
+     ],
+     "end": [
+      19.7879,
+      29.0808
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "F.Courtyard",
+     "shape": "Line",
+     "start": [
+      18.0201,
+      30.5657
+     ],
+     "end": [
+      20.5657,
+      28.0201
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "F.Courtyard",
+     "shape": "Line",
+     "start": [
+      20.5657,
+      28.0201
+     ],
+     "end": [
+      21.9799,
+      29.4343
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "F.Fab",
+     "shape": "Line",
+     "start": [
+      18.3029,
+      30.5657
+     ],
+     "end": [
+      20.5657,
+      28.3029
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "F.Fab",
+     "shape": "Line",
+     "start": [
+      20.5657,
+      28.3029
+     ],
+     "end": [
+      21.6971,
+      29.4343
+     ],
+     "width": 0.12
+    }
+   ]
+  },
+  {
+   "ref": "R2",
+   "value": "R_0603",
+   "pos": [
+    30.0,
+    20.0
+   ],
+   "orient": 90.0,
+   "side": "F",
+   "pads": [
+    {
+     "num": "1",
+     "pos": [
+      30.0,
+      21.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 90.0,
+     "shape": "roundrect",
+     "drill": 0.0,
+     "on_front": true,
+     "on_back": false,
+     "box": [
+      29.4,
+      20.55,
+      30.6,
+      21.45
+     ]
+    },
+    {
+     "num": "2",
+     "pos": [
+      30.0,
+      19.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 90.0,
+     "shape": "rect",
+     "drill": 0.0,
+     "on_front": true,
+     "on_back": false,
+     "box": [
+      29.4,
+      18.55,
+      30.6,
+      19.45
+     ]
+    }
+   ],
+   "graphics": [
+    {
+     "layer": "F.Silkscreen",
+     "shape": "Line",
+     "start": [
+      29.2,
+      20.5
+     ],
+     "end": [
+      29.2,
+      19.5
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "F.Courtyard",
+     "shape": "Line",
+     "start": [
+      29.0,
+      18.2
+     ],
+     "end": [
+      31.0,
+      18.2
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "F.Courtyard",
+     "shape": "Line",
+     "start": [
+      29.0,
+      21.8
+     ],
+     "end": [
+      29.0,
+      18.2
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "F.Fab",
+     "shape": "Line",
+     "start": [
+      29.2,
+      18.4
+     ],
+     "end": [
+      30.8,
+      18.4
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "F.Fab",
+     "shape": "Line",
+     "start": [
+      29.2,
+      21.6
+     ],
+     "end": [
+      29.2,
+      18.4
+     ],
+     "width": 0.12
+    }
+   ]
+  },
+  {
+   "ref": "C3",
+   "value": "C_0603",
+   "pos": [
+    40.0,
+    30.0
+   ],
+   "orient": -90.0,
+   "side": "B",
+   "pads": [
+    {
+     "num": "1",
+     "pos": [
+      40.0,
+      29.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 270.0,
+     "shape": "roundrect",
+     "drill": 0.0,
+     "on_front": false,
+     "on_back": true,
+     "box": [
+      39.4,
+      28.55,
+      40.6,
+      29.45
+     ]
+    },
+    {
+     "num": "2",
+     "pos": [
+      40.0,
+      31.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 270.0,
+     "shape": "rect",
+     "drill": 0.0,
+     "on_front": false,
+     "on_back": true,
+     "box": [
+      39.4,
+      30.55,
+      40.6,
+      31.45
+     ]
+    }
+   ],
+   "graphics": [
+    {
+     "layer": "B.Silkscreen",
+     "shape": "Line",
+     "start": [
+      39.2,
+      29.5
+     ],
+     "end": [
+      39.2,
+      30.5
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "B.Courtyard",
+     "shape": "Line",
+     "start": [
+      39.0,
+      28.2
+     ],
+     "end": [
+      39.0,
+      31.8
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "B.Courtyard",
+     "shape": "Line",
+     "start": [
+      39.0,
+      31.8
+     ],
+     "end": [
+      41.0,
+      31.8
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "B.Fab",
+     "shape": "Line",
+     "start": [
+      39.2,
+      28.4
+     ],
+     "end": [
+      39.2,
+      31.6
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "B.Fab",
+     "shape": "Line",
+     "start": [
+      39.2,
+      31.6
+     ],
+     "end": [
+      40.8,
+      31.6
+     ],
+     "width": 0.12
+    }
+   ]
+  },
+  {
+   "ref": "C2",
+   "value": "C_0603",
+   "pos": [
+    30.0,
+    30.0
+   ],
+   "orient": 180.0,
+   "side": "B",
+   "pads": [
+    {
+     "num": "1",
+     "pos": [
+      31.0,
+      30.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 180.0,
+     "shape": "roundrect",
+     "drill": 0.0,
+     "on_front": false,
+     "on_back": true,
+     "box": [
+      30.55,
+      29.4,
+      31.45,
+      30.6
+     ]
+    },
+    {
+     "num": "2",
+     "pos": [
+      29.0,
+      30.0
+     ],
+     "size": [
+      0.9,
+      1.2
+     ],
+     "orient": 180.0,
+     "shape": "rect",
+     "drill": 0.0,
+     "on_front": false,
+     "on_back": true,
+     "box": [
+      28.55,
+      29.4,
+      29.45,
+      30.6
+     ]
+    }
+   ],
+   "graphics": [
+    {
+     "layer": "B.Silkscreen",
+     "shape": "Line",
+     "start": [
+      30.5,
+      29.2
+     ],
+     "end": [
+      29.5,
+      29.2
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "B.Courtyard",
+     "shape": "Line",
+     "start": [
+      28.2,
+      29.0
+     ],
+     "end": [
+      28.2,
+      31.0
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "B.Courtyard",
+     "shape": "Line",
+     "start": [
+      31.8,
+      29.0
+     ],
+     "end": [
+      28.2,
+      29.0
+     ],
+     "width": 0.05
+    },
+    {
+     "layer": "B.Fab",
+     "shape": "Line",
+     "start": [
+      28.4,
+      29.2
+     ],
+     "end": [
+      28.4,
+      30.8
+     ],
+     "width": 0.12
+    },
+    {
+     "layer": "B.Fab",
+     "shape": "Line",
+     "start": [
+      31.6,
+      29.2
+     ],
+     "end": [
+      28.4,
+      29.2
+     ],
+     "width": 0.12
+    }
+   ]
+  }
+ ],
+ "edge": [
+  {
+   "shape": "Line",
+   "start": [
+    10.0,
+    10.0
+   ],
+   "end": [
+    50.0,
+    10.0
+   ]
+  },
+  {
+   "shape": "Line",
+   "start": [
+    10.0,
+    40.0
+   ],
+   "end": [
+    10.0,
+    10.0
+   ]
+  },
+  {
+   "shape": "Line",
+   "start": [
+    50.0,
+    10.0
+   ],
+   "end": [
+    50.0,
+    40.0
+   ]
+  },
+  {
+   "shape": "Line",
+   "start": [
+    50.0,
+    40.0
+   ],
+   "end": [
+    10.0,
+    40.0
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "start": [
+    21.0,
+    20.0
+   ],
+   "end": [
+    29.0,
+    20.0
+   ],
+   "width": 0.25,
+   "layer": "F.Cu"
+  }
+ ],
+ "vias": [
+  {
+   "pos": [
+    25.0,
+    25.0
+   ],
+   "width": 0.6,
+   "drill": 0.3
+  }
+ ],
+ "bbox": [
+  9.95,
+  9.95,
+  50.05,
+  40.05
+ ]
+}

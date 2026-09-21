@@ -146,3 +146,36 @@ def test_the_board_view_is_optional_and_lives_with_the_project(client):
         client.delete(f"/api/bom/projects/{pid}")
     from app.api.bom import _ibom_path
     assert not _ibom_path(pid).exists()
+
+
+# -- the board drawn by PartsNAS itself -------------------------------------------------------
+
+def test_a_kicad_board_can_be_previewed_and_kept_with_the_project(client):
+    from pathlib import Path
+
+    board = (Path(__file__).parent / "fixtures" / "mini.kicad_pcb").read_bytes()
+    up = lambda: {"file": ("mini.kicad_pcb", board, "application/octet-stream")}  # noqa: E731
+
+    r = client.post("/api/bom/board/parse", files=up())
+    assert r.status_code == 200, r.text
+    assert {f["ref"] for f in r.json()["footprints"]} == {"R1", "R2", "C1", "C2", "C3", "J1"}
+    assert client.post("/api/bom/board/parse", files={"file": ("x.kicad_pcb", b"not a board", "text/plain")}).status_code == 400
+
+    pid = client.post("/api/bom/projects", json={"name": "ZZ_BOARD proj", "lines": [
+        {"value": "10k", "footprint": "R_0603", "qty": 1, "refdes": "R1"}]}).json()["id"]
+    try:
+        assert client.get(f"/api/bom/projects/{pid}").json()["has_board"] is False
+        assert client.get(f"/api/bom/projects/{pid}/board").status_code == 404
+        up_r = client.post(f"/api/bom/projects/{pid}/board", files=up())
+        assert up_r.status_code == 200 and up_r.json()["footprints"] == 6
+        got = client.get(f"/api/bom/projects/{pid}/board")
+        assert got.status_code == 200 and len(got.json()["footprints"]) == 6
+        assert client.get(f"/api/bom/projects/{pid}").json()["has_board"] is True
+        assert client.post("/api/bom/projects/999999/board", files=up()).status_code == 404
+        client.delete(f"/api/bom/projects/{pid}/board")
+        assert client.get(f"/api/bom/projects/{pid}/board").status_code == 404
+        client.post(f"/api/bom/projects/{pid}/board", files=up())
+    finally:
+        client.delete(f"/api/bom/projects/{pid}")
+    from app.api.bom import _board_path
+    assert not _board_path(pid).exists()

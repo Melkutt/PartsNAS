@@ -13,8 +13,12 @@
                                      -> the same preview as /parse
 `POST/GET/DELETE /api/bom/projects/{id}/ibom`   the project's Interactive HTML BOM file (an optional
                                      board view; the project works without it)
+`POST /api/bom/board/parse`         a KiCad board file (.kicad_pcb) -> what the viewer draws (nothing saved)
+`POST/GET/DELETE /api/bom/projects/{id}/board`   the same, kept with the project (data/pcb/<id>.json)
 """
 from __future__ import annotations
+
+import json
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -24,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from ..bommatch import Matcher, part_summary, remember
 from ..bomparse import parse_bom_csv
+from ..kicadpcb import extract_board
 from ..core.config import get_settings
 from ..core.db import get_db
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
@@ -99,6 +104,7 @@ def _project_summary(db: Session, p: Project) -> dict:
         "notes": p.notes,
         "line_count": len(p.bom_lines),
         "has_ibom": _ibom_path(p.id).is_file(),
+        "has_board": _board_path(p.id).is_file(),
         "unresolved_count": sum(1 for ln in p.bom_lines if not ln.part_id),
         "last_build": max((b.created_at.isoformat() for b in p.builds if not b.reverted), default=None),
         "created_at": p.created_at.isoformat(),
@@ -181,6 +187,61 @@ def delete_project(pid: int, db: Session = Depends(get_db)):
     db.delete(proj)
     db.commit()
     _ibom_path(pid).unlink(missing_ok=True)
+    _board_path(pid).unlink(missing_ok=True)
+    return {"ok": True}
+
+
+# ---------- the KiCad board (drawn by PartsNAS itself) ----------
+BOARD_MAX_BYTES = 60 * 1024 * 1024
+
+
+def _board_path(pid: int):
+    return get_settings().data_dir / "pcb" / f"{pid}.json"
+
+
+async def _read_board(file: UploadFile) -> dict:
+    raw = await file.read(BOARD_MAX_BYTES + 1)
+    if len(raw) > BOARD_MAX_BYTES:
+        raise HTTPException(413, "that file is larger than 60 MB")
+    try:
+        return extract_board(raw.decode("utf-8-sig", errors="replace"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RecursionError as e:
+        raise HTTPException(400, "that file is nested too deeply to be a KiCad board") from e
+
+
+@router.post("/board/parse")
+async def parse_board(file: UploadFile = File(...)):
+    """The drawing model of a .kicad_pcb, for the review step (nothing is saved yet)."""
+    return await _read_board(file)
+
+
+@router.post("/projects/{pid}/board")
+async def put_board(pid: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Attach (or replace) the project's board. Only the drawing is kept, not the original file."""
+    if db.get(Project, pid) is None:
+        raise HTTPException(404, "project not found")
+    board = await _read_board(file)
+    path = _board_path(pid)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(board, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(path)
+    return {"ok": True, "footprints": len(board["footprints"]), "bytes": path.stat().st_size}
+
+
+@router.get("/projects/{pid}/board")
+def get_board(pid: int):
+    path = _board_path(pid)
+    if not path.is_file():
+        raise HTTPException(404, "no board attached to this project")
+    return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/projects/{pid}/board")
+def delete_board(pid: int):
+    _board_path(pid).unlink(missing_ok=True)
     return {"ok": True}
 
 

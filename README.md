@@ -85,11 +85,15 @@ Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   or a **BOM exported from KiCad** (with matching against your stock).
 - **BOM tab, two ways in.** *Import BOM* takes KiCad's BOM file (`.csv`): it is matched against your parts,
   shows what is short, deducts stock when you build, and prints a pick list with where each part is kept.
+  Add the project's **board file** (`.kicad_pcb`) and PartsNAS **draws the board itself** next to the list: turn it,
+  flip it to the back, zoom, click a line to light up the parts on the board, click a part on the board to see
+  what it is, its value and where it is stored. It reads KiCad's own file format directly (no plugin needed) and
+  keeps only the drawing, a few hundred KB per board.
   *Import IBOM* takes the `ibom.html` from the [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom)
   KiCad plugin: it reads the parts list from the file and shows the board next to it, so a click on a line
   lights up the parts on the board and a click on the board shows what the part is and where it is stored.
-  The board view is only a viewer on top of the BOM (PartsNAS contains none of that plugin's code); the CSV
-  path never depends on it.
+  Both board views are only a viewer on top of the BOM (PartsNAS contains none of that plugin's code); the CSV
+  path never depends on them.
 
 **Yours to keep**
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
