@@ -10,6 +10,7 @@
 // matches an old rule, since the rule is keyed on the value too.
 import { api } from "./api.js";
 import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
+import { boardWindow, highlightRefs, onBoardClick, readIbomFile, splitRefs } from "./ibomlink.js";
 
 const CERTAIN = ["mpn", "remembered", "new"];
 const badge = (score, kind, why) => {
@@ -40,8 +41,19 @@ export class BomView {
     panel.append(
       el("h2", {}, "BOM / Projects"),
       el("div", { class: "panel-body" },
-        el("button", { class: "primary", onclick: () => this.openImportModal() }, "Import BOM…"),
-        el("div", { class: "hint" }, "Export a BOM (CSV) from KiCad's schematic editor — Tools → Generate BOM / the Export BOM toolbar button — then import it here."),
+        el("div", { class: "bom-import" },
+          el("div", { class: "bom-import-card" },
+            el("button", { class: "primary", onclick: () => this.openImportModal() }, "Import BOM…"),
+            el("div", { class: "hint" },
+              "The KiCad BOM file (.csv): Tools → Generate BOM, or the Export BOM button in the schematic editor. " +
+              "Matches the lines against your parts, shows what is missing, deducts stock when you build and prints a pick list. " +
+              "This always works, whatever else changes.")),
+          el("div", { class: "bom-import-card" },
+            el("button", { onclick: () => this.openImportIbomModal() }, "Import IBOM…"),
+            el("div", { class: "hint" },
+              "The Interactive HTML BOM (ibom.html) from KiCad's InteractiveHtmlBom plugin. Reads the parts list from the file and " +
+              "shows the board next to it: click a line to see where the parts sit, click a part on the board to see what it is and " +
+              "where you keep it. It is a viewer on top of the BOM: if the plugin's format ever changes, use Import BOM instead."))),
         this._projectsTable(rows)),
     );
     this.el.append(panel);
@@ -71,6 +83,35 @@ export class BomView {
   }
 
   // ---------- Import + review ----------
+  // The parts list comes out of the ibom.html itself (read by the browser), goes through the same
+  // matching and review as a CSV, and the file is kept with the project for the board view.
+  openImportIbomModal() {
+    const fileInp = el("input", { type: "file", accept: ".html,.htm" });
+    modal({
+      title: "Import IBOM",
+      confirmText: "Read file",
+      body: el("div", { class: "modal-body" },
+        el("div", { class: "row" }, el("label", {}, "ibom.html"), fileInp),
+        el("div", { class: "hint" },
+          "The file KiCad's InteractiveHtmlBom plugin writes (usually <project>/bom/ibom.html). Only open files you made yourself: " +
+          "the page is a small program that runs here. The parts list is read from it and reviewed like a KiCad BOM; " +
+          "the file is then kept with the project so you can see the board.")),
+      onConfirm: async () => {
+        const file = fileInp.files[0];
+        if (!file) throw new Error("Choose the ibom.html file first");
+        let read;
+        try {
+          read = await readIbomFile(file);
+        } catch (e) {
+          throw new Error(`${e.message}. If the file is fine, its format may have changed — use Import BOM with the KiCad BOM (.csv) instead; ` +
+            "you can attach this file to the project afterwards.");
+        }
+        const data = await api("/api/bom/match", { method: "POST", body: { lines: read.lines, suggested_name: read.title || file.name.replace(/\.html?$/i, "") } });
+        this._startReview(data, { ibomFile: file });
+      },
+    });
+  }
+
   openImportModal() {
     const fileInp = el("input", { type: "file", accept: ".csv" });
     modal({
@@ -93,8 +134,9 @@ export class BomView {
     });
   }
 
-  _startReview(data) {
+  _startReview(data, opts = {}) {
     this.mode = "review";
+    this.ibomFile = opts.ibomFile || null;
     this.el.innerHTML = "";
     this.reviewLines = data.lines.map((l) => ({
       ...l,
@@ -289,10 +331,27 @@ export class BomView {
     try {
       const { id } = await api("/api/bom/projects", { method: "POST", body: { name, lines } });
       toast(`Saved “${name}”`);
+      if (this.ibomFile) {
+        try {
+          await this._uploadIbom(id, this.ibomFile);
+        } catch (e) {
+          toast(`Saved, but the board view could not be attached: ${e.message}`);
+        }
+        this.ibomFile = null;
+      }
       this.showDetail(id);
     } catch (e) {
       toast(e.message);
     }
+  }
+
+  async _uploadIbom(id, file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/bom/projects/${id}/ibom`, { method: "POST", body: fd });
+    const text = await res.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!res.ok) throw new Error(body?.detail || res.statusText);
   }
 
   // ---------- Project detail: shortage + build ----------
@@ -300,10 +359,36 @@ export class BomView {
     this.mode = "detail";
     const data = await api(`/api/bom/projects/${id}?boards=${boards}`);
     this.el.innerHTML = "";
-    const panel = el("div", { class: "panel bom-panel", style: "max-width:1100px" });
+    const hasBoard = !!data.has_ibom;
+    const panel = el("div", { class: "panel bom-panel", style: `max-width:${hasBoard ? 1700 : 1100}px` });
     const boardsInp = el("input", { type: "number", min: 1, value: boards, style: "width:5em",
       onchange: (e) => this.showDetail(id, Number(e.target.value) || 1) });
     const table = el("table", { class: "mini-table bom-table" });
+    const rowOf = new Map();   // line id -> <tr>, for the board <-> list linking
+    let board = null;          // the board page's window once it is loaded and linkable
+    const info = el("div", { class: "ibom-info" }, "Click a line to see it on the board, or a part on the board to see the line.");
+    const showLine = (ln) => {
+      info.innerHTML = "";
+      const where = ln.part_id ? (ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join(" · ") : "none in stock") : "";
+      info.append(el("b", {}, ln.refdes || ""), "  ",
+        ln.part_name ? `${ln.part_name}${ln.part_summary ? " — " + ln.part_summary : ""}` : (ln.unresolved_mpn || ln.value || "unresolved"),
+        where ? el("div", { class: "bom-where" }, `Where: ${where} · need ${ln.needed}, have ${ln.on_hand}`) : null);
+    };
+    const pickLine = (ln, fromBoard) => {
+      rowOf.forEach((tr) => tr.classList.remove("board-hit"));
+      const tr = rowOf.get(ln.id);
+      if (tr) {
+        tr.classList.add("board-hit");
+        if (fromBoard) tr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+      showLine(ln);
+      if (!fromBoard && board) highlightRefs(board, splitRefs(ln.refdes));
+    };
+    const onBoardRefs = (refs) => {
+      const hit = new Set(refs);
+      const ln = data.lines.find((l) => splitRefs(l.refdes).some((r) => hit.has(r)));
+      if (ln) pickLine(ln, true);
+    };
     table.append(el("tr", {}, el("th", { class: "print-only pick-col" }, "✓"), el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
       el("th", {}, "Where it is"),
       el("th", { class: "num" }, "Per board"), el("th", { class: "num" }, `Needed (${boards})`),
@@ -317,7 +402,7 @@ export class BomView {
     for (const ln of lines) {
       const short = ln.short;
       const where = !ln.part_id ? "—" : ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join("  ·  ") : "none in stock";
-      table.append(el("tr", {},
+      const tr = el("tr", { class: hasBoard ? "bom-line-link" : "", onclick: hasBoard ? () => pickLine(ln, false) : null },
         el("td", { class: "print-only pick-col" }, "☐"),
         el("td", {}, ln.refdes || ""),
         el("td", {}, ln.part_name
@@ -328,7 +413,9 @@ export class BomView {
         el("td", { class: "num" }, String(ln.qty_per_board)),
         el("td", { class: "num" }, String(ln.needed)),
         el("td", { class: "num" }, ln.part_id ? String(ln.on_hand) : "—"),
-        el("td", { class: "num" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—"))));
+        el("td", { class: "num" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—")));
+      rowOf.set(ln.id, tr);
+      table.append(tr);
     }
     const buildBtn = el("button", { class: "primary", onclick: async () => {
       if (!confirm(`Deduct stock for ${boardsInp.value} board(s)? This is reversible.`)) return;
@@ -340,6 +427,39 @@ export class BomView {
     } }, "Build (deduct stock)");
     const sortChk = el("input", { type: "checkbox", checked: this.sortByLocation ? "checked" : null,
       onchange: (e) => { this.sortByLocation = e.target.checked; this.showDetail(id, boards); } });
+    const pickBoardFile = () => {
+      const inp = el("input", { type: "file", accept: ".html,.htm" });
+      inp.onchange = async () => {
+        if (!inp.files[0]) return;
+        try {
+          await this._uploadIbom(id, inp.files[0]);
+          toast("Board view attached");
+          this.showDetail(id, boards);
+        } catch (e) {
+          toast(e.message);
+        }
+      };
+      inp.click();
+    };
+    let boardPane = null;
+    if (hasBoard) {
+      const frame = el("iframe", { class: "ibom-frame", src: `/api/bom/projects/${id}/ibom`, title: "Board view" });
+      frame.addEventListener("load", () => {
+        board = boardWindow(frame);
+        if (board) onBoardClick(board, onBoardRefs);
+        else info.textContent = "The board is shown, but it can't be linked to this list (the plugin's page looks different from what PartsNAS expects). The BOM itself is unaffected.";
+      });
+      boardPane = el("div", { class: "bom-board no-print" }, info, frame);
+    }
+    const boardBtns = hasBoard
+      ? [el("a", { href: `/api/bom/projects/${id}/ibom`, target: "_blank", rel: "noopener", class: "hint" }, "open board in a new tab"),
+         el("button", { class: "ghost", onclick: pickBoardFile }, "Replace board view…"),
+         el("button", { class: "ghost", onclick: async () => {
+           if (!confirm("Remove the board view from this project? The BOM stays.")) return;
+           await api(`/api/bom/projects/${id}/ibom`, { method: "DELETE" });
+           this.showDetail(id, boards);
+         } }, "Remove")]
+      : [el("button", { class: "ghost", title: "Attach the ibom.html from KiCad's InteractiveHtmlBom plugin to see the board next to this list", onclick: pickBoardFile }, "Attach board view (IBOM)…")];
     panel.append(
       el("div", { class: "no-print", style: "display:flex;align-items:center;gap:10px" },
         el("button", { class: "ghost", onclick: () => this.showList() }, "← Projects"),
@@ -352,7 +472,8 @@ export class BomView {
           el("span", { style: "flex:1" }),
           el("label", { title: "Order the lines by shelf, so you can collect the parts in one round" }, sortChk, " Sort by location"),
           el("button", { onclick: () => window.print() }, "Print pick list")),
-        table,
+        el("div", { class: "row no-print", style: "gap:8px;align-items:center" }, ...boardBtns),
+        el("div", { class: hasBoard ? "bom-split" : "" }, el("div", { class: "bom-lines" }, table), boardPane),
         el("div", { class: "no-print" },
           el("div", { class: "section-title" }, "Build history"),
           this._buildsTable(id, data.builds, boards))),

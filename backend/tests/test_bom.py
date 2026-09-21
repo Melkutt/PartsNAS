@@ -102,3 +102,47 @@ def test_a_part_with_only_a_kicad_footprint_is_still_a_candidate(client):
         assert m["score"] <= 95
     finally:
         client.delete(f"/api/parts/{pid}")
+
+
+# -- Import IBOM: lines read elsewhere, and the optional board view ----------------------------
+
+def test_lines_read_from_an_ibom_get_the_same_preview_as_a_csv(client):
+    r = client.post("/api/bom/match", json={"suggested_name": "BGA2802_15", "lines": [
+        {"refdes": "C6 C8 C10", "value": "1u", "footprint": "C_0402_1005Metric_Pad0.74x0.62mm_HandSolder", "qty": 3},
+        {"refdes": "U1", "value": "MIC5504-3.3YM5", "footprint": "SOT-23-5", "mpn": "", "qty": 1},
+    ]})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["suggested_name"] == "BGA2802_15"
+    assert [ln["refdes"] for ln in body["lines"]] == ["C6 C8 C10", "U1"]
+    assert all("match" in ln and "kind" in ln["match"] for ln in body["lines"])
+    assert client.post("/api/bom/match", json={"lines": []}).status_code == 422
+
+
+def test_the_board_view_is_optional_and_lives_with_the_project(client):
+    pid = client.post("/api/bom/projects", json={"name": "ZZ_IBOM proj", "lines": [
+        {"value": "1u", "footprint": "C_0402", "qty": 1, "refdes": "C1"}]}).json()["id"]
+    try:
+        assert client.get("/api/bom/projects").json()[0]["has_ibom"] is False
+        assert client.get(f"/api/bom/projects/{pid}/ibom").status_code == 404
+
+        page = b"<html><head><title>Interactive BOM</title></head><script>var pcbdata = {};</script></html>"
+        assert client.post(f"/api/bom/projects/{pid}/ibom", files={"file": ("ibom.html", page, "text/html")}).status_code == 200
+        got = client.get(f"/api/bom/projects/{pid}/ibom")
+        assert got.status_code == 200 and got.content == page and got.headers["content-type"].startswith("text/html")
+        assert client.get(f"/api/bom/projects/{pid}").json()["has_ibom"] is True
+
+        # anything else is refused, and the good file is left alone
+        bad = client.post(f"/api/bom/projects/{pid}/ibom", files={"file": ("x.html", b"<html>nothing</html>", "text/html")})
+        assert bad.status_code == 400
+        assert client.get(f"/api/bom/projects/{pid}/ibom").content == page
+        assert client.post("/api/bom/projects/999999/ibom", files={"file": ("i.html", page, "text/html")}).status_code == 404
+
+        client.delete(f"/api/bom/projects/{pid}/ibom")
+        assert client.get(f"/api/bom/projects/{pid}/ibom").status_code == 404
+        # deleting the project removes the file too
+        client.post(f"/api/bom/projects/{pid}/ibom", files={"file": ("ibom.html", page, "text/html")})
+    finally:
+        client.delete(f"/api/bom/projects/{pid}")
+    from app.api.bom import _ibom_path
+    assert not _ibom_path(pid).exists()

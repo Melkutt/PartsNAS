@@ -161,6 +161,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
 - **Build id** (`app/buildid.py`): a hash of backend + frontend + seed, shown in the top bar and in
   `/api/health`. `scripts/deploy_nas.ps1` copies, verifies each file and compares it. On Synology,
   Start re-uses the old image: remove the container and image to get new code.
+- **Import IBOM** (`frontend/js/ibomlink.js`): the BOM tab reads the parts list out of an Interactive HTML BOM
+  file in the browser (its `pcbdata`), sends it to `POST /api/bom/match` (same review as a CSV) and keeps the
+  file with the project (`data/ibom/<id>.html`, `POST/GET/DELETE /api/bom/projects/{id}/ibom`) for the board
+  view. The link to the page (`highlightHandlers`, `footprintsClicked`, `pcbdata`) uses that page's internals
+  and is defensive on purpose: if it breaks, the board is still shown and the CSV BOM path is untouched.
+  We link to / display the plugin's output only; none of its MIT code is copied here.
 - Duplicate MPNs (`app/dupes.py`, case/punctuation ignored) are only ever *reported*: list chip,
   `Same MPN` filter, part banner, `GET /api/parts/check-mpn`, `GET /api/parts/duplicates`.
 

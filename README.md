@@ -83,6 +83,13 @@ Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
   or a **BOM exported from KiCad** (with matching against your stock).
+- **BOM tab, two ways in.** *Import BOM* takes KiCad's BOM file (`.csv`): it is matched against your parts,
+  shows what is short, deducts stock when you build, and prints a pick list with where each part is kept.
+  *Import IBOM* takes the `ibom.html` from the [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom)
+  KiCad plugin: it reads the parts list from the file and shows the board next to it, so a click on a line
+  lights up the parts on the board and a click on the board shows what the part is and where it is stored.
+  The board view is only a viewer on top of the BOM (PartsNAS contains none of that plugin's code); the CSV
+  path never depends on it.
 
 **Yours to keep**
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
