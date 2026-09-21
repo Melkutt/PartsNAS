@@ -22,6 +22,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
+from ..bommatch import parse_component_value, part_value_number, same_value
 from ..dupes import duplicate_counts, duplicate_ids, norm_mpn, parts_with_mpn
 from ..models import Category, Part, StockEntry, Tag
 from ..partschema import fields_for, part_class_schema
@@ -100,6 +101,7 @@ class PartFilter:
     low_stock: bool = False
     no_category: bool = False
     duplicates: bool = False  # only parts that share their MPN with another part
+    value_eq: str | None = None  # only parts whose component value equals this ("1u" = 1uF = 1000nF)
 
     def attr_groups(self) -> dict[str, list[str]]:
         groups: dict[str, list[str]] = {}
@@ -186,6 +188,11 @@ def _matching_ids(db: Session, f: PartFilter) -> list[str]:
     if f.duplicates:
         dup = duplicate_ids(db)
         ids = [i for i in ids if i in dup]
+    target = parse_component_value(f.value_eq) if f.value_eq else None
+    if target is not None and ids:
+        # by NUMBER, not by text: "1u" must not find "100nF" just because its description says "0.1uF"
+        rows = db.execute(select(Part.id, Part.name, Part.attributes).where(Part.id.in_(ids))).all()
+        ids = [pid for pid, name, attrs in rows if same_value(target, part_value_number(name, attrs))]
     return ids
 
 
@@ -204,12 +211,13 @@ def _filter_params(
     low_stock: bool = False,
     no_category: bool = False,
     duplicates: bool = False,
+    value_eq: str | None = None,
 ) -> PartFilter:
     return PartFilter(
         q=q, category_id=category_id, with_subcats=with_subcats,
         location_ids=location_id, mounts=mount, footprints=footprint,
         manufacturers=manufacturer, tags=tag, in_stock=in_stock, datasheet=datasheet, attrs=attr,
-        low_stock=low_stock, no_category=no_category, duplicates=duplicates,
+        low_stock=low_stock, no_category=no_category, duplicates=duplicates, value_eq=value_eq,
     )
 
 

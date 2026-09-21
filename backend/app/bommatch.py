@@ -154,6 +154,28 @@ def parse_component_value(raw: str | None) -> float | None:
     return None
 
 
+def part_value_number(name: str | None, attributes: dict | None) -> float | None:
+    """The component value of a part as a number, or None. The `value` attribute is the source of
+    truth ("1µF", "2k2"); failing that, a leading word of the name ("1n 100V X7R" -> 1n). Other
+    attributes are never used: a voltage of "50" would otherwise read as a value of 50."""
+    attrs = attributes or {}
+    v = attrs.get("value")
+    if isinstance(v, str):
+        n = parse_component_value(v)
+        if n is not None:
+            return n
+    for word in (name or "").split():
+        n = parse_component_value(word)
+        if n is not None:
+            return n
+        break  # only the first word: "Single 2-Input AND Gate" has no value, "2-Input" is not one
+    return None
+
+
+def same_value(a: float | None, b: float | None) -> bool:
+    return a is not None and b is not None and abs(a - b) <= 1e-6 * max(abs(a), abs(b), 1e-30)
+
+
 def value_similarity(target: float, candidate: float) -> float:
     """1.0 = identical, falling off the further apart they are — a ratio
     of 2x (double or half) lands around 0.5, matching how a technician
@@ -227,9 +249,11 @@ class Matcher:
         self._cat_path = category_path_map(db)
         self._by_footprint: dict[str, list[Part]] = {}
         for p in self._parts:
-            if not p.footprint_raw:
-                continue
-            self._by_footprint.setdefault(canonical_footprint(db, p.footprint_raw), []).append(p)
+            # a part is found under its footprint AND under the KiCad footprint you gave it - a part that
+            # only has the KiCad footprint filled in used to be invisible to the matching
+            buckets = {canonical_footprint(db, f) for f in (p.footprint_raw, p.kicad_footprint) if f and f.strip()}
+            for b in buckets:
+                self._by_footprint.setdefault(b, []).append(p)
 
     def _category_ok(self, p: Part, expect: tuple[str, ...] | None) -> bool:
         if not expect:
@@ -304,11 +328,13 @@ class Matcher:
 
             cand_num = None
             if target_num is not None:
-                for rv in raw_values:
-                    n = parse_component_value(rv)
-                    if n is not None:
-                        cand_num = n
-                        break
+                cand_num = part_value_number(p.name, p.attributes)
+                if cand_num is None:                      # nothing that says "value": look wider
+                    for rv in raw_values:
+                        n = parse_component_value(rv)
+                        if n is not None:
+                            cand_num = n
+                            break
 
             if target_num is not None and cand_num is not None:
                 # a real number on both sides — "how close" has an actual
@@ -332,7 +358,13 @@ class Matcher:
                     "summary": None, "score": 0, "candidates": [],
                     "suggested_category_id": suggested_category_id}
         top_score, top = scored[0]
+        why = [f"package {fnorm}" if fnorm else "package"]
+        if expect:
+            why.append("type fits the reference designator")
+        if target_num is not None and same_value(target_num, part_value_number(top.name, top.attributes)):
+            why.append("same value")
         return {
+            "why": why,
             "kind": "candidate",
             "part_id": top.id,
             "part_name": top.name,

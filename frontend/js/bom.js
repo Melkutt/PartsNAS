@@ -12,11 +12,11 @@ import { api } from "./api.js";
 import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
 
 const CERTAIN = ["mpn", "remembered", "new"];
-const badge = (score, kind) => {
+const badge = (score, kind, why) => {
   const cls = CERTAIN.includes(kind) || kind === "manual" ? "ok" : score >= 70 ? "warn" : "low";
   const label = kind === "mpn" ? "MPN exact" : kind === "remembered" ? "Remembered" : kind === "manual" ? "Picked"
     : kind === "new" ? "New part" : kind === "none" ? "No match" : `~${score}% match`;
-  return el("span", { class: `match-badge ${cls}` }, label);
+  return el("span", { class: `match-badge ${cls}`, title: why ? why : null }, label);
 };
 
 export class BomView {
@@ -128,7 +128,10 @@ export class BomView {
   }
 
   _reviewRow(ln) {
-    const badgeCell = el("td", {}, badge(ln.match.score, ln.match.kind));
+    const whyText = (m) => m.kind !== "candidate" ? null :
+      `A guess: ${(m.why || []).join(", ")}. ${m.score >= 95 ? "95 % is the highest a guess gets — " : ""}` +
+      "it becomes exact when you tick Remember, or when the part is found by MPN (put it in the KiCad symbol's MPN field).";
+    const badgeCell = el("td", {}, badge(ln.match.score, ln.match.kind, whyText(ln.match)));
     const partCell = el("div", {});
     const renderPartCell = () => {
       partCell.innerHTML = "";
@@ -232,8 +235,10 @@ export class BomView {
       onClose: () => view && view.destroy(),
     });
     view = new PartsView({
-      q: ln.value || "",
+      value: ln.value || "",          // by number: "1u" finds 1uF and 1000nF, never 100nF
       footprint: size || null,
+      // the reference designator says what kind of part (C -> Capacitor): 1u is also a 1uH inductor
+      category_id: ln.match.suggested_category_id || null,
       pick: { onPick: (p) => { onPick({ id: p.id, name: p.name, mpn: p.mpn }); m.close(); } },
     });
     await view.mount(host);

@@ -60,6 +60,7 @@ export class PartsView {
     this.low = false;
     this.noCat = false;
     this.dupOnly = false;
+    this.valueEq = initial.value || ""; // BOM Browse: only parts of exactly this value (by number)
     this.scanSelect = false;
     this.rail = { mode: "categories", id: null };
     this.facetSel = { mount: new Set(), footprint: new Set(), manufacturer: new Set(),
@@ -264,6 +265,7 @@ export class PartsView {
     if (this.low) p.set("low_stock", "true");
     if (this.noCat) p.set("no_category", "true");
     if (this.dupOnly) p.set("duplicates", "true");
+    if (this.valueEq) p.set("value_eq", this.valueEq);
     if (this.rail.mode === "categories" && this.rail.id) p.set("category_id", this.rail.id);
     if (this.rail.mode === "locations" && this.rail.id) p.append("location_id", this.rail.id);
     for (const v of this.facetSel.mount) p.append("mount", v);
@@ -503,6 +505,7 @@ export class PartsView {
       const nm = (this.facets.location || []).find((o) => String(o.id) === String(v))?.value || v;
       add(`Location: ${nm}`, () => this.facetSel.location.delete(v));
     }
+    if (this.valueEq) add(`Value = ${this.valueEq}`, () => (this.valueEq = ""));
     if (this.facetSel.in_stock) add(`Stock: ${this.facetSel.in_stock}`, () => (this.facetSel.in_stock = null));
     if (this.facetSel.datasheet) add(DS_LABEL[this.facetSel.datasheet], () => (this.facetSel.datasheet = null));
     for (const [k, set] of Object.entries(this.facetSel.attr))
