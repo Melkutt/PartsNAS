@@ -95,7 +95,9 @@ matched against what you actually have in stock.
 2. **Review the match.** Every line is matched against your parts. An exact MPN, or a
    value + footprint you confirmed before, is picked automatically; anything else is only a
    *suggestion* with a score and the reasons. *Change…* opens a search, and *Browse…* opens the
-   parts list with the right category and footprint already chosen, the way the quote cart does.
+   parts list with the right category and footprint already chosen, the way the quote cart does: click a
+   part to look at it (nothing is added), press *Use* to take it. Unit prices (ex VAT) are shown while you
+   choose and in the project list.
    Tick *Remember* to reuse your choice for the same value + footprint in the next BOM. The BOM
    does not say voltage, dielectric or fuse type: you decide which real part a "100n" is.
 3. **Skip what is not built in.** Mounting holes, fiducials, logos and similar (`H`, `MH`, `FID`,

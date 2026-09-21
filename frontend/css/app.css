@@ -891,7 +891,7 @@ table.parts-table {
   /* the columns left out in the print dialog */
   .bom-table.hide-pick .c-pick, .bom-table.hide-refdes .c-refdes, .bom-table.hide-part .c-part, .bom-table.hide-value .c-value,
   .bom-table.hide-where .c-where, .bom-table.hide-per .c-per, .bom-table.hide-needed .c-needed, .bom-table.hide-onhand .c-onhand,
-  .bom-table.hide-short .c-short { display: none !important; }
+  .bom-table.hide-short .c-short, .bom-table.hide-price .c-price { display: none !important; }
   .bom-price-sum { margin-top: 10px; break-inside: avoid; }
   .bom-price-sum h3 { margin: 0 0 4px; font-size: 12px; }
   .bom-price-table { width: auto; min-width: 45%; }

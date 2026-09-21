@@ -81,7 +81,8 @@ def test_browse_by_value_finds_1u_and_not_100n(client):
         assert found("1u") == {a} and found("1µ") == {a} and found("1000n") == {a}
         assert found("100n") == {b} and found("0.1u") == {b}
         assert found("") == {a, b}                       # no value = no filter
-        assert found("not a value") == {a, b}
+        assert found("not a value") == set()             # not a number: matched as text, never silently ignored
+        assert found("zz_val 1uf") == {a}
     finally:
         for p in (a, b):
             client.delete(f"/api/parts/{p}")
@@ -272,5 +273,46 @@ def test_lines_carry_what_the_part_costs_for_the_price_summary(client):
     finally:
         if pid:
             client.delete(f"/api/bom/projects/{pid}")
+        for p in (a, b):
+            client.delete(f"/api/parts/{p}")
+
+
+def test_browse_filters_by_a_value_that_is_not_a_number_and_lists_prices(client):
+    loc = _location(client)[0]
+    a = client.post("/api/parts", json={"name": "ZZ_BROWSE TestPoint_2Pole", "mpn": "ZZ-TP-1"}).json()["id"]
+    b = client.post("/api/parts", json={"name": "ZZ_BROWSE Resistor", "mpn": "ZZ-R-1"}).json()["id"]
+    try:
+        client.post(f"/api/parts/{a}/stock", json={"location_id": loc, "delta": 5, "kind": "add", "unit_price": 0.0123,
+                                                   "vat_percent": 25, "currency": "SEK", "link_to_part": False})
+        # "TestPoint_2Pole" is not a number: it used to be ignored, so the list was not filtered at all
+        got = client.get("/api/parts", params={"value_eq": "TestPoint_2Pole", "limit": 1000}).json()["items"]
+        assert [p["id"] for p in got] == [a]
+        assert got[0]["unit_price"] == 0.0123 and got[0]["currency"] == "SEK"
+        assert client.get("/api/parts", params={"value_eq": "nothing-like-this"}).json()["items"] == []
+        rows = {p["id"]: p for p in client.get("/api/parts", params={"q": "ZZ_BROWSE", "limit": 1000}).json()["items"]}
+        assert rows[b]["unit_price"] is None
+    finally:
+        for p in (a, b):
+            client.delete(f"/api/parts/{p}")
+
+
+def test_bulk_prices_follow_the_same_rule_as_a_quote(client, db_session=None):
+    from app.api.quotes import snapshot_cost
+    from app.core.db import SessionLocal
+    from app.services import unit_cost_map
+    loc = _location(client)[0]
+    a = _part(client, "ZZ_PRICE a", "ZZ-PRICE-A")
+    b = _part(client, "ZZ_PRICE b", "ZZ-PRICE-B")
+    try:
+        client.post(f"/api/parts/{a}/stock", json={"location_id": loc, "delta": 5, "kind": "add", "unit_price": 1.5,
+                                                   "vat_percent": 25, "currency": "SEK", "link_to_part": False})
+        client.post(f"/api/parts/{a}/stock", json={"location_id": loc, "delta": 5, "kind": "add", "unit_price": 2.5,
+                                                   "vat_percent": 12, "currency": "SEK", "link_to_part": False})
+        with SessionLocal() as db:
+            bulk = unit_cost_map(db, [a, b])
+            cost, cur, _src, vat = snapshot_cost(db, a)
+            assert bulk[a] == (cost, cur, vat) == (2.5, "SEK", 12)          # the most recent priced purchase
+            assert b not in bulk and snapshot_cost(db, b)[0] == 0.0          # no price: absent here, 0 there
+    finally:
         for p in (a, b):
             client.delete(f"/api/parts/{p}")

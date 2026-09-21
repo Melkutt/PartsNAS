@@ -28,6 +28,8 @@ export function modal({ title, body, confirmText = "OK", onConfirm, onClose, wid
   back.append(box);
   back.addEventListener("mousedown", (e) => e.target === back && close());
   document.addEventListener("keydown", esc);
+  const z = stackZ();
+  if (z > 50) back.style.zIndex = String(z);
   document.body.append(back);
 
   function close() {
@@ -215,4 +217,21 @@ export async function treeOptions(base, { includeBlank = "—" } = {}) {
   };
   walk(forest, 0);
   return opts;
+}
+
+
+/** A z-index above every window and part panel that is open now (the ones stack in the order they were opened). */
+export function stackZ() {
+  let z = 49;
+  for (const e of document.querySelectorAll(".modal-back, .detail-back, .detail-panel")) {
+    z = Math.max(z, Number(e.style.zIndex) || Number.parseInt(getComputedStyle(e).zIndex, 10) || 0);
+  }
+  return z + 1;
+}
+
+/** "0.50 SEK", "0.0123 SEK": a price with enough decimals to be useful for cheap parts. */
+export function fmtPrice(n, currency = "") {
+  if (n == null) return "";
+  const s = n >= 1 ? n.toFixed(2) : n >= 0.1 ? n.toFixed(3) : n.toFixed(4);
+  return `${s.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")}${currency ? " " + currency : ""}`;
 }

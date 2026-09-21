@@ -35,6 +35,7 @@ from ..services import (
     location_breakdown_bulk,
     on_hand_map,
     resolve_part_class,
+    unit_cost_map,
 )
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
@@ -193,6 +194,14 @@ def _matching_ids(db: Session, f: PartFilter) -> list[str]:
         # by NUMBER, not by text: "1u" must not find "100nF" just because its description says "0.1uF"
         rows = db.execute(select(Part.id, Part.name, Part.attributes).where(Part.id.in_(ids))).all()
         ids = [pid for pid, name, attrs in rows if same_value(target, part_value_number(name, attrs))]
+    elif f.value_eq and ids:
+        # not a number ("TestPoint_2Pole", "USB4085-GF-A", "SMA"): match the text in the name, MPN or value,
+        # rather than quietly not filtering at all while the list claims it is filtered
+        needle = f.value_eq.strip().lower()
+        rows = db.execute(select(Part.id, Part.name, Part.mpn, Part.attributes).where(Part.id.in_(ids))).all()
+        ids = [pid for pid, name, mpn, attrs in rows
+               if needle in (name or "").lower() or needle in (mpn or "").lower()
+               or needle in str((attrs or {}).get("value", "")).lower()]
     return ids
 
 
@@ -236,6 +245,7 @@ def list_parts(
     paths = category_path_map(db)
     locs = location_breakdown_bulk(db, ids)
     dups = duplicate_counts(db)
+    costs = unit_cost_map(db, ids)
     out = [
         {
             "id": p.id,
@@ -254,6 +264,8 @@ def list_parts(
             "datasheet_url": p.datasheet_url,
             "discontinued": p.discontinued,
             "dup": dups.get(p.id, 0),  # other parts with the same MPN
+            "unit_price": costs[p.id][0] if p.id in costs else None,   # ex VAT, as a quote would price it
+            "currency": costs[p.id][1] if p.id in costs else None,
             "replacement": (
                 p.replaced_by.name if p.replaced_by else (p.replacement_mpn or None)
             ),

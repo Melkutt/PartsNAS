@@ -28,9 +28,8 @@ from ..bomparse import parse_bom_csv
 from ..kicadpcb import FORMAT as BOARD_FORMAT, extract_board
 from ..core.config import get_settings
 from ..core.db import get_db
-from .quotes import snapshot_cost
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
-from ..services import category_path_map, location_breakdown, location_breakdown_bulk, on_hand_map
+from ..services import category_path_map, location_breakdown, location_breakdown_bulk, on_hand_map, unit_cost_map
 
 router = APIRouter(prefix="/api/bom", tags=["bom"])
 
@@ -50,11 +49,21 @@ async def parse(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
 def _match_rows(db: Session, rows: list[dict]) -> list[dict]:
     matcher = Matcher(db)
-    return [
+    out = [
         {**r, "match": matcher.match(mpn=r.get("mpn"), value=r.get("value"),
                                      footprint=r.get("footprint"), refdes=r.get("refdes"))}
         for r in rows
     ]
+    # what each suggested part costs, so it can be weighed while choosing
+    ids = {m["part_id"] for r in out for m in [r["match"]] if m.get("part_id")}
+    ids |= {c["id"] for r in out for c in r["match"].get("candidates", [])}
+    costs = unit_cost_map(db, sorted(ids))
+    for r in out:
+        for m in (r["match"], *r["match"].get("candidates", [])):
+            pid = m.get("part_id") or m.get("id")
+            if pid in costs:
+                m["unit_price"], m["currency"] = costs[pid][0], costs[pid][1]
+    return out
 
 
 class LineIn(BaseModel):
@@ -126,12 +135,10 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
     on_hand = on_hand_map(db, part_ids)
     where = location_breakdown_bulk(db, part_ids)   # part id -> [{location, qty}], biggest first
     cat_path = category_path_map(db)
-    costs: dict[str, tuple[float, str, str, float]] = {}    # part id -> what a quote would use as its cost
+    costs = unit_cost_map(db, sorted({ln.part_id for ln in proj.bom_lines if ln.part_id and not ln.ignored}))
     lines = []
     for ln in proj.bom_lines:
         needed = 0 if ln.ignored else ln.qty_per_board * boards
-        if ln.part_id and not ln.ignored and ln.part_id not in costs:
-            costs[ln.part_id] = snapshot_cost(db, ln.part_id)
         cost = costs.get(ln.part_id) if ln.part_id and not ln.ignored else None
         have = on_hand.get(ln.part_id, 0) if ln.part_id else 0
         lines.append({
@@ -152,9 +159,9 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "ignored": bool(ln.ignored),
             "placed": bool(ln.placed),
             # ex VAT, from the part's preferred supplier price (else the last purchase): what a quote would use
-            "unit_cost": cost[0] if cost and cost[0] > 0 else None,
-            "currency": cost[1] if cost and cost[0] > 0 else None,
-            "vat_percent": cost[3] if cost and cost[0] > 0 else None,
+            "unit_cost": cost[0] if cost else None,
+            "currency": cost[1] if cost else None,
+            "vat_percent": cost[2] if cost else None,
             "suggested_category_id": suggest_category_id(cat_path, refdes_expectation(ln.refdes)),
         })
     return {

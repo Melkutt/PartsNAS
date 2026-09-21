@@ -10,7 +10,7 @@ from collections import defaultdict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .models import Category, Part, StockEntry, StorageLocation
+from .models import Category, Part, PartSupplier, StockEntry, StorageLocation
 
 
 def on_hand_map(db: Session, part_ids: list[str] | None = None) -> dict[str, int]:
@@ -158,4 +158,32 @@ def descendant_category_ids(db: Session, cat_id: int) -> set[int]:
         kids -= out
         out |= kids
         frontier = kids
+    return out
+
+
+def unit_cost_map(db: Session, part_ids: list[str]) -> dict[str, tuple[float, str, float]]:
+    """part_id -> (ex-VAT unit cost, currency, vat_percent) for the parts that have a price on file, else absent.
+
+    The same rule a quote uses (quotes.snapshot_cost): the preferred supplier link wins, otherwise the dearest
+    priced link; a part with no priced link falls back to its most recent priced purchase."""
+    if not part_ids:
+        return {}
+    out: dict[str, tuple[float, str, float]] = {}
+    best: dict[str, PartSupplier] = {}
+    for link in db.scalars(select(PartSupplier).where(PartSupplier.part_id.in_(part_ids), PartSupplier.unit_price.is_not(None))):
+        cur = best.get(link.part_id)
+        if cur is None or (link.preferred, link.unit_price or 0) > (cur.preferred, cur.unit_price or 0):
+            best[link.part_id] = link
+    for pid, link in best.items():
+        if link.unit_price and link.unit_price > 0:
+            out[pid] = (link.unit_price, link.currency, link.vat_percent)
+    rest = [pid for pid in part_ids if pid not in out]
+    if rest:
+        for e in db.scalars(
+            select(StockEntry)
+            .where(StockEntry.part_id.in_(rest), StockEntry.delta > 0, StockEntry.unit_price.is_not(None))
+            .order_by(StockEntry.id.desc())
+        ):
+            if e.part_id not in out and e.unit_price and e.unit_price > 0:
+                out[e.part_id] = (e.unit_price, e.currency, e.vat_percent)
     return out

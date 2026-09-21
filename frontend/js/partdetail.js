@@ -1,7 +1,7 @@
 // Part detail panel: Details (edit) / Stock / Suppliers / Notes, in a right-side overlay.
 import { ohmsOf, resistorBands, resistorSvg, toleranceOf } from "./colorcode.js";
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions, partSearch, withBusy, selectWithAdd } from "./ui.js";
+import { el, modal, toast, treeOptions, partSearch, withBusy, selectWithAdd, stackZ } from "./ui.js";
 import { openLookup } from "./lookup.js";
 import { formatValue, valueKind, parseNum, awgToMm2, isAwg } from "./units.js";
 import { addToLabelSheet, setPageSize, clearPageSize, labelUrl } from "./labelcommon.js";
@@ -39,7 +39,11 @@ export class PartDetail {
     await this._load();
     this.back = el("div", { class: "detail-back", onclick: () => this.close() });
     this.panel = el("div", { class: "detail-panel" });
-    document.body.append(this.back, this.panel);
+    // opened from inside a window (the BOM's Browse): stack on top of it, and let its own windows go on top of this
+    if (document.querySelector(".modal-back")) this.back.style.zIndex = String(stackZ());
+    document.body.append(this.back);
+    if (this.back.style.zIndex) this.panel.style.zIndex = String(stackZ());
+    document.body.append(this.panel);
     document.addEventListener("keydown", this._esc);
     document.addEventListener("paste", this._onPaste);
     this._render();

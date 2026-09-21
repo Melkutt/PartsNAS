@@ -9,7 +9,7 @@
 // footprint (an unvalued placeholder, a different voltage, ...) never
 // matches an old rule, since the rule is keyed on the value too.
 import { api } from "./api.js";
-import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
+import { el, fmtPrice, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
 import { compactRefs, splitRefs } from "./refdes.js";
 import { PcbView } from "./pcbview.js";
 
@@ -230,7 +230,10 @@ export class BomView {
         const c = ln.match.candidates.find((c) => c.id === ln.part_id);
         const name = c?.name || ln.match.part_name || ln.part_id;
         const summary = c?.summary || ln.match.summary;
-        partCell.append(...[el("div", {}, name), summary ? el("div", { class: "hint", style: "padding:0" }, summary) : null].filter(Boolean));
+        const price = c?.unit_price ?? (ln.match.part_id === ln.part_id ? ln.match.unit_price : null) ?? ln.picked_price;
+        const cur = c?.currency || ln.match.currency || ln.picked_currency;
+        partCell.append(...[el("div", {}, name), summary ? el("div", { class: "hint", style: "padding:0" }, summary) : null,
+          price != null ? el("div", { class: "hint", style: "padding:0", title: "Unit price ex VAT, as a quote would use it" }, fmtPrice(price, cur)) : null].filter(Boolean));
       } else {
         partCell.append(el("span", { class: "pill-off" }, "— pick —"));
       }
@@ -247,7 +250,9 @@ export class BomView {
     // a part was chosen by hand (search, the list or Browse): show it, and offer to remember it
     const picked = (p) => {
       ln.part_id = p.id;
-      ln.match = { ...ln.match, kind: "manual", score: 100, part_id: p.id, part_name: p.name, summary: null };
+      ln.picked_price = p.unit_price ?? null;       // a part chosen by hand: its price comes with it
+      ln.picked_currency = p.currency ?? null;
+      ln.match = { ...ln.match, kind: "manual", score: 100, part_id: p.id, part_name: p.name, summary: null, unit_price: null, currency: null };
       renderPartCell();
       rememberChk.disabled = false;
       badgeCell.innerHTML = "";
@@ -273,7 +278,7 @@ export class BomView {
             else { ln.part_id = null; renderPartCell(); rememberChk.disabled = true; }
           },
         }, el("option", { value: "" }, "— pick manually —"), ...ln.match.candidates.map((c) =>
-          el("option", { value: c.id }, `${c.name} — ${c.summary} (~${c.score}%)`)));
+          el("option", { value: c.id }, `${c.name} — ${c.summary}${c.unit_price != null ? " · " + fmtPrice(c.unit_price, c.currency) : ""} (~${c.score}%)`)));
         sel.value = ln.part_id || "";
         controls.append(sel);
       } else {
@@ -334,7 +339,7 @@ export class BomView {
       footprint: size || null,
       // the reference designator says what kind of part (C -> Capacitor): 1u is also a 1uH inductor
       category_id: ln.match.suggested_category_id || null,
-      pick: { onPick: (p) => { onPick({ id: p.id, name: p.name, mpn: p.mpn }); m.close(); } },
+      pick: { onPick: (p) => { onPick({ id: p.id, name: p.name, mpn: p.mpn, unit_price: p.unit_price, currency: p.currency }); m.close(); } },
     });
     await view.mount(host);
   }
@@ -494,7 +499,8 @@ export class BomView {
       el("th", { class: "c-refdes" }, "Refdes"), el("th", { class: "c-part" }, "Part"), el("th", { class: "c-value" }, "Value"),
       el("th", { class: "c-where" }, "Where it is"),
       el("th", { class: "num c-per" }, "Per board"), el("th", { class: "num c-needed" }, `Needed (${boards})`),
-      el("th", { class: "num c-onhand" }, "On hand"), el("th", { class: "num c-short" }, "Short"), el("th", { class: "no-print" }, "")));
+      el("th", { class: "num c-onhand" }, "On hand"), el("th", { class: "num c-short" }, "Short"),
+      el("th", { class: "num c-price", title: "Unit price ex VAT, as a quote would use it" }, "Price"), el("th", { class: "no-print" }, "")));
     // a pick list: walk the shelves once instead of hunting for each line
     const firstLoc = (ln) => (ln.locations && ln.locations[0] ? ln.locations[0].location : "\uffff");
     const skipped = data.lines.filter((l) => l.ignored);
@@ -536,6 +542,7 @@ export class BomView {
         el("td", { class: "num c-needed" }, String(ln.needed)),
         el("td", { class: "num c-onhand" }, ln.part_id ? String(ln.on_hand) : "—"),
         el("td", { class: "num c-short" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—")),
+        el("td", { class: "num c-price" }, ln.unit_cost ? fmtPrice(ln.unit_cost, ln.currency) : "—"),
         el("td", { class: "no-print", style: "white-space:nowrap" },
           el("button", { class: "ghost", title: "Use another part for this line", onclick: (e) => { e.stopPropagation(); changeLine(ln); } }, "Change…"),
           el("button", { class: "ghost", title: ln.ignored ? "Count this line in the build again" : "Not part of the build (hole, fiducial, logo, do-not-fit)",
@@ -613,13 +620,13 @@ export class BomView {
       return box;
     };
     const PRINT_COLS = [["pick", "Tick box"], ["refdes", "Refdes"], ["part", "Part"], ["value", "Value"], ["where", "Where it is"],
-      ["per", "Per board"], ["needed", "Needed"], ["onhand", "On hand"], ["short", "Short"]];
+      ["per", "Per board"], ["needed", "Needed"], ["onhand", "On hand"], ["short", "Short"], ["price", "Price"]];
     const prefs = (() => { try { return JSON.parse(localStorage.getItem("partsnas.bomPrint") || "{}"); } catch { return {}; } })();
     const printDialog = () => {
       const hasBoard = !!(pcb && pcb.model);
       const chk = (on) => el("input", { type: "checkbox", checked: on ? "checked" : null });
       const opt = (input, text) => el("label", { style: "display:flex;gap:6px;align-items:center;margin:3px 0" }, input, text);
-      const cols = Object.fromEntries(PRINT_COLS.map(([k]) => [k, chk(prefs.cols ? prefs.cols[k] !== false : true)]));
+      const cols = Object.fromEntries(PRINT_COLS.map(([k]) => [k, chk(prefs.cols?.[k] ?? k !== "price")]));
       const withBoard = el("input", { type: "radio", name: "pl", checked: hasBoard && prefs.board ? "checked" : null, disabled: hasBoard ? null : "disabled" });
       const only = el("input", { type: "radio", name: "pl", checked: withBoard.checked ? null : "checked" });
       const front = chk(true), back = chk(false), names = chk(true);

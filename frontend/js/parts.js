@@ -1,6 +1,6 @@
 // Parts tab: left category/location rail, right = faceted filters + results table + bulk bar.
 import { api } from "./api.js";
-import { el, modal, toast, treeOptions, withBusy, selectWithAdd } from "./ui.js";
+import { el, fmtPrice, modal, toast, treeOptions, withBusy, selectWithAdd } from "./ui.js";
 import { PartDetail } from "./partdetail.js";
 import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
@@ -530,10 +530,12 @@ export class PartsView {
       this.shop ? el("th", {}, "Add") : null,
       this.pick ? el("th", {}, "Use") : null,
       el("th", {}, "Name"), el("th", {}, "MPN"), el("th", { title: "Datasheet - opens in a new tab" }, "DS"), el("th", {}, "Category"),
-      el("th", {}, "Footprint"), el("th", { class: "num" }, "On hand"), el("th", {}, "Locations"))));
+      el("th", {}, "Footprint"), el("th", { class: "num" }, "On hand"),
+      this.shop || this.pick ? el("th", { class: "num", title: "Unit price ex VAT, the one a quote would use" }, "Price") : null,
+      el("th", {}, "Locations"))));
     const tb = el("tbody");
     for (const p of rows) tb.append(this._row(p));
-    if (!rows.length) tb.append(el("tr", {}, el("td", { colspan: this.shop || this.pick ? "9" : "8", class: "hint" }, "No parts match. Adjust filters, or use Import (top-right).")));
+    if (!rows.length) tb.append(el("tr", {}, el("td", { colspan: this.shop || this.pick ? "11" : "8", class: "hint" }, "No parts match. Adjust filters, or use Import (top-right).")));
     t.append(tb);
     this.tableWrap.append(t);
   }
@@ -569,7 +571,7 @@ export class PartsView {
       ? el("td", {}, el("button", { class: "primary", title: "Use this part",
           onclick: (e) => { e.stopPropagation(); this.pick.onPick(p); } }, "Use"))
       : null;
-    const tr = el("tr", { class: checked ? "sel" : "", onclick: () => (this.pick ? this.pick.onPick(p) : this.openDetail(p.id)) },
+    const tr = el("tr", { class: checked ? "sel" : "", onclick: () => this.openDetail(p.id) },   // in the BOM's Browse too: look first, press Use to take it
       el("td", {}, cb),
       shopCell,
       pickCell,
@@ -581,6 +583,7 @@ export class PartsView {
       el("td", {}, p.category || el("span", { class: "zero" }, "—")),
       el("td", {}, p.footprint || ""),
       el("td", { class: "num " + (p.on_hand <= 0 ? "zero" : p.min_stock && p.on_hand <= p.min_stock ? "low" : "") }, String(p.on_hand)),
+      this.shop || this.pick ? el("td", { class: "num" }, p.unit_price != null ? fmtPrice(p.unit_price, p.currency) : el("span", { class: "zero" }, "—")) : null,
       el("td", { class: "locs" }, p.locations.map((l) => el("span", { class: "chip" }, `${l.location}: ${l.qty}`))));
     if (this.shop) this._paintBadge(p.id);
     return tr;
