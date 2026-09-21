@@ -26,13 +26,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..bommatch import Matcher, part_summary, remember
+from ..bommatch import Matcher, part_summary, refdes_expectation, remember, suggest_category_id
 from ..bomparse import parse_bom_csv
 from ..kicadpcb import extract_board
 from ..core.config import get_settings
 from ..core.db import get_db
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
-from ..services import location_breakdown, location_breakdown_bulk, on_hand_map
+from ..services import category_path_map, location_breakdown, location_breakdown_bulk, on_hand_map
 
 router = APIRouter(prefix="/api/bom", tags=["bom"])
 
@@ -89,6 +89,7 @@ class LineIn(BaseModel):
     refdes: str | None = None
     part_id: str | None = None  # None = leave unresolved (fix later)
     remember: bool = False  # save this Value+Footprint -> part_id as a rule
+    ignored: bool = False   # not part of the build (holes, fiducials, logos, do-not-fit)
 
 
 class ProjectIn(BaseModel):
@@ -102,10 +103,11 @@ def _project_summary(db: Session, p: Project) -> dict:
         "id": p.id,
         "name": p.name,
         "notes": p.notes,
-        "line_count": len(p.bom_lines),
+        "line_count": sum(1 for ln in p.bom_lines if not ln.ignored),
+        "ignored_count": sum(1 for ln in p.bom_lines if ln.ignored),
         "has_ibom": _ibom_path(p.id).is_file(),
         "has_board": _board_path(p.id).is_file(),
-        "unresolved_count": sum(1 for ln in p.bom_lines if not ln.part_id),
+        "unresolved_count": sum(1 for ln in p.bom_lines if not ln.part_id and not ln.ignored),
         "last_build": max((b.created_at.isoformat() for b in p.builds if not b.reverted), default=None),
         "created_at": p.created_at.isoformat(),
     }
@@ -125,7 +127,7 @@ def create_project(body: ProjectIn, db: Session = Depends(get_db)):
             project_id=proj.id, part_id=ln.part_id,
             unresolved_mpn=None if ln.part_id else (ln.mpn or None),
             value=ln.value, footprint=ln.footprint,
-            qty_per_board=ln.qty, refdes=ln.refdes,
+            qty_per_board=ln.qty, refdes=ln.refdes, ignored=ln.ignored,
         ))
         if ln.remember and ln.part_id:
             remember(db, value=ln.value, footprint=ln.footprint, part_id=ln.part_id)
@@ -147,9 +149,10 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
     part_ids = [ln.part_id for ln in proj.bom_lines if ln.part_id]
     on_hand = on_hand_map(db, part_ids)
     where = location_breakdown_bulk(db, part_ids)   # part id -> [{location, qty}], biggest first
+    cat_path = category_path_map(db)
     lines = []
     for ln in proj.bom_lines:
-        needed = ln.qty_per_board * boards
+        needed = 0 if ln.ignored else ln.qty_per_board * boards
         have = on_hand.get(ln.part_id, 0) if ln.part_id else 0
         lines.append({
             "id": ln.id,
@@ -165,7 +168,9 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "needed": needed,
             "on_hand": have,
             "locations": [{"location": r["location"], "qty": r["qty"]} for r in where.get(ln.part_id, [])] if ln.part_id else [],
-            "short": max(0, needed - have) if ln.part_id else None,
+            "short": max(0, needed - have) if ln.part_id and not ln.ignored else None,
+            "ignored": bool(ln.ignored),
+            "suggested_category_id": suggest_category_id(cat_path, refdes_expectation(ln.refdes)),
         })
     return {
         **_project_summary(db, proj),
@@ -302,7 +307,7 @@ def build_project(pid: int, body: BuildIn, db: Session = Depends(get_db)):
     db.flush()
     grp = build.move_group
     for ln in proj.bom_lines:
-        if not ln.part_id:
+        if not ln.part_id or ln.ignored:
             continue
         need = int(round(ln.qty_per_board * body.boards))
         if need <= 0:
@@ -349,6 +354,36 @@ def list_match_rules(db: Session = Depends(get_db)):
          "created_at": r.created_at.isoformat()}
         for r in rules
     ]
+
+
+class LinePatch(BaseModel):
+    part_id: str | None = None      # another part; null = back to unresolved
+    ignored: bool | None = None
+    qty_per_board: float | None = Field(default=None, gt=0)
+    remember: bool = False          # with a part: remember Value + Footprint -> this part for later BOMs
+
+
+@router.patch("/projects/{pid}/lines/{lid}")
+def patch_line(pid: int, lid: int, body: LinePatch, db: Session = Depends(get_db)):
+    """Edit a saved BOM line: pick another part, skip it (or not), change the quantity."""
+    ln = db.get(BomLine, lid)
+    if ln is None or ln.project_id != pid:
+        raise HTTPException(404, "line not found")
+    data = body.model_dump(exclude_unset=True)
+    if "part_id" in data:
+        if data["part_id"] is not None and db.get(Part, data["part_id"]) is None:
+            raise HTTPException(400, "unknown part")
+        ln.part_id = data["part_id"]
+        if data["part_id"]:
+            ln.unresolved_mpn = None
+            if body.remember:
+                remember(db, value=ln.value, footprint=ln.footprint, part_id=data["part_id"])
+    if data.get("ignored") is not None:
+        ln.ignored = bool(data["ignored"])
+    if data.get("qty_per_board") is not None:
+        ln.qty_per_board = data["qty_per_board"]
+    db.commit()
+    return {"ok": True}
 
 
 class RulePatch(BaseModel):

@@ -1,0 +1,242 @@
+[
+ {
+  "owner": "R1:reference",
+  "text": "R1",
+  "shown": "R1",
+  "pos": [
+   20.0,
+   20.0
+  ],
+  "angle": 0.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Silkscreen",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "R1:value",
+  "text": "R_0603",
+  "shown": "R_0603",
+  "pos": [
+   20.0,
+   20.0
+  ],
+  "angle": 0.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Fab",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "J1:reference",
+  "text": "J1",
+  "shown": "J1",
+  "pos": [
+   40.0,
+   20.0
+  ],
+  "angle": 270.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Silkscreen",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "J1:value",
+  "text": "Conn_2",
+  "shown": "Conn_2",
+  "pos": [
+   40.0,
+   20.0
+  ],
+  "angle": 270.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Fab",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "C1:reference",
+  "text": "C1",
+  "shown": "C1",
+  "pos": [
+   20.0,
+   30.0
+  ],
+  "angle": 45.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Silkscreen",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "C1:value",
+  "text": "C_0603",
+  "shown": "C_0603",
+  "pos": [
+   20.0,
+   30.0
+  ],
+  "angle": 45.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Fab",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "R2:reference",
+  "text": "R2",
+  "shown": "R2",
+  "pos": [
+   30.0,
+   20.0
+  ],
+  "angle": 90.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Silkscreen",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "R2:value",
+  "text": "R_0603",
+  "shown": "R_0603",
+  "pos": [
+   30.0,
+   20.0
+  ],
+  "angle": 90.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "F.Fab",
+  "mirror": false,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "C3:reference",
+  "text": "C3",
+  "shown": "C3",
+  "pos": [
+   40.0,
+   30.0
+  ],
+  "angle": 90.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "B.Silkscreen",
+  "mirror": true,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "C3:value",
+  "text": "C_0603",
+  "shown": "C_0603",
+  "pos": [
+   40.0,
+   30.0
+  ],
+  "angle": 90.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "B.Fab",
+  "mirror": true,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "C2:reference",
+  "text": "C2",
+  "shown": "C2",
+  "pos": [
+   30.0,
+   30.0
+  ],
+  "angle": 0.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "B.Silkscreen",
+  "mirror": true,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ },
+ {
+  "owner": "C2:value",
+  "text": "C_0603",
+  "shown": "C_0603",
+  "pos": [
+   30.0,
+   30.0
+  ],
+  "angle": 0.0,
+  "h": 1.27,
+  "w": 1.27,
+  "thick": 0.0,
+  "visible": true,
+  "layer": "B.Fab",
+  "mirror": true,
+  "hj": 0,
+  "vj": 0,
+  "bold": false,
+  "italic": false
+ }
+]

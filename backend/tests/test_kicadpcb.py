@@ -117,3 +117,47 @@ def test_things_that_are_not_boards_are_refused_with_a_message():
         with pytest.raises(ValueError):
             extract_board(bad)
     assert parse_sexpr('(a "b c" (d 1.5))') == [["a", "b c", ["d", "1.5"]]]
+
+
+# -- text: silkscreen and fab text, in the size, place and direction pcbnew reports -------------------------------
+LAYER = {"F.Silkscreen": "F.SilkS", "B.Silkscreen": "B.SilkS", "F.Fab": "F.Fab", "B.Fab": "B.Fab"}
+
+
+def test_text_matches_pcbnew(mini):
+    truth = json.loads((FIX / "mini.text.json").read_text(encoding="utf-8"))
+    have = [(lyr, p) for lyr, prims in mini["gfx"].items() for p in prims if p[0] == "t"]
+    checked = 0
+    for t in truth:
+        if not t["visible"] or t["layer"] not in LAYER:
+            continue
+        cands = [p for lyr, p in have if lyr == LAYER[t["layer"]] and p[1] == t["shown"]
+                 and abs(p[2] - t["pos"][0]) < 0.003 and abs(p[3] - t["pos"][1]) < 0.003]
+        assert cands, t["owner"]
+        p = cands[0]
+        turn = (p[4] - t["angle"]) % 360
+        assert min(turn, 360 - turn) < 0.01, (t["owner"], p[4], t["angle"])
+        assert abs(p[5] - t["h"]) < 0.002 and bool(p[10]) == t["mirror"], t["owner"]
+        checked += 1
+    assert checked == 12
+    back = [p for lyr, prims in mini["gfx"].items() if lyr.startswith("B.") for p in prims if p[0] == "t"]
+    assert back and all(p[10] == 1 for p in back)          # text on the back is stored mirrored
+
+
+TEXTS = '''(kicad_pcb (version 20221018)
+  (footprint "Lib:R" (layer "F.Cu") (at 10 5 90)
+    (fp_text reference "R7" (at -1.5 7 90) (layer "F.SilkS") (effects (font (size 1 1) (thickness 0.15))))
+    (fp_text value "10k" (at 0 0) (layer "F.Fab") hide (effects (font (size 1 1) (thickness 0.15))))
+    (fp_text user "${REFERENCE} / ${VALUE}" (at 0 2 0) (layer "F.Fab") (effects (font (size 0.8 0.6) (thickness 0.1) bold) (justify left bottom))))
+  (gr_text "HELLO\nWORLD" (at 30 40 180) (layer "B.SilkS") (effects (font (size 2 2)) (justify mirror))))'''
+
+
+def test_text_position_angle_visibility_variables_and_line_breaks():
+    b = extract_board(TEXTS)
+    silk = [p for p in b["gfx"]["F.SilkS"] if p[0] == "t"]
+    # local (-1.5, 7) in a footprint at (10, 5) turned 90 degrees counter-clockwise: (10 + 7, 5 + 1.5); its angle is the board angle
+    assert silk == [["t", "R7", 17.0, 6.5, 90.0, 1.0, 1.0, 0.15, 0, 0, 0, 0]]
+    fab = [p for p in b["gfx"]["F.Fab"] if p[0] == "t"]
+    assert [p[1] for p in fab] == ["R7 / 10k"]                 # ${REFERENCE} / ${VALUE} filled in, hidden value not drawn
+    assert fab[0][5:7] == [0.8, 0.6] and fab[0][8:10] == [-1, 1] and fab[0][11] == 1   # size h/w, left + bottom, bold
+    back = [p for p in b["gfx"]["B.SilkS"] if p[0] == "t"]
+    assert back[0][1] == "HELLO\nWORLD" and back[0][2:5] == [30.0, 40.0, 180.0] and back[0][10] == 1

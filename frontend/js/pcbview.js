@@ -165,9 +165,16 @@ export function primWidth(p) {
 }
 
 // ------------------------------------------------------------------ drawing
+// on paper: light board, dark lines, no copper - it is a map for finding parts, not a picture of the board
+const PRINT_COLORS = {
+  board: "#f1f5ee", boardEdge: "#111111", copperF: "#cfcfcf", copperB: "#cfcfcf", pad: "#4a4a4a", padB: "#4a4a4a",
+  hole: "#ffffff", silk: "#000000", fab: "#777777", crtyd: "#999999", via: "#bbbbbb", hi: "#39ff14", hiFill: "rgba(57,255,20,0.3)",
+  bg: "#ffffff", label: "#000000",
+};
+
 const COLORS = {
   board: "#1d3b2a", boardEdge: "#e6d36a", copperF: "#b03a3a", copperB: "#3a5fb0", pad: "#c9a227", padB: "#8fa8c9",
-  hole: "#0e1a13", silk: "#ece8d8", fab: "#7d8a96", crtyd: "#4f7a6a", via: "#9aa0a6", hi: "#ffd400", bg: "#12191a",
+  hole: "#0e1a13", silk: "#ece8d8", fab: "#7d8a96", crtyd: "#4f7a6a", via: "#9aa0a6", hi: "#39ff14", hiFill: "rgba(57,255,20,0.22)", bg: "#12191a", label: "rgba(255,255,255,0.85)",
 };
 
 export class PcbView {
@@ -217,6 +224,11 @@ export class PcbView {
     this.fit();
   }
 
+  /** Is this part seen from the side being looked at? (a through-hole part shows from both) */
+  _seen(f) {
+    return f.side === this.side || f.pads.some((p) => p.L === "FB");
+  }
+
   /** Light up the parts with these references (an array or a Set). */
   highlight(refs) {
     this.highlighted = new Set(refs);
@@ -244,7 +256,7 @@ export class PcbView {
 
   // the canvas' pixel buffer must match the size it is shown at, or everything is a blurry 300 x 150 picture
   _syncBacking() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = this._dpr();
     const { w, h } = this._size();
     const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
     if (this.canvas.width !== bw || this.canvas.height !== bh) {
@@ -332,17 +344,77 @@ export class PcbView {
     }, { passive: false });
   }
 
+  /**
+   * Silkscreen / fab text. KiCad's own stroke font is not available here, so it is set in Courier New (a monospaced
+   * face, like KiCad's text) at the same height and, via the width setting, the same width: the size on the board
+   * is the size in the file. The text is drawn in a frame of millimetres whose axes are the text's own along / down
+   * directions mapped to the screen, so turning and flipping the board, and mirrored text on the back, come out right.
+   */
+  _drawTexts(prims, color, P) {
+    const ctx = this.ctx;
+    const K = 100;                                              // draw at 100x and scale down: tiny font sizes are unreliable
+    for (const t of prims) {
+      if (t[0] !== "t") continue;
+      const [, text, x, y, ang, h, w, th, hj, vj, mirror, bold] = t;
+      const o = P(x, y);
+      const [ux, uy] = rotateCcw(1, 0, ang), [dx, dy] = rotateCcw(0, 1, ang);
+      const a = P(x + ux, y + uy), d = P(x + dx, y + dy);
+      ctx.save();
+      ctx.transform(a[0] - o[0], a[1] - o[1], d[0] - o[0], d[1] - o[1], o[0], o[1]);
+      ctx.scale(1 / K, 1 / K);
+      if (mirror) ctx.scale(-1, 1);
+      const em = h * 1.3 * K;                                   // Courier New's capitals are ~0.57 em tall: 1.3 x gives ~0.75 of the height
+      ctx.font = `${bold || th >= 0.2 ? 700 : 600} ${em}px "Courier New", Courier, monospace`;
+      ctx.fillStyle = color;
+      ctx.textAlign = hj < 0 ? "left" : hj > 0 ? "right" : "center";
+      ctx.textBaseline = "middle";
+      const lines = String(text).split("\n");
+      const lineH = h * 1.55 * K;
+      const top = vj < 0 ? 0 : vj > 0 ? -lines.length * lineH : (-lines.length * lineH) / 2;
+      ctx.scale(w / (h || 1), 1);
+      lines.forEach((ln, i) => ctx.fillText(ln, 0, top + lineH * (i + 0.5)));
+      ctx.restore();
+    }
+  }
+
+  /**
+   * The board as a picture, for printing: `palette: "print"` is white paper with dark lines, and the reference
+   * names are drawn on every part so a printed board can be read without the screen.
+   * @returns {HTMLCanvasElement}
+   */
+  static renderImage(model, { side = "F", rot = 0, width = 2000, height = 1400, refs = true, palette = "print", highlighted = [] } = {}) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const r = Object.create(PcbView.prototype);
+    Object.assign(r, {
+      canvas, ctx: canvas.getContext("2d"), model, _loops: edgeLoops(model.edge || []), side, rot, panX: 0, panY: 0,
+      highlighted: new Set(highlighted), _raf: 0, _fixedDpr: 1, labelScale: width / 1100,
+      show: { silk: true, fab: false, pads: true, tracks: palette !== "print", zones: false, refs },
+      colors: palette === "print" ? PRINT_COLORS : null,
+    });
+    r._size = () => ({ w: width, h: height });
+    r.scale = fitScale(model.bbox, rot, width, height, 40);
+    r._paint();
+    return canvas;
+  }
+
   draw() {
     if (this._raf) return;
     this._raf = requestAnimationFrame(() => { this._raf = 0; this._paint(); });
   }
 
+  _dpr() {
+    return this._fixedDpr || window.devicePixelRatio || 1;
+  }
+
   _paint() {
+    const C = this.colors || COLORS;
     this._syncBacking();
-    const ctx = this.ctx, dpr = window.devicePixelRatio || 1;
+    const ctx = this.ctx, dpr = this._dpr();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const { w, h } = this._size();
-    ctx.fillStyle = COLORS.bg;
+    ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, w, h);
     if (!this.model) return;
     const view = this._view();
@@ -370,14 +442,14 @@ export class PcbView {
         }
         ctx.closePath();
       }
-      ctx.fillStyle = COLORS.board;
+      ctx.fillStyle = C.board;
       ctx.fill("evenodd");
-      ctx.strokeStyle = COLORS.boardEdge;
+      ctx.strokeStyle = C.boardEdge;
       ctx.lineWidth = px(0.15, 1);
       ctx.stroke();
     } else {
       const [a, b] = [P(m.bbox[0], m.bbox[1]), P(m.bbox[2], m.bbox[3])];
-      ctx.fillStyle = COLORS.board;
+      ctx.fillStyle = C.board;
       ctx.fillRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
     }
 
@@ -387,20 +459,20 @@ export class PcbView {
       for (const pts of (m.zones && m.zones[copper]) || []) { path(pts, true); ctx.fill(); }
     }
     if (this.show.tracks) {
-      ctx.strokeStyle = front ? COLORS.copperF : COLORS.copperB;
+      ctx.strokeStyle = front ? C.copperF : C.copperB;
       ctx.lineCap = "round";
       for (const t of (m.tracks && m.tracks[copper]) || []) {
         ctx.lineWidth = px(t[t.length - 1] || 0.2, 1);
         if (t[0] === "l") { path([t[1], t[2], t[3], t[4]], false); ctx.stroke(); }
         else if (t[0] === "a") { path(arcPoints(t[1], t[2], t[3], t[4], t[5], t[6]), false); ctx.stroke(); }
       }
-      ctx.fillStyle = COLORS.via;
+      ctx.fillStyle = C.via;
       for (const v of m.vias || []) {
         const [sx, sy] = P(v[0], v[1]);
         ctx.beginPath(); ctx.arc(sx, sy, px(v[2] / 2, 1.5), 0, 6.2832); ctx.fill();
-        ctx.fillStyle = COLORS.hole;
+        ctx.fillStyle = C.hole;
         ctx.beginPath(); ctx.arc(sx, sy, px(v[3] / 2, 0.7), 0, 6.2832); ctx.fill();
-        ctx.fillStyle = COLORS.via;
+        ctx.fillStyle = C.via;
       }
     }
 
@@ -412,6 +484,7 @@ export class PcbView {
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       for (const p of prims) {
+        if (p[0] === "t") continue;                       // text is drawn by drawTexts
         ctx.lineWidth = px(primWidth(p) || 0.1, minWidth);
         if (p[0] === "l") { path([p[1], p[2], p[3], p[4]], false); ctx.stroke(); }
         else if (p[0] === "a") { path(arcPoints(p[1], p[2], p[3], p[4], p[5], p[6]), false); ctx.stroke(); }
@@ -423,15 +496,15 @@ export class PcbView {
         }
       }
     };
-    if (this.show.fab) drawPrims(sideLayer("Fab"), COLORS.fab, 0.6);
+    if (this.show.fab) { drawPrims(sideLayer("Fab"), C.fab, 0.6); this._drawTexts(sideLayer("Fab"), C.fab, P); }
 
     // pads (a through-hole pad shows from both sides)
     if (this.show.pads) {
       for (const f of m.footprints) {
-        const hi = this.highlighted.has(f.ref);
+        const hi = this.highlighted.has(f.ref) && this._seen(f);
         for (const pad of f.pads) {
           if (pad.L !== "FB" && pad.L !== this.side) continue;
-          ctx.fillStyle = hi ? COLORS.hi : pad.L === "FB" || front ? COLORS.pad : COLORS.padB;
+          ctx.fillStyle = hi ? C.hi : pad.L === "FB" || front ? C.pad : C.padB;
           if (pad.s === "circle" && !pad.poly) {
             const [sx, sy] = P(pad.x, pad.y);
             ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.8, (pad.w / 2) * this.scale), 0, 6.2832); ctx.fill();
@@ -440,24 +513,24 @@ export class PcbView {
           }
           if (pad.d) {
             const [sx, sy] = P(pad.x, pad.y);
-            ctx.fillStyle = COLORS.hole;
+            ctx.fillStyle = C.hole;
             ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.5, (pad.d / 2) * this.scale), 0, 6.2832); ctx.fill();
           }
         }
       }
     }
-    if (this.show.silk) drawPrims(sideLayer("SilkS"), COLORS.silk, 0.8);
+    if (this.show.silk) { drawPrims(sideLayer("SilkS"), C.silk, 0.8); this._drawTexts(sideLayer("SilkS"), C.silk, P); }
 
     // the parts being looked for
     ctx.lineJoin = "round";
     for (const f of m.footprints) {
-      if (!this.highlighted.has(f.ref)) continue;
+      if (!this.highlighted.has(f.ref) || !this._seen(f)) continue;
       const [x0, y0, x1, y1] = f.bbox, pad = 0.4;
       const pts = [x0 - pad, y0 - pad, x1 + pad, y0 - pad, x1 + pad, y1 + pad, x0 - pad, y1 + pad];
       path(pts, true);
-      ctx.fillStyle = "rgba(255,212,0,0.22)";
+      ctx.fillStyle = C.hiFill;
       ctx.fill();
-      ctx.strokeStyle = COLORS.hi;
+      ctx.strokeStyle = C.hi;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -467,14 +540,19 @@ export class PcbView {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const f of m.footprints) {
-      const hi = this.highlighted.has(f.ref);
+      const hi = this.highlighted.has(f.ref) && this._seen(f);
       if (!hi && !labelAll) continue;
-      if (f.side !== this.side && !hi) continue;
+      if (!this._seen(f)) continue;
       const [sx, sy] = P((f.bbox[0] + f.bbox[2]) / 2, (f.bbox[1] + f.bbox[3]) / 2);
-      const size = Math.max(9, Math.min(15, (Math.min(f.bbox[2] - f.bbox[0], f.bbox[3] - f.bbox[1]) * this.scale) * 0.7));
+      const size = (this.labelScale || 1) * Math.max(9, Math.min(15, (Math.min(f.bbox[2] - f.bbox[0], f.bbox[3] - f.bbox[1]) * this.scale) * 0.7));
       ctx.font = `600 ${hi ? Math.max(12, size) : size}px sans-serif`;
-      ctx.fillStyle = hi ? "#000" : "rgba(255,255,255,0.85)";
-      if (hi) { ctx.lineWidth = 3; ctx.strokeStyle = COLORS.hi; ctx.strokeText(f.ref, sx, sy); }
+      ctx.fillStyle = hi ? "#000" : C.label;
+      if (hi || this.colors) {                       // a halo keeps the name readable over pads and silkscreen
+        ctx.lineJoin = "round";
+        ctx.lineWidth = (hi ? 3 : 4) * (this.labelScale || 1);
+        ctx.strokeStyle = hi ? C.hi : "#ffffff";
+        ctx.strokeText(f.ref, sx, sy);
+      }
       ctx.fillText(f.ref, sx, sy);
     }
   }

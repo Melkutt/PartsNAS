@@ -916,3 +916,19 @@ tr.board-hit { background: var(--accent-soft); outline: 1px solid var(--accent);
 }
 @media print { .bom-boardbar, .bom-board { display: none !important; } }
 @media (max-width: 820px) { .bom-board-host { height: 60vh; } .bom-boardbar { height: 45vh; } }
+
+/* lines that are not part of the build */
+tr.bom-skipped > td { opacity: 0.5; }
+tr.bom-skipped .bom-where, tr.bom-skipped td:nth-child(2) { text-decoration: line-through; }
+
+/* printing: the board on page 1, then the list */
+.bom-print-board h2 { margin: 0 0 2px; }
+.bom-print-sub { margin-bottom: 8px; }
+.bom-print-fig { margin: 0 0 6px; text-align: center; }
+.bom-print-fig img { max-width: 100%; max-height: 235mm; object-fit: contain; border: 1px solid #999; }
+.bom-print-board.two .bom-print-fig img { max-height: 115mm; }
+.bom-print-fig figcaption { font-size: 11px; }
+@media print {
+  .bom-print-board { break-after: page; page-break-after: always; }
+  .bom-split { display: block; }
+}

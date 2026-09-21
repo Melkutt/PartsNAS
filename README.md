@@ -88,7 +88,10 @@ Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   Add the project's **board file** (`.kicad_pcb`) and PartsNAS **draws the board itself** next to the list: turn it,
   flip it to the back, zoom, click a line to light up the parts on the board, click a part on the board to see
   what it is, its value and where it is stored. It reads KiCad's own file format directly (no plugin needed) and
-  keeps only the drawing, a few hundred KB per board.
+  keeps only the drawing, a few hundred KB per board. Silkscreen text is drawn, and a clicked part lights up in
+  neon green on the side it sits on. Saved lines can be edited afterwards (**Change…** picks another part,
+  **Skip** leaves out holes, fiducials, logos and do-not-fit parts: kept in the list, but not counted, built or
+  printed), and **Print pick list** can put the board on page 1 and the list from page 2.
   *Import IBOM* takes the `ibom.html` from the [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom)
   KiCad plugin: it reads the parts list from the file and shows the board next to it, so a click on a line
   lights up the parts on the board and a click on the board shows what the part is and where it is stored.

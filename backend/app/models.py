@@ -262,6 +262,9 @@ class BomLine(Base):
     qty_per_board: Mapped[float] = mapped_column(Float, default=1)
     refdes: Mapped[str | None] = mapped_column(Text)  # "R1 R2 R7"
     note: Mapped[str | None] = mapped_column(Text)
+    # not part of the build (mounting holes, fiducials, logos, do-not-fit): kept in the list, but left out of
+    # shortages, builds and the pick list
+    ignored: Mapped[bool] = mapped_column(default=False)
 
     project: Mapped["Project"] = relationship(back_populates="bom_lines")
     part: Mapped["Part | None"] = relationship()

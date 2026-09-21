@@ -22,6 +22,7 @@ from typing import Any
 
 _TOKEN = re.compile(r'\(|\)|"((?:[^"\\]|\\.)*)"|[^\s()"]+')
 _ESCAPE = re.compile(r"\\(.)")
+_UNESCAPED = {"n": "\n", "t": "\t"}          # KiCad writes a line break inside a string as \n
 FORMAT = 1
 
 
@@ -41,7 +42,7 @@ def parse_sexpr(text: str) -> list:
                 raise ValueError("unbalanced ')' in the board file")
             stack.pop()
         elif m.group(1) is not None:
-            stack[-1].append(_ESCAPE.sub(r"\1", m.group(1)))
+            stack[-1].append(_ESCAPE.sub(lambda e: _UNESCAPED.get(e.group(1), e.group(1)), m.group(1)))
         else:
             stack[-1].append(tok)
     if len(stack) != 1:
@@ -180,6 +181,45 @@ def _union(a: list[float] | None, b: list[float]) -> list[float]:
     return list(b) if a is None else [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
 
 
+# ------------------------------------------------------------------ text
+_HJ = {"left": -1, "right": 1}
+_VJ = {"top": -1, "bottom": 1}
+
+
+def _hidden(node: list) -> bool:
+    for c in node:
+        if c == "hide" or (isinstance(c, list) and c and c[0] == "hide" and (len(c) < 2 or c[1] != "no")):
+            return True
+    eff = _first(node, "effects")
+    return bool(eff and any(c == "hide" or (isinstance(c, list) and c and c[0] == "hide" and (len(c) < 2 or c[1] != "no")) for c in eff))
+
+
+def _text(node: list, text: str, frame: _Frame | None, layer: str) -> list | None:
+    """["t", text, x, y, angle, height, width, thickness, hj, vj, mirror, bold] in board coordinates.
+    hj / vj: -1 left / top, 0 centre, 1 right / bottom (KiCad's own numbers). The angle in the file is the text's
+    angle on the board, like a pad's."""
+    if not text.strip():
+        return None
+    at = _first(node, "at") or ["at", 0, 0]
+    lx, ly = _num(at[1]), _num(at[2])
+    x, y = frame.pt(lx, ly) if frame else (lx, ly)
+    angle = _num(at[3]) if len(at) > 3 else 0.0
+    eff = _first(node, "effects") or []
+    font = _first(eff, "font") or []
+    size = _first(font, "size") or ["size", 1, 1]
+    h, w = _num(size[1], 1.0), _num(size[2], _num(size[1], 1.0))
+    th = _num((_first(font, "thickness") or [0, 0.15])[1], 0.15)
+    bold = any(c == "bold" or (isinstance(c, list) and c[0] == "bold" and c[1:2] != ["no"]) for c in font)
+    just = [str(c) for c in (_first(eff, "justify") or [])[1:]]
+    hj = next((_HJ[t] for t in just if t in _HJ), 0)
+    vj = next((_VJ[t] for t in just if t in _VJ), 0)
+    return ["t", text, _r(x), _r(y), _r(angle % 360), _r(h), _r(w), _r(th), hj, vj, 1 if "mirror" in just else 0, 1 if bold else 0]
+
+
+def _expand(text: str, ref: str, value: str) -> str:
+    return text.replace("${REFERENCE}", ref).replace("${VALUE}", value)
+
+
 # ------------------------------------------------------------------ pads
 _PAD_SHAPES = {"circle": "circle", "rect": "rect", "oval": "oval", "roundrect": "roundrect",
                "trapezoid": "rect", "custom": "custom"}
@@ -251,6 +291,7 @@ def _text_of(fp: list, which: str) -> str:
 
 
 _DRAW_LAYERS = {"F.SilkS", "B.SilkS", "F.Fab", "B.Fab", "F.CrtYd", "B.CrtYd"}
+_TEXT_LAYERS = {"F.SilkS", "B.SilkS", "F.Fab", "B.Fab"}
 _GR = {f"gr_{k}": v for k, v in _KINDS.items()}
 _FP = {f"fp_{k}": v for k, v in _KINDS.items()}
 
@@ -263,6 +304,22 @@ def _footprint(fp: list, gfx: dict[str, list]) -> dict:
     layer = (_first(fp, "layer") or ["layer", "F.Cu"])[1]
     attrs = [str(a) for a in (_first(fp, "attr") or [])[1:] if not isinstance(a, list)]
     pads = [p for p in (_pad(n, frame) for n in _kids(fp, "pad")) if p]
+
+    ref, value = _text_of(fp, "Reference"), _text_of(fp, "Value")
+
+    def add_text(node: list, text: str) -> None:
+        lyr = (_first(node, "layer") or ["layer", ""])[1]
+        if lyr in _TEXT_LAYERS and not _hidden(node):
+            t = _text(node, _expand(text, ref, value), frame, lyr)
+            if t:
+                gfx[lyr].append(t)
+
+    for t in _kids(fp, "fp_text"):                 # KiCad 5-7: reference, value and free text alike
+        if len(t) > 2:
+            add_text(t, str(t[2]))
+    for prop in _kids(fp, "property"):             # KiCad 8+: the reference and the value are properties
+        if len(prop) > 2 and prop[1] in ("Reference", "Value"):
+            add_text(prop, str(prop[2]))
 
     bbox: list[float] | None = None
     for p in pads:                                 # the pad's rotated rectangle (or its polygon) -> box
@@ -320,6 +377,12 @@ def extract_board(text: str, *, copper: bool = True) -> dict:
                  [_footprint(fp, gfx) for fp in _kids(root, "module")]          # KiCad 5 called them modules
 
     ident = lambda x, y: (x, y)  # noqa: E731 - top-level items are already in board coordinates
+    for gt in _kids(root, "gr_text"):
+        lyr = (_first(gt, "layer") or ["layer", ""])[1]
+        if lyr in _TEXT_LAYERS and len(gt) > 1 and not _hidden(gt):
+            t = _text(gt, str(gt[1]), None, lyr)
+            if t:
+                gfx[lyr].append(t)
     for child in root:
         if not isinstance(child, list) or not child or child[0] not in _GR:
             continue

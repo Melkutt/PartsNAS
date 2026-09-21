@@ -179,3 +179,59 @@ def test_a_kicad_board_can_be_previewed_and_kept_with_the_project(client):
         client.delete(f"/api/bom/projects/{pid}")
     from app.api.bom import _board_path
     assert not _board_path(pid).exists()
+
+
+# -- lines that are not part of the build, and editing a saved line ------------------------------
+
+def test_skipped_lines_are_left_out_of_shortages_and_builds(client):
+    loc = _location(client)[0]
+    a = _part(client, "ZZ_SKIP screw", "ZZ-SKIP-A")
+    h = _part(client, "ZZ_SKIP hole part", "ZZ-SKIP-H")
+    try:
+        for p in (a, h):
+            client.post(f"/api/parts/{p}/stock", json={"location_id": loc, "delta": 10, "kind": "add"})
+        pid = client.post("/api/bom/projects", json={"name": "ZZ_SKIP proj", "lines": [
+            {"value": "M3", "footprint": "x", "qty": 2, "refdes": "C1", "part_id": a},
+            {"value": "Hole", "footprint": "MountingHole", "qty": 4, "refdes": "H1 H2 H3 H4", "part_id": h, "ignored": True},
+            {"value": "?", "footprint": "Logo", "qty": 1, "refdes": "G1", "ignored": True},
+        ]}).json()["id"]
+        summary = client.get("/api/bom/projects").json()[0]
+        assert (summary["line_count"], summary["ignored_count"], summary["unresolved_count"]) == (1, 2, 0)
+        d = client.get(f"/api/bom/projects/{pid}", params={"boards": 3}).json()
+        by = {ln["refdes"]: ln for ln in d["lines"]}
+        assert by["H1 H2 H3 H4"]["ignored"] is True and by["H1 H2 H3 H4"]["needed"] == 0 and by["H1 H2 H3 H4"]["short"] is None
+        assert by["C1"]["needed"] == 6
+        client.post(f"/api/bom/projects/{pid}/build", json={"boards": 3})
+        assert client.get(f"/api/parts/{a}").json()["on_hand"] == 4      # 10 - 6
+        assert client.get(f"/api/parts/{h}").json()["on_hand"] == 10     # untouched
+        client.delete(f"/api/bom/projects/{pid}")
+    finally:
+        for p in (a, h):
+            client.delete(f"/api/parts/{p}")
+
+
+def test_a_saved_line_can_be_edited(client):
+    x = _part(client, "ZZ_EDIT 1n X7R", "ZZ-EDIT-X")
+    y = _part(client, "ZZ_EDIT 1n C0G", "ZZ-EDIT-Y")
+    pid = client.post("/api/bom/projects", json={"name": "ZZ_EDIT proj", "lines": [
+        {"value": "1n", "footprint": "C_0603_1608Metric", "qty": 1, "refdes": "C1", "part_id": x}]}).json()["id"]
+    try:
+        lid = client.get(f"/api/bom/projects/{pid}").json()["lines"][0]["id"]
+        url = f"/api/bom/projects/{pid}/lines/{lid}"
+        assert client.patch(url, json={"part_id": y, "remember": True}).status_code == 200
+        assert client.get(f"/api/bom/projects/{pid}").json()["lines"][0]["part_id"] == y
+        assert any(r["part_id"] == y for r in client.get("/api/bom/match-rules").json())      # remembered for the next BOM
+        assert client.patch(url, json={"ignored": True, "qty_per_board": 3}).status_code == 200
+        line = client.get(f"/api/bom/projects/{pid}").json()["lines"][0]
+        assert line["ignored"] is True and line["qty_per_board"] == 3 and line["part_id"] == y
+        assert client.patch(url, json={"part_id": None, "ignored": False}).status_code == 200
+        assert client.get(f"/api/bom/projects/{pid}").json()["lines"][0]["part_id"] is None
+        assert client.patch(url, json={"part_id": "nope"}).status_code == 400
+        assert client.patch(f"/api/bom/projects/{pid}/lines/999999", json={"ignored": True}).status_code == 404
+        assert client.patch(f"/api/bom/projects/999999/lines/{lid}", json={"ignored": True}).status_code == 404
+        for r in client.get("/api/bom/match-rules").json():
+            client.delete(f"/api/bom/match-rules/{r['id']}")
+    finally:
+        client.delete(f"/api/bom/projects/{pid}")
+        for p in (x, y):
+            client.delete(f"/api/parts/{p}")

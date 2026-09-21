@@ -240,6 +240,28 @@ def canonical_footprint(db: Session, raw: str | None) -> str:
     return re.sub(r"\s+", " ", fp_low).strip()
 
 
+def suggest_category_id(cat_path: dict[int, str], expect: tuple[str, ...] | None) -> int | None:
+    """The category to preselect for a line, from its reference designator ("C" -> Capacitor): tokens are tried
+    most specific first and matched against a category's own name, shallowest node wins."""
+    if not expect:
+        return None
+    for tok in expect:
+        best: tuple[int, int] | None = None
+        for cid, path in cat_path.items():
+            leaf = path.rsplit(" > ", 1)[-1].lower()
+            if leaf == tok or leaf.startswith(tok):
+                depth = path.count(">")
+                if best is None or depth < best[1]:
+                    best = (cid, depth)
+        if best:
+            return best[0]
+    return None
+
+
+def refdes_expectation(refdes: str | None) -> tuple[str, ...] | None:
+    return _REFDES_CATEGORY.get(_refdes_prefix(refdes) or "")
+
+
 class Matcher:
     """Loads parts/rules once, then scores many BOM lines cheaply."""
 
@@ -262,26 +284,7 @@ class Matcher:
         return any(tok in path for tok in expect)
 
     def _suggest_category_id(self, expect: tuple[str, ...] | None) -> int | None:
-        """The category to preselect when the user creates a brand-new part
-        for this line — same refdes-prefix signal as _category_ok, but
-        resolved to one concrete id instead of used as a filter. Tokens are
-        tried in order (most specific first, e.g. "LED" tries "led" before
-        the fallback "diode") and matched against a category's own name
-        (not just anywhere in its path), preferring the shallowest node so
-        e.g. "capacitor" lands on Capacitor itself, not some subtype."""
-        if not expect:
-            return None
-        for tok in expect:
-            best: tuple[int, int] | None = None
-            for cid, path in self._cat_path.items():
-                leaf = path.rsplit(" > ", 1)[-1].lower()
-                if leaf == tok or leaf.startswith(tok):
-                    depth = path.count(">")
-                    if best is None or depth < best[1]:
-                        best = (cid, depth)
-            if best:
-                return best[0]
-        return None
+        return suggest_category_id(self._cat_path, expect)
 
     def match(self, *, mpn: str | None, value: str | None, footprint: str | None,
               refdes: str | None = None) -> dict:

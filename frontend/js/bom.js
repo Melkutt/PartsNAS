@@ -14,6 +14,9 @@ import { boardWindow, highlightRefs, onBoardClick, readIbomFile, splitRefs } fro
 import { PcbView } from "./pcbview.js";
 
 const CERTAIN = ["mpn", "remembered", "new"];
+// mounting holes, fiducials, logos, symbols, net ties: on the board, but not something you build in
+const AUTO_SKIP = /^(H|MH|FID|G|LOGO|SYM|NT)\d*$/i;
+const isSkippable = (refdes) => { const r = splitRefs(refdes); return r.length > 0 && r.every((x) => AUTO_SKIP.test(x)); };
 const badge = (score, kind, why) => {
   const cls = CERTAIN.includes(kind) || kind === "manual" ? "ok" : score >= 70 ? "warn" : "low";
   const label = kind === "mpn" ? "MPN exact" : kind === "remembered" ? "Remembered" : kind === "manual" ? "Picked"
@@ -173,6 +176,7 @@ export class BomView {
       ...l,
       part_id: l.match.part_id,
       remember: false,
+      ignored: isSkippable(l.refdes),     // holes, fiducials, logos: kept in the list but not part of the build
     }));
     const nameInp = el("input", { type: "text", value: data.suggested_name, style: "max-width:320px" });
     const hasBoard = !!opts.board;
@@ -210,7 +214,9 @@ export class BomView {
     );
     const table = el("table", { class: "mini-table bom-table" });
     table.append(el("tr", {}, el("th", {}, "Refdes"), el("th", {}, "Value"), el("th", {}, "Footprint"),
-      el("th", { class: "num" }, "Qty"), el("th", {}, "Match"), el("th", {}, "Part"), el("th", {}, "Remember")));
+      el("th", { class: "num" }, "Qty"), el("th", {}, "Match"), el("th", {}, "Part"),
+      el("th", { title: "Not part of the build: mounting holes, fiducials, logos, do-not-fit. Kept in the list, left out of shortages, builds and the pick list." }, "Skip"),
+      el("th", {}, "Remember")));
     this.reviewLines.forEach((ln) => {
       const tr = this._reviewRow(ln);
       if (hasBoard) {
@@ -311,14 +317,18 @@ export class BomView {
     };
     buildControls();
 
-    return el("tr", {},
+    const tr = el("tr", { class: ln.ignored ? "bom-skipped" : "" },
       el("td", {}, ln.refdes || ""),
       el("td", {}, ln.value || ""),
       el("td", { style: "max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, ln.footprint || ""),
       el("td", { class: "num" }, String(ln.qty)),
       badgeCell,
       el("td", { class: "bom-part" }, partCell, controls.childNodes.length ? el("div", {}, controls) : null),
+      el("td", {}, el("input", { type: "checkbox", checked: ln.ignored ? "checked" : null,
+        title: "Not part of the build (hole, fiducial, logo, do-not-fit)",
+        onchange: (e) => { ln.ignored = e.target.checked; tr.classList.toggle("bom-skipped", ln.ignored); } })),
       el("td", {}, rememberChk));
+    return tr;
   }
 
   // The Parts list in a window, filtered to what this BOM line asks for (its value and, when the
@@ -386,7 +396,7 @@ export class BomView {
     if (!name) return toast("Name the project first");
     const lines = this.reviewLines.map((ln) => ({
       mpn: ln.mpn, value: ln.value, footprint: ln.footprint, qty: ln.qty, refdes: ln.refdes,
-      part_id: ln.part_id || null, remember: !!(ln.remember && ln.part_id),
+      part_id: ln.part_id || null, remember: !!(ln.remember && ln.part_id), ignored: !!ln.ignored,
     }));
     try {
       const { id } = await api("/api/bom/projects", { method: "POST", body: { name, lines } });
@@ -470,20 +480,51 @@ export class BomView {
       if (ln) pickLine(ln, true);
       else showLine({ refdes: refs.join(" "), part_id: null, value: "not in this BOM" });
     };
+    // pick another part for a saved line: search, browse like the cart, or take the part away again
+    const changeLine = (ln) => {
+      let chosen = ln.part_id ? { id: ln.part_id, name: ln.part_name } : null;
+      const ps = partSearch({ placeholder: "search part…", onPick: (p) => { chosen = p; } });
+      if (chosen) ps.set(chosen);
+      const remember = el("input", { type: "checkbox" });
+      const m = modal({
+        title: `Part for ${ln.refdes}`,
+        confirmText: "Save",
+        body: el("div", { class: "modal-body" },
+          el("div", { class: "hint" }, `${[ln.value, ln.footprint].filter(Boolean).join("  ·  ")} — the BOM does not say voltage, dielectric or fuse style: choose the part this board really uses.`),
+          el("div", { class: "row" }, el("label", {}, "Part"), ps.el,
+            el("button", { class: "ghost", onclick: () => this._browseFor({ refdes: ln.refdes, value: ln.value, footprint: ln.footprint,
+              match: { suggested_category_id: ln.suggested_category_id } }, (p) => { chosen = p; ps.set(p); }) }, "Browse…")),
+          el("label", { class: "facet-opt", style: "margin:4px 0 0 6em" }, remember, " Remember for this value + footprint next time"),
+          el("div", { class: "row" }, el("label", {}, ""),
+            el("button", { class: "ghost", onclick: async () => {
+              await api(`/api/bom/projects/${id}/lines/${ln.id}`, { method: "PATCH", body: { part_id: null } });
+              m.close();
+              this.showDetail(id, boards);
+            } }, "No part (unresolved)"))),
+        onConfirm: async () => {
+          if (!chosen) throw new Error("Pick a part first");
+          await api(`/api/bom/projects/${id}/lines/${ln.id}`, { method: "PATCH", body: { part_id: chosen.id, remember: remember.checked } });
+          toast(`${ln.refdes}: ${chosen.name}`);
+          this.showDetail(id, boards);
+        },
+      });
+    };
     table.append(el("tr", {}, el("th", { class: "print-only pick-col" }, "✓"), el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
       el("th", {}, "Where it is"),
       el("th", { class: "num" }, "Per board"), el("th", { class: "num" }, `Needed (${boards})`),
-      el("th", { class: "num" }, "On hand"), el("th", { class: "num" }, "Short")));
+      el("th", { class: "num" }, "On hand"), el("th", { class: "num" }, "Short"), el("th", { class: "no-print" }, "")));
     // a pick list: walk the shelves once instead of hunting for each line
     const firstLoc = (ln) => (ln.locations && ln.locations[0] ? ln.locations[0].location : "\uffff");
+    const skipped = data.lines.filter((l) => l.ignored);
+    const shown = this.showSkipped ? data.lines : data.lines.filter((l) => !l.ignored);
     const lines = this.sortByLocation
-      ? [...data.lines].sort((a, b) => firstLoc(a).localeCompare(firstLoc(b), undefined, { numeric: true }) ||
+      ? [...shown].sort((a, b) => firstLoc(a).localeCompare(firstLoc(b), undefined, { numeric: true }) ||
           (a.refdes || "").localeCompare(b.refdes || "", undefined, { numeric: true }))
-      : data.lines;
+      : shown;
     for (const ln of lines) {
       const short = ln.short;
       const where = !ln.part_id ? "—" : ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join("  ·  ") : "none in stock";
-      const tr = el("tr", { class: hasView ? "bom-line-link" : "", onclick: hasView ? () => pickLine(ln, false) : null },
+      const tr = el("tr", { class: `${hasView ? "bom-line-link" : ""}${ln.ignored ? " bom-skipped no-print" : ""}`, onclick: hasView ? () => pickLine(ln, false) : null },
         el("td", { class: "print-only pick-col" }, "☐"),
         el("td", {}, ln.refdes || ""),
         el("td", {}, ln.part_name
@@ -494,7 +535,15 @@ export class BomView {
         el("td", { class: "num" }, String(ln.qty_per_board)),
         el("td", { class: "num" }, String(ln.needed)),
         el("td", { class: "num" }, ln.part_id ? String(ln.on_hand) : "—"),
-        el("td", { class: "num" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—")));
+        el("td", { class: "num" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—")),
+        el("td", { class: "no-print", style: "white-space:nowrap" },
+          el("button", { class: "ghost", title: "Use another part for this line", onclick: (e) => { e.stopPropagation(); changeLine(ln); } }, "Change…"),
+          el("button", { class: "ghost", title: ln.ignored ? "Count this line in the build again" : "Not part of the build (hole, fiducial, logo, do-not-fit)",
+            onclick: async (e) => {
+              e.stopPropagation();
+              await api(`/api/bom/projects/${id}/lines/${ln.id}`, { method: "PATCH", body: { ignored: !ln.ignored } });
+              this.showDetail(id, boards);
+            } }, ln.ignored ? "Use" : "Skip")));
       rowOf.set(ln.id, tr);
       table.append(tr);
     }
@@ -508,6 +557,8 @@ export class BomView {
     } }, "Build (deduct stock)");
     const sortChk = el("input", { type: "checkbox", checked: this.sortByLocation ? "checked" : null,
       onchange: (e) => { this.sortByLocation = e.target.checked; this.showDetail(id, boards); } });
+    const skipChk = el("input", { type: "checkbox", checked: this.showSkipped ? "checked" : null,
+      onchange: (e) => { this.showSkipped = e.target.checked; this.showDetail(id, boards); } });
     const pickFile = (accept, upload, done) => {
       const inp = el("input", { type: "file", accept });
       inp.onchange = async () => {
@@ -526,6 +577,42 @@ export class BomView {
       if (!confirm(`Remove the ${what} from this project? The BOM stays.`)) return;
       await api(url, { method: "DELETE" });
       this.showDetail(id, boards);
+    };
+
+    // print: the list alone, or the board on page 1 and the list from page 2
+    const printDialog = () => {
+      if (!(pcb && pcb.model)) return window.print();
+      const only = el("input", { type: "radio", name: "pl", checked: "checked" });
+      const withBoard = el("input", { type: "radio", name: "pl" });
+      const front = el("input", { type: "checkbox", checked: "checked" });
+      const back = el("input", { type: "checkbox" });
+      const names = el("input", { type: "checkbox", checked: "checked" });
+      const opt = (input, text) => el("label", { style: "display:flex;gap:6px;align-items:center;margin:4px 0" }, input, text);
+      modal({
+        title: "Print pick list",
+        confirmText: "Print",
+        body: el("div", { class: "modal-body" },
+          opt(only, "The list, from page 1"),
+          opt(withBoard, "The board on page 1, the list from page 2"),
+          el("div", { style: "margin:6px 0 0 24px" },
+            opt(front, "Front"), opt(back, "Back"), opt(names, "Reference names on the board (C1, R2 …)")),
+          el("div", { class: "hint" }, "The board is printed light, for paper, as it is turned now. Lines marked Skip are not printed.")),
+        onConfirm: () => {
+          if (!withBoard.checked) return void setTimeout(() => window.print(), 50);
+          if (!front.checked && !back.checked) throw new Error("Choose Front and/or Back");
+          const sides = [front.checked && "F", back.checked && "B"].filter(Boolean);
+          const bb = pcb.model.bbox, turned = pcb.rot % 180 !== 0;
+          const ratio = Math.min(1.6, Math.max(0.5, (turned ? bb[2] - bb[0] : bb[3] - bb[1]) / Math.max(1e-6, turned ? bb[3] - bb[1] : bb[2] - bb[0])));
+          const imgs = sides.map((side) => el("figure", { class: "bom-print-fig" },
+            el("img", { src: PcbView.renderImage(pcb.model, { side, rot: pcb.rot, refs: names.checked, width: 2000, height: Math.round(2000 * ratio) }).toDataURL("image/png") }),
+            el("figcaption", {}, side === "F" ? "Front" : "Back")));
+          const sheet = el("div", { class: `print-only bom-print-board${sides.length > 1 ? " two" : ""}` },
+            el("h2", {}, data.name), el("div", { class: "bom-print-sub" }, `${boards} board${boards === 1 ? "" : "s"} · ${new Date().toLocaleDateString()}`), ...imgs);
+          document.body.prepend(sheet);
+          window.addEventListener("afterprint", () => sheet.remove(), { once: true });
+          setTimeout(() => window.print(), 100);
+        },
+      });
     };
 
     // the board next to the list: our own drawing when there is one, else the attached IBOM page
@@ -571,8 +658,9 @@ export class BomView {
       el("div", { class: "panel-body" },
         el("div", { class: "row no-print" }, el("label", {}, "Boards to build"), boardsInp, buildBtn,
           el("span", { style: "flex:1" }),
+          skipped.length ? el("label", { title: "Mounting holes, fiducials, logos and other lines that are not part of the build" }, skipChk, ` Show ${skipped.length} skipped`) : null,
           el("label", { title: "Order the lines by shelf, so you can collect the parts in one round" }, sortChk, " Sort by location"),
-          el("button", { onclick: () => window.print() }, "Print pick list")),
+          el("button", { onclick: () => printDialog() }, "Print pick list")),
         el("div", { class: "row no-print", style: "gap:8px;align-items:center" }, ...boardBtns),
         el("div", { class: hasView ? "bom-split" : "" }, el("div", { class: "bom-lines" }, table), boardPane),
         el("div", { class: "no-print" },
