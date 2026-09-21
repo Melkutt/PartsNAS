@@ -489,12 +489,12 @@ export class BomView {
       progress.classList.toggle("done", n > 0 && n === activeLines.length);
     };
     updateProgress();
-    table.append(el("tr", {}, el("th", { class: "print-only pick-col" }, "✓"),
+    table.append(el("tr", {}, el("th", { class: "print-only pick-col c-pick" }, "✓"),
       el("th", { class: "no-print", title: "Tick off each part as you solder it on: it turns blue on the board and the tick is kept, so a half-built board can be picked up again" }, "Placed"),
-      el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
-      el("th", {}, "Where it is"),
-      el("th", { class: "num" }, "Per board"), el("th", { class: "num" }, `Needed (${boards})`),
-      el("th", { class: "num" }, "On hand"), el("th", { class: "num" }, "Short"), el("th", { class: "no-print" }, "")));
+      el("th", { class: "c-refdes" }, "Refdes"), el("th", { class: "c-part" }, "Part"), el("th", { class: "c-value" }, "Value"),
+      el("th", { class: "c-where" }, "Where it is"),
+      el("th", { class: "num c-per" }, "Per board"), el("th", { class: "num c-needed" }, `Needed (${boards})`),
+      el("th", { class: "num c-onhand" }, "On hand"), el("th", { class: "num c-short" }, "Short"), el("th", { class: "no-print" }, "")));
     // a pick list: walk the shelves once instead of hunting for each line
     const firstLoc = (ln) => (ln.locations && ln.locations[0] ? ln.locations[0].location : "\uffff");
     const skipped = data.lines.filter((l) => l.ignored);
@@ -522,18 +522,18 @@ export class BomView {
           if (pcb) pcb.setPlaced(placedRefs());
         } });
       const tr = el("tr", { class: `${hasView ? "bom-line-link" : ""}${ln.ignored ? " bom-skipped no-print" : ""}${ln.placed && !ln.ignored ? " bom-placed" : ""}`, onclick: hasView ? () => pickLine(ln, false) : null },
-        el("td", { class: "print-only pick-col" }, ln.placed && !ln.ignored ? "☑" : "☐"),
+        el("td", { class: "print-only pick-col c-pick" }, ln.placed && !ln.ignored ? "☑" : "☐"),
         el("td", { class: "no-print" }, placedBox),
-        el("td", {}, ln.refdes || ""),
-        el("td", {}, ln.part_name
+        el("td", { class: "c-refdes" }, ln.refdes || ""),
+        el("td", { class: "c-part" }, ln.part_name
           ? el("div", {}, el("div", {}, ln.part_name), ln.part_summary ? el("div", { class: "hint", style: "padding:0" }, ln.part_summary) : null)
           : el("span", { class: "match-badge low" }, ln.unresolved_mpn || "unresolved")),
-        el("td", {}, ln.value || ""),
-        el("td", { class: ln.part_id && !ln.locations.length ? "bom-where none" : "bom-where" }, where),
-        el("td", { class: "num" }, String(ln.qty_per_board)),
-        el("td", { class: "num" }, String(ln.needed)),
-        el("td", { class: "num" }, ln.part_id ? String(ln.on_hand) : "—"),
-        el("td", { class: "num" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—")),
+        el("td", { class: "c-value" }, ln.value || ""),
+        el("td", { class: `c-where ${ln.part_id && !ln.locations.length ? "bom-where none" : "bom-where"}` }, where),
+        el("td", { class: "num c-per" }, String(ln.qty_per_board)),
+        el("td", { class: "num c-needed" }, String(ln.needed)),
+        el("td", { class: "num c-onhand" }, ln.part_id ? String(ln.on_hand) : "—"),
+        el("td", { class: "num c-short" }, short ? el("b", { style: "color:var(--danger)" }, String(short)) : (ln.part_id ? "0" : "—")),
         el("td", { class: "no-print", style: "white-space:nowrap" },
           el("button", { class: "ghost", title: "Use another part for this line", onclick: (e) => { e.stopPropagation(); changeLine(ln); } }, "Change…"),
           el("button", { class: "ghost", title: ln.ignored ? "Count this line in the build again" : "Not part of the build (hole, fiducial, logo, do-not-fit)",
@@ -577,37 +577,102 @@ export class BomView {
       this.showDetail(id, boards);
     };
 
-    // print: the list alone, or the board on page 1 and the list from page 2
+    // ---- print: what goes on the paper (remembered), the board on page 1 or not, a price summary at the end
+    const priceSummary = (margin, showCost, showSell, showEx, showInc) => {
+      // per currency (there is normally one): what the parts of this build cost, and what they sell for with the margin
+      const by = new Map();
+      let unpriced = 0;
+      for (const ln of data.lines) {
+        if (ln.ignored || !ln.needed) continue;
+        if (!ln.unit_cost) { unpriced += 1; continue; }
+        const t = by.get(ln.currency) || { ex: 0, inc: 0 };
+        const ex = ln.unit_cost * ln.needed;
+        t.ex += ex;
+        t.inc += ex * (1 + (ln.vat_percent ?? 0) / 100);
+        by.set(ln.currency, t);
+      }
+      const fmt = (n, cur) => `${n.toFixed(2)} ${cur}`;
+      const box = el("div", { class: "print-only bom-price-sum" }, el("h3", {}, `Price summary · ${boards} board${boards === 1 ? "" : "s"}`));
+      for (const [cur, t] of by) {
+        const head = el("tr", {}, el("th", {}, ""),
+          showCost ? el("th", { class: "num" }, "Cost") : null,
+          showSell ? el("th", { class: "num" }, `With ${margin}% margin`) : null);
+        const row = (label, cost, sell) => el("tr", {}, el("td", {}, label),
+          showCost ? el("td", { class: "num" }, fmt(cost, cur)) : null,
+          showSell ? el("td", { class: "num" }, fmt(sell, cur)) : null);
+        const m = 1 + margin / 100;
+        box.append(el("table", { class: "mini-table bom-price-table" }, head,
+          showEx ? row("Ex VAT", t.ex, t.ex * m) : null,
+          showInc ? row("Inc VAT", t.inc, t.inc * m) : null));
+      }
+      if (!by.size) box.append(el("div", {}, "No line has a price on file."));
+      if (unpriced) box.append(el("div", { class: "bom-print-sub" }, `${unpriced} line${unpriced === 1 ? "" : "s"} without a price on file ${unpriced === 1 ? "is" : "are"} not included.`));
+      box.append(el("div", { class: "bom-print-sub" }, "Prices are the parts' supplier prices, as a quote would use them."));
+      return box;
+    };
+    const PRINT_COLS = [["pick", "Tick box"], ["refdes", "Refdes"], ["part", "Part"], ["value", "Value"], ["where", "Where it is"],
+      ["per", "Per board"], ["needed", "Needed"], ["onhand", "On hand"], ["short", "Short"]];
+    const prefs = (() => { try { return JSON.parse(localStorage.getItem("partsnas.bomPrint") || "{}"); } catch { return {}; } })();
     const printDialog = () => {
-      if (!(pcb && pcb.model)) return window.print();
-      const only = el("input", { type: "radio", name: "pl", checked: "checked" });
-      const withBoard = el("input", { type: "radio", name: "pl" });
-      const front = el("input", { type: "checkbox", checked: "checked" });
-      const back = el("input", { type: "checkbox" });
-      const names = el("input", { type: "checkbox", checked: "checked" });
-      const opt = (input, text) => el("label", { style: "display:flex;gap:6px;align-items:center;margin:4px 0" }, input, text);
+      const hasBoard = !!(pcb && pcb.model);
+      const chk = (on) => el("input", { type: "checkbox", checked: on ? "checked" : null });
+      const opt = (input, text) => el("label", { style: "display:flex;gap:6px;align-items:center;margin:3px 0" }, input, text);
+      const cols = Object.fromEntries(PRINT_COLS.map(([k]) => [k, chk(prefs.cols ? prefs.cols[k] !== false : true)]));
+      const withBoard = el("input", { type: "radio", name: "pl", checked: hasBoard && prefs.board ? "checked" : null, disabled: hasBoard ? null : "disabled" });
+      const only = el("input", { type: "radio", name: "pl", checked: withBoard.checked ? null : "checked" });
+      const front = chk(true), back = chk(false), names = chk(true);
+      const sum = chk(!!prefs.summary);
+      const margin = el("input", { type: "number", min: 0, step: 5, value: prefs.margin ?? 50, style: "width:5em" });
+      const showCost = chk(prefs.showCost !== false), showSell = chk(prefs.showSell !== false);
+      const showEx = chk(prefs.showEx !== false), showInc = chk(prefs.showInc !== false);
+      const sub = (...c) => el("div", { style: "margin:2px 0 6px 24px" }, ...c);
+      const grid = (...c) => el("div", { style: "display:flex;flex-wrap:wrap;gap:0 16px" }, ...c);
       modal({
         title: "Print pick list",
         confirmText: "Print",
         body: el("div", { class: "modal-body" },
+          el("div", { class: "section-title" }, "Columns"),
+          sub(grid(...PRINT_COLS.map(([k, label]) => opt(cols[k], label)))),
+          el("div", { class: "section-title" }, "Board"),
           opt(only, "The list, from page 1"),
-          opt(withBoard, "The board on page 1, the list from page 2"),
-          el("div", { style: "margin:6px 0 0 24px" },
-            opt(front, "Front"), opt(back, "Back"), opt(names, "Reference names on the board (C1, R2 …)")),
-          el("div", { class: "hint" }, "The board is printed light, for paper, as it is turned now. Lines marked Skip are not printed.")),
+          opt(withBoard, hasBoard ? "The board on page 1, the list from page 2" : "The board on page 1 (attach a .kicad_pcb to the project first)"),
+          sub(grid(opt(front, "Front"), opt(back, "Back"), opt(names, "Reference names (C1, R2 …)"))),
+          el("div", { class: "section-title" }, "Price summary"),
+          opt(sum, "A price summary at the end of the list"),
+          sub(grid(opt(showCost, "Cost"), opt(showSell, "With margin"), el("label", { style: "display:flex;gap:6px;align-items:center;margin:3px 0" }, "margin", margin, "%")),
+            grid(opt(showEx, "Ex VAT"), opt(showInc, "Inc VAT"))),
+          el("div", { class: "hint" }, "Lines marked Skip are not printed. The choices are remembered.")),
         onConfirm: () => {
-          if (!withBoard.checked) return void setTimeout(() => window.print(), 50);
-          if (!front.checked && !back.checked) throw new Error("Choose Front and/or Back");
-          const sides = [front.checked && "F", back.checked && "B"].filter(Boolean);
-          const bb = pcb.model.bbox, turned = pcb.rot % 180 !== 0;
-          const ratio = Math.min(1.6, Math.max(0.5, (turned ? bb[2] - bb[0] : bb[3] - bb[1]) / Math.max(1e-6, turned ? bb[3] - bb[1] : bb[2] - bb[0])));
-          const imgs = sides.map((side) => el("figure", { class: "bom-print-fig" },
-            el("img", { src: PcbView.renderImage(pcb.model, { side, rot: pcb.rot, refs: names.checked, width: 2000, height: Math.round(2000 * ratio) }).toDataURL("image/png") }),
-            el("figcaption", {}, side === "F" ? "Front" : "Back")));
-          const sheet = el("div", { class: `print-only bom-print-board${sides.length > 1 ? " two" : ""}` },
-            el("h2", {}, data.name), el("div", { class: "bom-print-sub" }, `${boards} board${boards === 1 ? "" : "s"} · ${new Date().toLocaleDateString()}`), ...imgs);
-          document.body.prepend(sheet);
-          window.addEventListener("afterprint", () => sheet.remove(), { once: true });
+          const c = Object.fromEntries(PRINT_COLS.map(([k]) => [k, cols[k].checked]));
+          if (!Object.values(c).some(Boolean)) throw new Error("Choose at least one column");
+          if (sum.checked && !(showCost.checked || showSell.checked)) throw new Error("Price summary: choose Cost and/or With margin");
+          if (sum.checked && !(showEx.checked || showInc.checked)) throw new Error("Price summary: choose Ex VAT and/or Inc VAT");
+          if (withBoard.checked && !front.checked && !back.checked) throw new Error("Choose Front and/or Back");
+          try {
+            localStorage.setItem("partsnas.bomPrint", JSON.stringify({ cols: c, board: withBoard.checked, summary: sum.checked,
+              margin: Number(margin.value) || 0, showCost: showCost.checked, showSell: showSell.checked, showEx: showEx.checked, showInc: showInc.checked }));
+          } catch { /* private mode: it just is not remembered */ }
+
+          const cleanup = [];
+          for (const [k, on] of Object.entries(c)) if (!on) { table.classList.add(`hide-${k}`); cleanup.push(() => table.classList.remove(`hide-${k}`)); }
+          if (sum.checked) {
+            const box = priceSummary(Number(margin.value) || 0, showCost.checked, showSell.checked, showEx.checked, showInc.checked);
+            table.after(box);
+            cleanup.push(() => box.remove());
+          }
+          if (withBoard.checked) {
+            const sides = [front.checked && "F", back.checked && "B"].filter(Boolean);
+            const bb = pcb.model.bbox, turned = pcb.rot % 180 !== 0;
+            const ratio = Math.min(1.6, Math.max(0.5, (turned ? bb[2] - bb[0] : bb[3] - bb[1]) / Math.max(1e-6, turned ? bb[3] - bb[1] : bb[2] - bb[0])));
+            const imgs = sides.map((side) => el("figure", { class: "bom-print-fig" },
+              el("img", { src: PcbView.renderImage(pcb.model, { side, rot: pcb.rot, refs: names.checked, width: 2000, height: Math.round(2000 * ratio) }).toDataURL("image/png") }),
+              el("figcaption", {}, side === "F" ? "Front" : "Back")));
+            const sheet = el("div", { class: `print-only bom-print-board${sides.length > 1 ? " two" : ""}` },
+              el("h2", {}, data.name), el("div", { class: "bom-print-sub" }, `${boards} board${boards === 1 ? "" : "s"} · ${new Date().toLocaleDateString()}`), ...imgs);
+            document.body.prepend(sheet);
+            cleanup.push(() => sheet.remove());
+          }
+          window.addEventListener("afterprint", () => cleanup.forEach((f) => f()), { once: true });
           setTimeout(() => window.print(), 100);
         },
       });

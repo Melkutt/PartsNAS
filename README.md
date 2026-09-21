@@ -110,9 +110,13 @@ matched against what you actually have in stock.
 6. **Placed.** Tick a line as you solder it on. The tick is saved, the row fades, and on the
    board the part turns blue, so you see what is left and can pick the job up again another evening.
    *Clear placed* starts over for the next board.
-7. **Print pick list.** Print just the list, or the board on page 1 and the list from page 2,
-   with front and/or back and the reference names (C1, R2 …) drawn on it. The board is printed
-   light, for paper, as you have turned it on screen. Skipped lines are not printed.
+7. **Print pick list.** Choose which columns go on the paper (tick box, reference, part, value, where it is,
+   per board, needed, on hand, short), and print just the list or the board on page 1 and the list from
+   page 2, with front and/or back and the reference names (C1, R2 …) drawn on it. The board is printed
+   light, for paper, as you have turned it on screen. Optionally add a **price summary** at the end: what the
+   parts cost, and what they sell for with a margin you set, each ex and inc VAT, using the same supplier
+   prices a quote would use (lines without a price are counted and left out). Skipped lines are not printed,
+   and your choices are remembered.
 
 *The board view.* With a `.kicad_pcb` attached, PartsNAS draws the board itself next to the list,
 straight from KiCad's own file (KiCad 6 to 10, no plugin and no 3D models): outline, pads,

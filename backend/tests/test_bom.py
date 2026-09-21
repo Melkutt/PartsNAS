@@ -248,3 +248,29 @@ def test_a_board_drawn_by_an_older_parser_is_drawn_again_from_the_kept_file(clie
         assert not _board_source(pid).exists()
     finally:
         client.delete(f"/api/bom/projects/{pid}")
+
+
+def test_lines_carry_what_the_part_costs_for_the_price_summary(client):
+    loc = _location(client)[0]
+    a = _part(client, "ZZ_COST priced", "ZZ-COST-A")
+    b = _part(client, "ZZ_COST unpriced", "ZZ-COST-B")
+    pid = None
+    try:
+        r = client.post(f"/api/parts/{a}/stock", json={"location_id": loc, "delta": 10, "kind": "add",
+                                                       "unit_price": 2.0, "vat_percent": 25, "currency": "SEK", "link_to_part": False})
+        assert r.status_code in (200, 201), r.text
+        client.post(f"/api/parts/{b}/stock", json={"location_id": loc, "delta": 1, "kind": "add"})
+        pid = client.post("/api/bom/projects", json={"name": "ZZ_COST proj", "lines": [
+            {"value": "1k", "qty": 3, "refdes": "R1 R2 R3", "part_id": a},
+            {"value": "2k", "qty": 1, "refdes": "R4", "part_id": b},
+            {"value": "H", "qty": 1, "refdes": "H1", "part_id": a, "ignored": True},
+            {"value": "?", "qty": 1, "refdes": "R5"}]}).json()["id"]
+        by = {ln["refdes"]: ln for ln in client.get(f"/api/bom/projects/{pid}?boards=2").json()["lines"]}
+        assert (by["R1 R2 R3"]["unit_cost"], by["R1 R2 R3"]["currency"], by["R1 R2 R3"]["vat_percent"]) == (2.0, "SEK", 25)
+        assert by["R1 R2 R3"]["needed"] == 6
+        assert by["R4"]["unit_cost"] is None and by["R5"]["unit_cost"] is None and by["H1"]["unit_cost"] is None
+    finally:
+        if pid:
+            client.delete(f"/api/bom/projects/{pid}")
+        for p in (a, b):
+            client.delete(f"/api/parts/{p}")

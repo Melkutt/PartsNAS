@@ -28,6 +28,7 @@ from ..bomparse import parse_bom_csv
 from ..kicadpcb import FORMAT as BOARD_FORMAT, extract_board
 from ..core.config import get_settings
 from ..core.db import get_db
+from .quotes import snapshot_cost
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
 from ..services import category_path_map, location_breakdown, location_breakdown_bulk, on_hand_map
 
@@ -125,9 +126,13 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
     on_hand = on_hand_map(db, part_ids)
     where = location_breakdown_bulk(db, part_ids)   # part id -> [{location, qty}], biggest first
     cat_path = category_path_map(db)
+    costs: dict[str, tuple[float, str, str, float]] = {}    # part id -> what a quote would use as its cost
     lines = []
     for ln in proj.bom_lines:
         needed = 0 if ln.ignored else ln.qty_per_board * boards
+        if ln.part_id and not ln.ignored and ln.part_id not in costs:
+            costs[ln.part_id] = snapshot_cost(db, ln.part_id)
+        cost = costs.get(ln.part_id) if ln.part_id and not ln.ignored else None
         have = on_hand.get(ln.part_id, 0) if ln.part_id else 0
         lines.append({
             "id": ln.id,
@@ -146,6 +151,10 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "short": max(0, needed - have) if ln.part_id and not ln.ignored else None,
             "ignored": bool(ln.ignored),
             "placed": bool(ln.placed),
+            # ex VAT, from the part's preferred supplier price (else the last purchase): what a quote would use
+            "unit_cost": cost[0] if cost and cost[0] > 0 else None,
+            "currency": cost[1] if cost and cost[0] > 0 else None,
+            "vat_percent": cost[3] if cost and cost[0] > 0 else None,
             "suggested_category_id": suggest_category_id(cat_path, refdes_expectation(ln.refdes)),
         })
     return {
