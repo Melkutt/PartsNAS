@@ -168,13 +168,13 @@ export function primWidth(p) {
 // on paper: light board, dark lines, no copper - it is a map for finding parts, not a picture of the board
 const PRINT_COLORS = {
   board: "#f1f5ee", boardEdge: "#111111", copperF: "#cfcfcf", copperB: "#cfcfcf", pad: "#4a4a4a", padB: "#4a4a4a",
-  hole: "#ffffff", silk: "#000000", fab: "#777777", crtyd: "#999999", via: "#bbbbbb", hi: "#39ff14", hiFill: "rgba(57,255,20,0.3)",
+  hole: "#ffffff", silk: "#000000", fab: "#777777", crtyd: "#999999", via: "#bbbbbb", hi: "#39ff14", hiFill: "rgba(57,255,20,0.3)", placed: "#4a4a4a",
   bg: "#ffffff", label: "#000000",
 };
 
 const COLORS = {
   board: "#1d3b2a", boardEdge: "#e6d36a", copperF: "#b03a3a", copperB: "#3a5fb0", pad: "#c9a227", padB: "#8fa8c9",
-  hole: "#0e1a13", silk: "#ece8d8", fab: "#7d8a96", crtyd: "#4f7a6a", via: "#9aa0a6", hi: "#39ff14", hiFill: "rgba(57,255,20,0.22)", bg: "#12191a", label: "rgba(255,255,255,0.85)",
+  hole: "#0e1a13", silk: "#ece8d8", fab: "#7d8a96", crtyd: "#4f7a6a", via: "#9aa0a6", hi: "#39ff14", hiFill: "rgba(57,255,20,0.22)", placed: "#4da3ff", placedFill: "rgba(77,163,255,0.16)", bg: "#12191a", label: "rgba(255,255,255,0.85)",
 };
 
 export class PcbView {
@@ -192,6 +192,7 @@ export class PcbView {
     this.panX = 0;
     this.panY = 0;
     this.highlighted = new Set();
+    this.placed = new Set();          // parts already soldered on: drawn in blue, so what is left stands out
     this.show = { silk: true, fab: false, pads: true, tracks: true, zones: true, refs: false };
     this._raf = 0;
     this._loops = [];
@@ -232,6 +233,12 @@ export class PcbView {
   /** Light up the parts with these references (an array or a Set). */
   highlight(refs) {
     this.highlighted = new Set(refs);
+    this.draw();
+  }
+
+  /** Mark the parts with these references as placed (an array or a Set). */
+  setPlaced(refs) {
+    this.placed = new Set(refs);
     this.draw();
   }
 
@@ -502,9 +509,10 @@ export class PcbView {
     if (this.show.pads) {
       for (const f of m.footprints) {
         const hi = this.highlighted.has(f.ref) && this._seen(f);
+        const done = this.placed.has(f.ref);
         for (const pad of f.pads) {
           if (pad.L !== "FB" && pad.L !== this.side) continue;
-          ctx.fillStyle = hi ? C.hi : pad.L === "FB" || front ? C.pad : C.padB;
+          ctx.fillStyle = hi ? C.hi : done ? C.placed : pad.L === "FB" || front ? C.pad : C.padB;
           if (pad.s === "circle" && !pad.poly) {
             const [sx, sy] = P(pad.x, pad.y);
             ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.8, (pad.w / 2) * this.scale), 0, 6.2832); ctx.fill();
@@ -521,8 +529,22 @@ export class PcbView {
     }
     if (this.show.silk) { drawPrims(sideLayer("SilkS"), C.silk, 0.8); this._drawTexts(sideLayer("SilkS"), C.silk, P); }
 
-    // the parts being looked for
+    // parts already placed: a faint blue box
     ctx.lineJoin = "round";
+    if (C.placedFill) {
+      for (const f of m.footprints) {
+        if (!this.placed.has(f.ref) || !this._seen(f)) continue;
+        const [x0, y0, x1, y1] = f.bbox, pad = 0.3;
+        path([x0 - pad, y0 - pad, x1 + pad, y0 - pad, x1 + pad, y1 + pad, x0 - pad, y1 + pad], true);
+        ctx.fillStyle = C.placedFill;
+        ctx.fill();
+        ctx.strokeStyle = C.placed;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    // the parts being looked for
     for (const f of m.footprints) {
       if (!this.highlighted.has(f.ref) || !this._seen(f)) continue;
       const [x0, y0, x1, y1] = f.bbox, pad = 0.4;

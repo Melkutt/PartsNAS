@@ -23,7 +23,7 @@ from typing import Any
 _TOKEN = re.compile(r'\(|\)|"((?:[^"\\]|\\.)*)"|[^\s()"]+')
 _ESCAPE = re.compile(r"\\(.)")
 _UNESCAPED = {"n": "\n", "t": "\t"}          # KiCad writes a line break inside a string as \n
-FORMAT = 1
+FORMAT = 2   # 2: silkscreen / fab text
 
 
 # ------------------------------------------------------------------ S-expression

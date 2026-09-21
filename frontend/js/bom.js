@@ -76,9 +76,28 @@ export class BomView {
         el("td", {}, String(p.line_count)),
         el("td", {}, p.unresolved_count ? el("span", { class: "match-badge low" }, `${p.unresolved_count} unresolved`) : "—"),
         el("td", {}, p.last_build ? new Date(p.last_build).toLocaleDateString() : "never"),
-        el("td", {}, el("button", { class: "ghost", onclick: (e) => { e.stopPropagation(); this._deleteProject(p.id); } }, "✕"))));
+        el("td", { style: "white-space:nowrap" },
+          el("button", { class: "ghost", title: "Rename", onclick: (e) => { e.stopPropagation(); this._renameProject(p.id, p.name, () => this.showList()); } }, "✎"),
+          el("button", { class: "ghost", title: "Delete", onclick: (e) => { e.stopPropagation(); this._deleteProject(p.id); } }, "✕"))));
     }
     return t;
+  }
+
+  _renameProject(id, current, done) {
+    const inp = el("input", { type: "text", value: current, style: "width:100%" });
+    modal({
+      title: "Rename project",
+      confirmText: "Rename",
+      body: el("div", { class: "modal-body" }, el("div", { class: "row" }, el("label", {}, "Name"), inp)),
+      onConfirm: async () => {
+        const name = inp.value.trim();
+        if (!name) throw new Error("Name is required");
+        if (name !== current) await api(`/api/bom/projects/${id}`, { method: "PATCH", body: { name } });
+        toast(`Renamed to “${name}”`);
+        done();
+      },
+    });
+    setTimeout(() => { inp.focus(); inp.select(); }, 50);
   }
 
   async _deleteProject(id) {
@@ -509,7 +528,18 @@ export class BomView {
         },
       });
     };
-    table.append(el("tr", {}, el("th", { class: "print-only pick-col" }, "✓"), el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
+    const activeLines = data.lines.filter((l) => !l.ignored);
+    const placedRefs = () => activeLines.filter((l) => l.placed).flatMap((l) => splitRefs(l.refdes));
+    const progress = el("span", { class: "bom-progress no-print" });
+    const updateProgress = () => {
+      const n = activeLines.filter((l) => l.placed).length;
+      progress.textContent = `Placed ${n} / ${activeLines.length}`;
+      progress.classList.toggle("done", n > 0 && n === activeLines.length);
+    };
+    updateProgress();
+    table.append(el("tr", {}, el("th", { class: "print-only pick-col" }, "✓"),
+      el("th", { class: "no-print", title: "Tick off each part as you solder it on: it turns blue on the board and the tick is kept, so a half-built board can be picked up again" }, "Placed"),
+      el("th", {}, "Refdes"), el("th", {}, "Part"), el("th", {}, "Value"),
       el("th", {}, "Where it is"),
       el("th", { class: "num" }, "Per board"), el("th", { class: "num" }, `Needed (${boards})`),
       el("th", { class: "num" }, "On hand"), el("th", { class: "num" }, "Short"), el("th", { class: "no-print" }, "")));
@@ -524,8 +554,24 @@ export class BomView {
     for (const ln of lines) {
       const short = ln.short;
       const where = !ln.part_id ? "—" : ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join("  ·  ") : "none in stock";
-      const tr = el("tr", { class: `${hasView ? "bom-line-link" : ""}${ln.ignored ? " bom-skipped no-print" : ""}`, onclick: hasView ? () => pickLine(ln, false) : null },
-        el("td", { class: "print-only pick-col" }, "☐"),
+      const placedBox = ln.ignored ? null : el("input", { type: "checkbox", checked: ln.placed ? "checked" : null, title: "Placed on the board",
+        onclick: (e) => e.stopPropagation(),
+        onchange: async (e) => {
+          const want = e.target.checked;
+          try {
+            await api(`/api/bom/projects/${id}/lines/${ln.id}`, { method: "PATCH", body: { placed: want } });
+          } catch (err) {
+            e.target.checked = !want;
+            return toast(err.message);
+          }
+          ln.placed = want;
+          rowOf.get(ln.id)?.classList.toggle("bom-placed", want);
+          updateProgress();
+          if (pcb) pcb.setPlaced(placedRefs());
+        } });
+      const tr = el("tr", { class: `${hasView ? "bom-line-link" : ""}${ln.ignored ? " bom-skipped no-print" : ""}${ln.placed && !ln.ignored ? " bom-placed" : ""}`, onclick: hasView ? () => pickLine(ln, false) : null },
+        el("td", { class: "print-only pick-col" }, ln.placed && !ln.ignored ? "☑" : "☐"),
+        el("td", { class: "no-print" }, placedBox),
         el("td", {}, ln.refdes || ""),
         el("td", {}, ln.part_name
           ? el("div", {}, el("div", {}, ln.part_name), ln.part_summary ? el("div", { class: "hint", style: "padding:0" }, ln.part_summary) : null)
@@ -622,7 +668,12 @@ export class BomView {
       boardPane = el("div", { class: "bom-board no-print" }, info, host);
       pcb = new PcbView(host, { onSelect: onBoardRefs });
       this._pcb = pcb;
-      api(`/api/bom/projects/${id}/board`).then((model) => { if (this._pcb === pcb) pcb.setBoard(model); })
+      api(`/api/bom/projects/${id}/board`).then((model) => {
+        if (this._pcb !== pcb) return;
+        pcb.setBoard(model);
+        pcb.setPlaced(placedRefs());
+        if ((model.format || 1) < 2) info.textContent = "This board was saved before PartsNAS could draw text. Use Replace board… once (the same .kicad_pcb) to get the silkscreen text.";
+      })
         .catch((e) => { info.textContent = `The board could not be loaded: ${e.message}`; });
     } else if (hasIbom) {
       const frame = el("iframe", { class: "ibom-frame", src: `/api/bom/projects/${id}/ibom`, title: "Board view" });
@@ -651,7 +702,8 @@ export class BomView {
     panel.append(
       el("div", { class: "no-print", style: "display:flex;align-items:center;gap:10px" },
         el("button", { class: "ghost", onclick: () => this.showList() }, "← Projects"),
-        el("h2", { style: "margin:0" }, data.name)),
+        el("h2", { style: "margin:0" }, data.name),
+        el("button", { class: "ghost", title: "Rename this project", onclick: () => this._renameProject(id, data.name, () => this.showDetail(id, boards)) }, "✎ Rename")),
       el("div", { class: "print-only bom-print-head" },
         el("h2", {}, data.name),
         el("div", {}, `${boards} board${boards === 1 ? "" : "s"} · pick list ${new Date().toLocaleDateString()}`)),
@@ -661,6 +713,13 @@ export class BomView {
           skipped.length ? el("label", { title: "Mounting holes, fiducials, logos and other lines that are not part of the build" }, skipChk, ` Show ${skipped.length} skipped`) : null,
           el("label", { title: "Order the lines by shelf, so you can collect the parts in one round" }, sortChk, " Sort by location"),
           el("button", { onclick: () => printDialog() }, "Print pick list")),
+        el("div", { class: "row no-print", style: "gap:10px;align-items:center" }, progress,
+          el("button", { class: "ghost", title: "Untick every Placed box (start a new board)", onclick: async () => {
+            if (!activeLines.some((l) => l.placed)) return;
+            if (!confirm("Clear all Placed ticks?")) return;
+            await api(`/api/bom/projects/${id}/placed`, { method: "POST", body: { placed: false } });
+            this.showDetail(id, boards);
+          } }, "Clear placed")),
         el("div", { class: "row no-print", style: "gap:8px;align-items:center" }, ...boardBtns),
         el("div", { class: hasView ? "bom-split" : "" }, el("div", { class: "bom-lines" }, table), boardPane),
         el("div", { class: "no-print" },

@@ -932,3 +932,10 @@ tr.bom-skipped .bom-where, tr.bom-skipped td:nth-child(2) { text-decoration: lin
   .bom-print-board { break-after: page; page-break-after: always; }
   .bom-split { display: block; }
 }
+
+/* Placed: parts already soldered on */
+tr.bom-placed > td { opacity: 0.55; }
+tr.bom-placed > td:nth-child(2) { opacity: 1; }
+.bom-progress { font-weight: 600; }
+.bom-progress.done { color: var(--ok, #3fb950); }
+@media print { tr.bom-placed > td { opacity: 1; } }

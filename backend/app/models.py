@@ -265,6 +265,8 @@ class BomLine(Base):
     # not part of the build (mounting holes, fiducials, logos, do-not-fit): kept in the list, but left out of
     # shortages, builds and the pick list
     ignored: Mapped[bool] = mapped_column(default=False)
+    # ticked off while assembling ("Placed"), so a half-built board can be picked up again later
+    placed: Mapped[bool] = mapped_column(default=False)
 
     project: Mapped["Project"] = relationship(back_populates="bom_lines")
     part: Mapped["Part | None"] = relationship()

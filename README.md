@@ -92,6 +92,7 @@ Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   neon green on the side it sits on. Saved lines can be edited afterwards (**Change…** picks another part,
   **Skip** leaves out holes, fiducials, logos and do-not-fit parts: kept in the list, but not counted, built or
   printed), and **Print pick list** can put the board on page 1 and the list from page 2.
+  Projects can be renamed, and each line has a **Placed** tick (kept, and shown in blue on the board) for building a board over several evenings.
   *Import IBOM* takes the `ibom.html` from the [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom)
   KiCad plugin: it reads the parts list from the file and shows the board next to it, so a click on a line
   lights up the parts on the board and a click on the board shows what the part is and where it is stored.

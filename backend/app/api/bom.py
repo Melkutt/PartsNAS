@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import gzip
 import json
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -28,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from ..bommatch import Matcher, part_summary, refdes_expectation, remember, suggest_category_id
 from ..bomparse import parse_bom_csv
-from ..kicadpcb import extract_board
+from ..kicadpcb import FORMAT as BOARD_FORMAT, extract_board
 from ..core.config import get_settings
 from ..core.db import get_db
 from ..models import BomLine, BomMatchRule, Build, Part, Project, StockEntry
@@ -105,6 +106,7 @@ def _project_summary(db: Session, p: Project) -> dict:
         "notes": p.notes,
         "line_count": sum(1 for ln in p.bom_lines if not ln.ignored),
         "ignored_count": sum(1 for ln in p.bom_lines if ln.ignored),
+        "placed_count": sum(1 for ln in p.bom_lines if ln.placed and not ln.ignored),
         "has_ibom": _ibom_path(p.id).is_file(),
         "has_board": _board_path(p.id).is_file(),
         "unresolved_count": sum(1 for ln in p.bom_lines if not ln.part_id and not ln.ignored),
@@ -170,6 +172,7 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "locations": [{"location": r["location"], "qty": r["qty"]} for r in where.get(ln.part_id, [])] if ln.part_id else [],
             "short": max(0, needed - have) if ln.part_id and not ln.ignored else None,
             "ignored": bool(ln.ignored),
+            "placed": bool(ln.placed),
             "suggested_category_id": suggest_category_id(cat_path, refdes_expectation(ln.refdes)),
         })
     return {
@@ -193,6 +196,52 @@ def delete_project(pid: int, db: Session = Depends(get_db)):
     db.commit()
     _ibom_path(pid).unlink(missing_ok=True)
     _board_path(pid).unlink(missing_ok=True)
+    _board_source(pid).unlink(missing_ok=True)
+    return {"ok": True}
+
+
+class ProjectPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    notes: str | None = None
+
+
+@router.patch("/projects/{pid}")
+def patch_project(pid: int, body: ProjectPatch, db: Session = Depends(get_db)):
+    """Rename a project (or change its notes)."""
+    proj = db.get(Project, pid)
+    if proj is None:
+        raise HTTPException(404, "project not found")
+    data = body.model_dump(exclude_unset=True)
+    if data.get("name") is not None:
+        name = data["name"].strip()
+        if not name:
+            raise HTTPException(400, "name is required")
+        other = db.scalar(select(Project).where(Project.name == name, Project.id != pid))
+        if other is not None:
+            raise HTTPException(409, "A project with that name already exists")
+        proj.name = name
+    if "notes" in data:
+        proj.notes = data["notes"]
+    db.commit()
+    return {"ok": True, "name": proj.name}
+
+
+class PlacedIn(BaseModel):
+    placed: bool
+    line_ids: list[int] | None = None   # none = every line of the project (e.g. start over)
+
+
+@router.post("/projects/{pid}/placed")
+def set_placed(pid: int, body: PlacedIn, db: Session = Depends(get_db)):
+    """Tick / untick "Placed" for several lines at once."""
+    proj = db.get(Project, pid)
+    if proj is None:
+        raise HTTPException(404, "project not found")
+    want = set(body.line_ids) if body.line_ids is not None else None
+    for ln in proj.bom_lines:
+        if want is None or ln.id in want:
+            ln.placed = body.placed
+    db.commit()
     return {"ok": True}
 
 
@@ -204,10 +253,13 @@ def _board_path(pid: int):
     return get_settings().data_dir / "pcb" / f"{pid}.json"
 
 
-async def _read_board(file: UploadFile) -> dict:
-    raw = await file.read(BOARD_MAX_BYTES + 1)
-    if len(raw) > BOARD_MAX_BYTES:
-        raise HTTPException(413, "that file is larger than 60 MB")
+def _board_source(pid: int):
+    """The .kicad_pcb as uploaded, gzipped (a fraction of its size): lets the drawing be rebuilt when the parser
+    learns to draw more (like the text), without asking for the file again."""
+    return get_settings().data_dir / "pcb" / f"{pid}.kicad_pcb.gz"
+
+
+def _extract(raw: bytes) -> dict:
     try:
         return extract_board(raw.decode("utf-8-sig", errors="replace"))
     except ValueError as e:
@@ -216,24 +268,36 @@ async def _read_board(file: UploadFile) -> dict:
         raise HTTPException(400, "that file is nested too deeply to be a KiCad board") from e
 
 
-@router.post("/board/parse")
-async def parse_board(file: UploadFile = File(...)):
-    """The drawing model of a .kicad_pcb, for the review step (nothing is saved yet)."""
-    return await _read_board(file)
+async def _read_board(file: UploadFile) -> tuple[dict, bytes]:
+    raw = await file.read(BOARD_MAX_BYTES + 1)
+    if len(raw) > BOARD_MAX_BYTES:
+        raise HTTPException(413, "that file is larger than 60 MB")
+    return _extract(raw), raw
 
 
-@router.post("/projects/{pid}/board")
-async def put_board(pid: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Attach (or replace) the project's board. Only the drawing is kept, not the original file."""
-    if db.get(Project, pid) is None:
-        raise HTTPException(404, "project not found")
-    board = await _read_board(file)
+def _write_board(pid: int, board: dict) -> None:
     path = _board_path(pid)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(board, separators=(",", ":")), encoding="utf-8")
     tmp.replace(path)
-    return {"ok": True, "footprints": len(board["footprints"]), "bytes": path.stat().st_size}
+
+
+@router.post("/board/parse")
+async def parse_board(file: UploadFile = File(...)):
+    """The drawing model of a .kicad_pcb, for the review step (nothing is saved yet)."""
+    return (await _read_board(file))[0]
+
+
+@router.post("/projects/{pid}/board")
+async def put_board(pid: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Attach (or replace) the project's board: the drawing, plus the file itself gzipped for later re-drawing."""
+    if db.get(Project, pid) is None:
+        raise HTTPException(404, "project not found")
+    board, raw = await _read_board(file)
+    _write_board(pid, board)
+    _board_source(pid).write_bytes(gzip.compress(raw, 6))
+    return {"ok": True, "footprints": len(board["footprints"]), "bytes": _board_path(pid).stat().st_size}
 
 
 @router.get("/projects/{pid}/board")
@@ -241,12 +305,24 @@ def get_board(pid: int):
     path = _board_path(pid)
     if not path.is_file():
         raise HTTPException(404, "no board attached to this project")
+    src = _board_source(pid)
+    if src.is_file():
+        try:
+            fresh = json.loads(path.read_text(encoding="utf-8")).get("format") == BOARD_FORMAT
+        except (OSError, ValueError):
+            fresh = False
+        if not fresh:                       # drawn by an older parser: draw it again from the kept file
+            try:
+                _write_board(pid, _extract(gzip.decompress(src.read_bytes())))
+            except (OSError, HTTPException):
+                pass
     return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
 @router.delete("/projects/{pid}/board")
 def delete_board(pid: int):
     _board_path(pid).unlink(missing_ok=True)
+    _board_source(pid).unlink(missing_ok=True)
     return {"ok": True}
 
 
@@ -359,6 +435,7 @@ def list_match_rules(db: Session = Depends(get_db)):
 class LinePatch(BaseModel):
     part_id: str | None = None      # another part; null = back to unresolved
     ignored: bool | None = None
+    placed: bool | None = None
     qty_per_board: float | None = Field(default=None, gt=0)
     remember: bool = False          # with a part: remember Value + Footprint -> this part for later BOMs
 
@@ -380,6 +457,8 @@ def patch_line(pid: int, lid: int, body: LinePatch, db: Session = Depends(get_db
                 remember(db, value=ln.value, footprint=ln.footprint, part_id=data["part_id"])
     if data.get("ignored") is not None:
         ln.ignored = bool(data["ignored"])
+    if data.get("placed") is not None:
+        ln.placed = bool(data["placed"])
     if data.get("qty_per_board") is not None:
         ln.qty_per_board = data["qty_per_board"]
     db.commit()

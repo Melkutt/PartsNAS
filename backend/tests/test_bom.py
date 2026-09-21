@@ -235,3 +235,60 @@ def test_a_saved_line_can_be_edited(client):
         client.delete(f"/api/bom/projects/{pid}")
         for p in (x, y):
             client.delete(f"/api/parts/{p}")
+
+
+# -- renaming, "Placed", boards drawn by an older parser ----------------------------------------
+
+def test_a_project_can_be_renamed(client):
+    a = client.post("/api/bom/projects", json={"name": "ZZ_REN a", "lines": []}).json()["id"]
+    b = client.post("/api/bom/projects", json={"name": "ZZ_REN b", "lines": []}).json()["id"]
+    try:
+        assert client.patch(f"/api/bom/projects/{a}", json={"name": "  ZZ_REN renamed "}).status_code == 200
+        assert client.get(f"/api/bom/projects/{a}").json()["name"] == "ZZ_REN renamed"
+        assert client.patch(f"/api/bom/projects/{a}", json={"name": "ZZ_REN b"}).status_code == 409
+        assert client.patch(f"/api/bom/projects/{a}", json={"name": "ZZ_REN renamed"}).status_code == 200   # same name, itself
+        assert client.patch(f"/api/bom/projects/{a}", json={"name": " "}).status_code == 400
+        assert client.patch("/api/bom/projects/999999", json={"name": "x"}).status_code == 404
+    finally:
+        for p in (a, b):
+            client.delete(f"/api/bom/projects/{p}")
+
+
+def test_lines_can_be_ticked_off_as_placed(client):
+    pid = client.post("/api/bom/projects", json={"name": "ZZ_PLACED proj", "lines": [
+        {"value": "1k", "qty": 1, "refdes": "R1"}, {"value": "2k", "qty": 1, "refdes": "R2"}, {"value": "H", "qty": 1, "refdes": "H1", "ignored": True}]}).json()["id"]
+    try:
+        lines = client.get(f"/api/bom/projects/{pid}").json()["lines"]
+        assert not any(ln["placed"] for ln in lines)
+        assert client.patch(f"/api/bom/projects/{pid}/lines/{lines[0]['id']}", json={"placed": True}).status_code == 200
+        got = client.get(f"/api/bom/projects/{pid}").json()
+        assert [ln["placed"] for ln in got["lines"]] == [True, False, False] and got["placed_count"] == 1
+        assert client.post(f"/api/bom/projects/{pid}/placed", json={"placed": True, "line_ids": [lines[1]["id"]]}).status_code == 200
+        assert client.get(f"/api/bom/projects/{pid}").json()["placed_count"] == 2
+        assert client.post(f"/api/bom/projects/{pid}/placed", json={"placed": False}).status_code == 200      # start over
+        assert client.get(f"/api/bom/projects/{pid}").json()["placed_count"] == 0
+        assert client.post("/api/bom/projects/999999/placed", json={"placed": True}).status_code == 404
+    finally:
+        client.delete(f"/api/bom/projects/{pid}")
+
+
+def test_a_board_drawn_by_an_older_parser_is_drawn_again_from_the_kept_file(client):
+    import json
+    from pathlib import Path
+
+    from app.api.bom import _board_path, _board_source
+    board = (Path(__file__).parent / "fixtures" / "mini.kicad_pcb").read_bytes()
+    pid = client.post("/api/bom/projects", json={"name": "ZZ_REDRAW proj", "lines": []}).json()["id"]
+    try:
+        client.post(f"/api/bom/projects/{pid}/board", files={"file": ("m.kicad_pcb", board, "application/octet-stream")})
+        assert _board_source(pid).is_file()
+        old = json.loads(_board_path(pid).read_text(encoding="utf-8"))
+        old["format"] = 1
+        old["gfx"]["F.SilkS"] = [p for p in old["gfx"]["F.SilkS"] if p[0] != "t"]          # what a v1 file looked like
+        _board_path(pid).write_text(json.dumps(old), encoding="utf-8")
+        got = client.get(f"/api/bom/projects/{pid}/board").json()
+        assert got["format"] >= 2 and any(p[0] == "t" for p in got["gfx"]["F.SilkS"])
+        client.delete(f"/api/bom/projects/{pid}/board")
+        assert not _board_source(pid).exists()
+    finally:
+        client.delete(f"/api/bom/projects/{pid}")
