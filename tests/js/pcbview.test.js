@@ -1,5 +1,5 @@
 // deno test --allow-read tests/js
-import { arcPoints, boardToScreen, edgeLoops, fitScale, hitFootprint, padPolygon, primWidth, rotateCcw, screenToBoard } from "../../frontend/js/pcbview.js";
+import { arcPoints, boardToScreen, edgeLoops, fitScale, hitFootprint, padPolygon, PcbView, primWidth, rotateCcw, screenToBoard } from "../../frontend/js/pcbview.js";
 
 function eq(actual, expected, msg = "") {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -93,4 +93,25 @@ Deno.test("a click picks the part on top: this side first, then the smallest box
 Deno.test("stroke widths sit in different places per primitive", () => {
   eq([primWidth(["l", 0, 0, 1, 1, 0.2]), primWidth(["c", 0, 0, 1, 0.3, 0]), primWidth(["p", [0, 0, 1, 0, 1, 1], 0.4, 0]), primWidth(["a", 0, 0, 1, 1, 2, 0, 0.5])],
     [0.2, 0.3, 0.4, 0.5]);
+});
+
+Deno.test("the print picture of a board can be drawn (the pick list prints it)", () => {
+  // no browser here: a canvas whose 2D context accepts any call, and remembers the text that was drawn
+  const drawn = [];
+  const ctx = new Proxy({}, {
+    get: (t, k) => (k === "fillText" || k === "strokeText" ? (s) => drawn.push(s) : k in t ? t[k] : () => {}),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  globalThis.document = { createElement: () => ({ getContext: () => ctx }) };
+  const model = {
+    bbox: [0, 0, 40, 30], edge: [["l", 0, 0, 40, 0, 0.1], ["l", 40, 0, 40, 30, 0.1], ["l", 40, 30, 0, 30, 0.1], ["l", 0, 30, 0, 0, 0.1]],
+    gfx: { "F.SilkS": [["t", "R1", 20, 15, 0, 1, 1, 0.15, 0, 0, 0, 0]] },
+    footprints: [{ ref: "R1", value: "10k", fpid: "R", x: 20, y: 15, rot: 0, side: "F", attr: "smd", bbox: [19, 14, 21, 16],
+      pads: [{ n: "1", s: "rect", x: 19.5, y: 15, w: 1, h: 1, r: 0, L: "F" }] }],
+    tracks: {}, vias: [], zones: {},
+  };
+  const canvas = PcbView.renderImage(model, { side: "F", refs: true, width: 400, height: 300 });
+  eq(canvas.width, 400);
+  eq(drawn.includes("R1"), true);
+  PcbView.renderImage(model, { side: "B", rot: 90, refs: false, width: 400, height: 300 });   // the back, turned, no names
 });

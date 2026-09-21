@@ -396,7 +396,7 @@ export class PcbView {
     const r = Object.create(PcbView.prototype);
     Object.assign(r, {
       canvas, ctx: canvas.getContext("2d"), model, _loops: edgeLoops(model.edge || []), side, rot, panX: 0, panY: 0,
-      highlighted: new Set(highlighted), _raf: 0, _fixedDpr: 1, labelScale: width / 1100,
+      highlighted: new Set(highlighted), placed: new Set(), _raf: 0, _fixedDpr: 1, labelScale: width / 1100,
       show: { silk: true, fab: false, pads: true, tracks: palette !== "print", zones: false, refs },
       colors: palette === "print" ? PRINT_COLORS : null,
     });
