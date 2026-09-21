@@ -9,10 +9,6 @@
 `POST /api/bom/projects/{id}/build` deduct stock for N boards (reversible)
 `POST /api/bom/builds/{id}/undo`
 `GET/DELETE /api/bom/match-rules`   remembered Value+Footprint -> Part rules
-`POST /api/bom/match`               already-parsed lines (e.g. read from an Interactive HTML BOM)
-                                     -> the same preview as /parse
-`POST/GET/DELETE /api/bom/projects/{id}/ibom`   the project's Interactive HTML BOM file (an optional
-                                     board view; the project works without it)
 `POST /api/bom/board/parse`         a KiCad board file (.kicad_pcb) -> what the viewer draws (nothing saved)
 `POST/GET/DELETE /api/bom/projects/{id}/board`   the same, kept with the project (data/pcb/<id>.json)
 """
@@ -60,28 +56,6 @@ def _match_rows(db: Session, rows: list[dict]) -> list[dict]:
     ]
 
 
-class RawLine(BaseModel):
-    mpn: str | None = None
-    value: str | None = None
-    footprint: str | None = None
-    qty: float = 1
-    refdes: str | None = None
-
-
-class MatchIn(BaseModel):
-    lines: list[RawLine] = Field(min_length=1, max_length=5000)
-    suggested_name: str = "BOM"
-
-
-@router.post("/match")
-def match_lines(body: MatchIn, db: Session = Depends(get_db)):
-    """Same preview as /parse, for a parts list that was read somewhere else - the Interactive HTML
-    BOM carries one (reference, value, footprint) per component, read by the browser."""
-    rows = [{"mpn": ln.mpn or "", "value": ln.value or "", "footprint": ln.footprint or "",
-             "qty": ln.qty, "refdes": ln.refdes or ""} for ln in body.lines]
-    return {"lines": _match_rows(db, rows), "suggested_name": body.suggested_name or "BOM"}
-
-
 class LineIn(BaseModel):
     mpn: str | None = None
     value: str | None = None
@@ -107,7 +81,6 @@ def _project_summary(db: Session, p: Project) -> dict:
         "line_count": sum(1 for ln in p.bom_lines if not ln.ignored),
         "ignored_count": sum(1 for ln in p.bom_lines if ln.ignored),
         "placed_count": sum(1 for ln in p.bom_lines if ln.placed and not ln.ignored),
-        "has_ibom": _ibom_path(p.id).is_file(),
         "has_board": _board_path(p.id).is_file(),
         "unresolved_count": sum(1 for ln in p.bom_lines if not ln.part_id and not ln.ignored),
         "last_build": max((b.created_at.isoformat() for b in p.builds if not b.reverted), default=None),
@@ -194,7 +167,6 @@ def delete_project(pid: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "project not found")
     db.delete(proj)
     db.commit()
-    _ibom_path(pid).unlink(missing_ok=True)
     _board_path(pid).unlink(missing_ok=True)
     _board_source(pid).unlink(missing_ok=True)
     return {"ok": True}
@@ -323,48 +295,6 @@ def get_board(pid: int):
 def delete_board(pid: int):
     _board_path(pid).unlink(missing_ok=True)
     _board_source(pid).unlink(missing_ok=True)
-    return {"ok": True}
-
-
-# ---------- the Interactive HTML BOM (optional board view) ----------
-IBOM_MAX_BYTES = 40 * 1024 * 1024
-
-
-def _ibom_path(pid: int):
-    return get_settings().data_dir / "ibom" / f"{pid}.html"
-
-
-@router.post("/projects/{pid}/ibom")
-async def put_ibom(pid: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Attach (or replace) the project's ibom.html. It is only a viewer: nothing in the project
-    depends on it, so a file this cannot read never breaks the BOM itself."""
-    if db.get(Project, pid) is None:
-        raise HTTPException(404, "project not found")
-    raw = await file.read(IBOM_MAX_BYTES + 1)
-    if len(raw) > IBOM_MAX_BYTES:
-        raise HTTPException(413, "that file is larger than 40 MB")
-    head = raw[:4000].lower()
-    if b"<html" not in head or b"pcbdata" not in raw:
-        raise HTTPException(400, "that does not look like an Interactive HTML BOM (ibom.html)")
-    path = _ibom_path(pid)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_bytes(raw)
-    tmp.replace(path)
-    return {"ok": True, "bytes": len(raw)}
-
-
-@router.get("/projects/{pid}/ibom")
-def get_ibom(pid: int):
-    path = _ibom_path(pid)
-    if not path.is_file():
-        raise HTTPException(404, "no board view attached to this project")
-    return FileResponse(path, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
-
-
-@router.delete("/projects/{pid}/ibom")
-def delete_ibom(pid: int):
-    _ibom_path(pid).unlink(missing_ok=True)
     return {"ok": True}
 
 

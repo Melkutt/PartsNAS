@@ -891,8 +891,7 @@ table.parts-table {
 .bom-split { display: grid; grid-template-columns: minmax(360px, 38%) minmax(0, 1fr); gap: 12px; align-items: start; }
 .bom-lines { min-width: 0; overflow-x: auto; }
 .bom-board { position: sticky; top: 0; min-width: 0; }
-.ibom-frame { width: 100%; height: calc(100vh - 230px); min-height: 420px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
-.ibom-info { font-size: 13px; padding: 6px 2px 8px; min-height: 3.2em; }
+.bom-info { font-size: 13px; padding: 6px 2px 8px; min-height: 3.2em; }
 .bom-line-link { cursor: pointer; }
 .bom-line-link:hover { background: var(--surface-raised); }
 tr.board-hit { background: var(--accent-soft); outline: 1px solid var(--accent); }

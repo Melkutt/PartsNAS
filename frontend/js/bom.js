@@ -10,7 +10,7 @@
 // matches an old rule, since the rule is keyed on the value too.
 import { api } from "./api.js";
 import { el, modal, toast, partSearch, treeOptions, withBusy } from "./ui.js";
-import { boardWindow, highlightRefs, onBoardClick, readIbomFile, splitRefs } from "./ibomlink.js";
+import { splitRefs } from "./refdes.js";
 import { PcbView } from "./pcbview.js";
 
 const CERTAIN = ["mpn", "remembered", "new"];
@@ -52,14 +52,8 @@ export class BomView {
             el("div", { class: "hint" },
               "The KiCad BOM file (.csv): Tools → Generate BOM, or the Export BOM button in the schematic editor. " +
               "Matches the lines against your parts, shows what is missing, deducts stock when you build and prints a pick list. " +
-              "Add the board file (.kicad_pcb) too and PartsNAS draws the board next to the list. " +
-              "The BOM always works, whatever else changes.")),
-          el("div", { class: "bom-import-card" },
-            el("button", { onclick: () => this.openImportIbomModal() }, "Import IBOM…"),
-            el("div", { class: "hint" },
-              "The Interactive HTML BOM (ibom.html) from KiCad's InteractiveHtmlBom plugin. Reads the parts list from the file and " +
-              "shows the board next to it: click a line to see where the parts sit, click a part on the board to see what it is and " +
-              "where you keep it. It is a viewer on top of the BOM: if the plugin's format ever changes, use Import BOM instead."))),
+              "Add the board file (.kicad_pcb) too and PartsNAS draws the board next to the list: click a line to see where the parts sit, " +
+              "click a part on the board to see what it is and where you keep it. The BOM always works without the board."))),
         this._projectsTable(rows)),
     );
     this.el.append(panel);
@@ -108,35 +102,6 @@ export class BomView {
   }
 
   // ---------- Import + review ----------
-  // The parts list comes out of the ibom.html itself (read by the browser), goes through the same
-  // matching and review as a CSV, and the file is kept with the project for the board view.
-  openImportIbomModal() {
-    const fileInp = el("input", { type: "file", accept: ".html,.htm" });
-    modal({
-      title: "Import IBOM",
-      confirmText: "Read file",
-      body: el("div", { class: "modal-body" },
-        el("div", { class: "row" }, el("label", {}, "ibom.html"), fileInp),
-        el("div", { class: "hint" },
-          "The file KiCad's InteractiveHtmlBom plugin writes (usually <project>/bom/ibom.html). Only open files you made yourself: " +
-          "the page is a small program that runs here. The parts list is read from it and reviewed like a KiCad BOM; " +
-          "the file is then kept with the project so you can see the board.")),
-      onConfirm: async () => {
-        const file = fileInp.files[0];
-        if (!file) throw new Error("Choose the ibom.html file first");
-        let read;
-        try {
-          read = await readIbomFile(file);
-        } catch (e) {
-          throw new Error(`${e.message}. If the file is fine, its format may have changed — use Import BOM with the KiCad BOM (.csv) instead; ` +
-            "you can attach this file to the project afterwards.");
-        }
-        const data = await api("/api/bom/match", { method: "POST", body: { lines: read.lines, suggested_name: read.title || file.name.replace(/\.html?$/i, "") } });
-        this._startReview(data, { ibomFile: file });
-      },
-    });
-  }
-
   openImportModal() {
     const fileInp = el("input", { type: "file", accept: ".csv" });
     const boardInp = el("input", { type: "file", accept: ".kicad_pcb" });
@@ -150,7 +115,7 @@ export class BomView {
         el("div", { class: "hint" },
           "The board file <project>.kicad_pcb from the same KiCad project. PartsNAS draws the board (parts, pads, silkscreen, outline) " +
           "next to the list, so you can see where each part sits while you choose parts, and later when you build. " +
-          "Only the drawing is kept, not the file, and the BOM works without it.")),
+          "A compressed copy of the file is kept with the project, so the drawing can be redrawn when PartsNAS learns to show more. The BOM works without it.")),
       onConfirm: async () => {
         const file = fileInp.files[0];
         if (!file) throw new Error("Choose a .csv file first");
@@ -187,7 +152,6 @@ export class BomView {
 
   _startReview(data, opts = {}) {
     this.mode = "review";
-    this.ibomFile = opts.ibomFile || null;
     this.boardFile = opts.boardFile || null;
     this._destroyBoard();
     this.el.innerHTML = "";
@@ -420,14 +384,6 @@ export class BomView {
     try {
       const { id } = await api("/api/bom/projects", { method: "POST", body: { name, lines } });
       toast(`Saved “${name}”`);
-      if (this.ibomFile) {
-        try {
-          await this._uploadIbom(id, this.ibomFile);
-        } catch (e) {
-          toast(`Saved, but the board view could not be attached: ${e.message}`);
-        }
-        this.ibomFile = null;
-      }
       if (this.boardFile) {
         try {
           await this._uploadBoard(id, this.boardFile);
@@ -452,7 +408,6 @@ export class BomView {
     return body;
   }
 
-  _uploadIbom(id, file) { return this._upload(`/api/bom/projects/${id}/ibom`, file); }
 
   _uploadBoard(id, file) { return this._upload(`/api/bom/projects/${id}/board`, file); }
 
@@ -463,16 +418,14 @@ export class BomView {
     const data = await api(`/api/bom/projects/${id}?boards=${boards}`);
     this.el.innerHTML = "";
     const hasPcb = !!data.has_board;      // PartsNAS's own drawing of the KiCad board
-    const hasIbom = !!data.has_ibom;      // an Interactive HTML BOM page, if that is what was attached
-    const hasView = hasPcb || hasIbom;
+    const hasView = hasPcb;
     const panel = el("div", { class: "panel bom-panel", style: `max-width:${hasView ? "none" : "1100px"}` });
     const boardsInp = el("input", { type: "number", min: 1, value: boards, style: "width:5em",
       onchange: (e) => this.showDetail(id, Number(e.target.value) || 1) });
     const table = el("table", { class: "mini-table bom-table" });
     const rowOf = new Map();   // line id -> <tr>, for the board <-> list linking
     let pcb = null;            // our own board view
-    let ibomWin = null;        // or the window of an attached IBOM page
-    const info = el("div", { class: "ibom-info" }, "Click a line to see it on the board, or a part on the board to see the line.");
+    const info = el("div", { class: "bom-info" }, "Click a line to see it on the board, or a part on the board to see the line.");
     const showLine = (ln) => {
       info.innerHTML = "";
       const where = ln.part_id ? (ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join(" · ") : "none in stock") : "";
@@ -490,7 +443,6 @@ export class BomView {
       showLine(ln);
       if (!fromBoard) {
         if (pcb) pcb.highlight(splitRefs(ln.refdes));
-        else if (ibomWin) highlightRefs(ibomWin, splitRefs(ln.refdes));
       }
     };
     const onBoardRefs = (refs) => {
@@ -661,7 +613,7 @@ export class BomView {
       });
     };
 
-    // the board next to the list: our own drawing when there is one, else the attached IBOM page
+    // the board next to the list: the drawing of the .kicad_pcb, when one is attached
     let boardPane = null;
     if (hasPcb) {
       const host = el("div", { class: "bom-board-host" });
@@ -675,14 +627,6 @@ export class BomView {
         if ((model.format || 1) < 2) info.textContent = "This board was saved before PartsNAS could draw text. Use Replace board… once (the same .kicad_pcb) to get the silkscreen text.";
       })
         .catch((e) => { info.textContent = `The board could not be loaded: ${e.message}`; });
-    } else if (hasIbom) {
-      const frame = el("iframe", { class: "ibom-frame", src: `/api/bom/projects/${id}/ibom`, title: "Board view" });
-      frame.addEventListener("load", () => {
-        ibomWin = boardWindow(frame);
-        if (ibomWin) onBoardClick(ibomWin, onBoardRefs);
-        else info.textContent = "The board is shown, but it can't be linked to this list (the plugin's page looks different from what PartsNAS expects). The BOM itself is unaffected.";
-      });
-      boardPane = el("div", { class: "bom-board no-print" }, info, frame);
     }
     const boardBtns = [];
     if (hasPcb) {
@@ -691,13 +635,6 @@ export class BomView {
     } else {
       boardBtns.push(el("button", { class: "ghost", title: "The .kicad_pcb file of this project: PartsNAS draws the board next to the list",
         onclick: () => pickFile(".kicad_pcb", (i, f) => this._uploadBoard(i, f), "Board attached") }, "Attach board (.kicad_pcb)…"));
-    }
-    if (hasIbom) {
-      boardBtns.push(el("a", { href: `/api/bom/projects/${id}/ibom`, target: "_blank", rel: "noopener", class: "hint" }, "open the IBOM page"),
-        el("button", { class: "ghost", onclick: remove("IBOM page", `/api/bom/projects/${id}/ibom`) }, "Remove IBOM"));
-    } else if (!hasPcb) {
-      boardBtns.push(el("button", { class: "ghost", title: "Attach the ibom.html from KiCad's InteractiveHtmlBom plugin instead",
-        onclick: () => pickFile(".html,.htm", (i, f) => this._uploadIbom(i, f), "Board view attached") }, "Attach IBOM…"));
     }
     panel.append(
       el("div", { class: "no-print", style: "display:flex;align-items:center;gap:10px" },

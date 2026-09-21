@@ -83,21 +83,16 @@ Version **0.5.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
   or a **BOM exported from KiCad** (with matching against your stock).
-- **BOM tab, two ways in.** *Import BOM* takes KiCad's BOM file (`.csv`): it is matched against your parts,
+- **BOM tab.** *Import BOM* takes KiCad's BOM file (`.csv`): it is matched against your parts,
   shows what is short, deducts stock when you build, and prints a pick list with where each part is kept.
   Add the project's **board file** (`.kicad_pcb`) and PartsNAS **draws the board itself** next to the list: turn it,
   flip it to the back, zoom, click a line to light up the parts on the board, click a part on the board to see
   what it is, its value and where it is stored. It reads KiCad's own file format directly (no plugin needed) and
-  keeps only the drawing, a few hundred KB per board. Silkscreen text is drawn, and a clicked part lights up in
+  keeps the drawing (a few hundred KB per board) and a compressed copy of the file. Silkscreen text is drawn, and a clicked part lights up in
   neon green on the side it sits on. Saved lines can be edited afterwards (**Change…** picks another part,
   **Skip** leaves out holes, fiducials, logos and do-not-fit parts: kept in the list, but not counted, built or
   printed), and **Print pick list** can put the board on page 1 and the list from page 2.
   Projects can be renamed, and each line has a **Placed** tick (kept, and shown in blue on the board) for building a board over several evenings.
-  *Import IBOM* takes the `ibom.html` from the [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom)
-  KiCad plugin: it reads the parts list from the file and shows the board next to it, so a click on a line
-  lights up the parts on the board and a click on the board shows what the part is and where it is stored.
-  Both board views are only a viewer on top of the BOM (PartsNAS contains none of that plugin's code); the CSV
-  path never depends on them.
 
 **Yours to keep**
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
