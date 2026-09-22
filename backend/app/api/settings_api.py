@@ -33,7 +33,7 @@ from ..providers.safety import status as breaker_status
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-_LIMITS = {"mouser": (10, 1000), "digikey": (20, 1000)}
+_LIMITS = {"mouser": (10, 1000), "digikey": (20, 1000), "tme": (6, 500)}
 _LOGO_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
 
 

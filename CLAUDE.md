@@ -299,10 +299,15 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
    class parameters over subcategories), expanded per-class dimensions
    (`part_classes_extra.json`), parameter datalists from prior values.
 7. **mostly done** — `app/providers/` framework (rate limit + quota + disk cache
-   + backoff + circuit breaker); **Mouser** (Search v1 — price/stock/datasheet)
-   and **Digi-Key** (Product Info V4 — real parameters). Settings modal takes
-   per-field creds. "Look up specs" applies attributes / category / mount / price
-   / datasheet / image / supplier link. TODO: TME (HMAC), Farnell (element14 key).
+   + backoff + circuit breaker); **Mouser** (Search v1 — price/stock/datasheet),
+   **Digi-Key** (Product Info V4 — real parameters) and **TME** (own HMAC-SHA1
+   signature scheme, `app/providers/tme.py` — Search + GetProducts + GetPrices +
+   GetParameters per lookup, since TME splits those across separate actions;
+   field names for Search/GetParameters are from published examples, not yet
+   confirmed against a live account — read defensively, never crashes on a
+   surprise shape, just thinner attributes until confirmed). Settings modal
+   takes per-field creds. "Look up specs" applies attributes / category / mount
+   / price / datasheet / image / supplier link. TODO: Farnell (element14 key).
 8. **done** — Quotes / invoice basis (`js/quotes.js` tab, markup default 50 %,
    static cost snapshots + source, print + CSV, "Add to quote…" bulk action).
 9. **done** — label/QR: `GET /api/parts/{id}/label.png?fmt=code128|qr`
