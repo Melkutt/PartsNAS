@@ -83,6 +83,8 @@ Version **0.6.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
   or a **BOM exported from KiCad** (with matching against your stock).
+- The **Parts list** has a Price column (ex VAT): the preferred supplier's price, else the last
+  purchase — the same figure a quote or the BOM's price summary would use, at a glance while you browse.
 
 **Build a board from a KiCad project (the BOM tab)**
 
