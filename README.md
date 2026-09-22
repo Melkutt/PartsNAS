@@ -14,7 +14,7 @@ and tell you when a resistor drawer is running low. Inspired by
 [PartsBox](https://partsbox.com/) and the old open-source
 [ecDB](https://github.com/jwr/ecDB).
 
-Version **0.6.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [GPL-3.0 license](LICENSE)
+Version **0.7.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [GPL-3.0 license](LICENSE)
 
 > **Please read this first.** PartsNAS is a **hobby project**, shared as it is, free of charge and with
 > **no warranty of any kind**. It is **not** business, accounting or invoicing software. Use it at your
