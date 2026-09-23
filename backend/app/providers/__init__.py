@@ -1,4 +1,4 @@
-"""Supplier data providers (Mouser, Digi-Key, TME; later Farnell).
+"""Supplier data providers (Mouser, Digi-Key, TME, Farnell).
 
 All network access goes through `safety.fetch_json`, which enforces a per-minute
 rate limit, a persisted daily quota, a disk cache and a circuit breaker — the
@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from .base import Provider, ProviderBlocked, ProviderError, ProviderResult
 from .digikey import DigiKeyProvider
+from .farnell import FarnellProvider
 from .mouser import MouserProvider
 from .tme import TMEProvider
 
 _REGISTRY: dict[str, Provider] = {
-    p.name: p for p in [MouserProvider(), DigiKeyProvider(), TMEProvider()]
+    p.name: p for p in [MouserProvider(), DigiKeyProvider(), TMEProvider(), FarnellProvider()]
 }
 
 

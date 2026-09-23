@@ -173,3 +173,55 @@ def test_search_reports_the_real_error_when_the_fallback_finds_nothing_either(cl
         except ProviderError as e:
             assert str(e).startswith("Products/Search: ")  # the original, most actionable error - not a silent empty match
         set_kv(db, "provider:tme:config", {})
+
+
+# -- Farnell / element14 --------------------------------------------------------------------
+
+def test_farnell_is_registered_and_builds_a_get_url_with_the_key_as_a_plain_param(client, monkeypatch):
+    from app.core.db import SessionLocal
+    from app.core.kv import set_kv
+    import app.providers.farnell as farnell_mod
+
+    names = {p.name for p in all_providers()}
+    assert "farnell" in names
+    f = get_provider("farnell")
+    assert f.label == "Farnell" and f.cred_fields == ["api_key"]
+
+    seen = {}
+
+    def fake_guarded_request(db, name, *, method, url, params, per_min, per_day):
+        seen.update(method=method, url=url, params=params)
+        return {"manufacturerPartNumberSearchReturn": {"products": [
+            {"translatedManufacturerPartNumber": "LM339ADT", "brandName": "Texas Instruments",
+             "displayName": "TI - LM339ADT - COMPARATOR, QUAD, SOIC-14, 0.1uF, 5%",
+             "sku": "1234567", "productStatus": "Active",
+             "prices": [{"from": 1, "to": 9, "cost": 3.21}, {"from": 10, "to": 99, "cost": 2.87}],
+             "datasheets": [{"url": "https://example.com/lm339.pdf"}],
+             "inv": {"quantity": 812}}]}}
+
+    with SessionLocal() as db:
+        set_kv(db, "provider:farnell:config", {"api_key": "k"})
+        monkeypatch.setattr(farnell_mod, "guarded_request", fake_guarded_request)
+        results = farnell_mod.FarnellProvider().search(db, "LM339ADT")
+        set_kv(db, "provider:farnell:config", {})
+
+    assert seen["method"] == "GET" and seen["url"] == farnell_mod.BASE
+    assert seen["params"]["callInfo.apiKey"] == "k"
+    assert seen["params"]["term"] == "manuPartNum:LM339ADT"
+    assert len(results) == 1
+    r = results[0]
+    assert r.mpn == "LM339ADT" and r.manufacturer == "Texas Instruments"
+    assert r.in_stock == 812 and r.datasheet_url == "https://example.com/lm339.pdf"
+    breaks = sorted(r.price_breaks, key=lambda b: b.qty)
+    assert [(b.qty, b.ex_vat) for b in breaks] == [(1, 3.21), (10, 2.87)]
+    assert r.unit_price().ex_vat == 3.21
+    assert r.attributes.get("Capacitance") == "0.1uF"  # pulled from the description text
+
+
+def test_farnell_never_invents_an_image_url_from_a_bare_filename():
+    from app.providers.farnell import _parse_product
+
+    r = _parse_product({"translatedManufacturerPartNumber": "X", "image": {"baseName": "x_lrg.jpg"}}, "GBP")
+    assert r.image_url is None  # a bare filename isn't a loadable URL; a wrong guess would be worse than none
+    r2 = _parse_product({"translatedManufacturerPartNumber": "X", "image": {"url": "https://x.example/x.jpg"}}, "GBP")
+    assert r2.image_url == "https://x.example/x.jpg"

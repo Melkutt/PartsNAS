@@ -1,12 +1,12 @@
 """Regression tests for bugs that were found in real use. Each one names what went wrong."""
-from app.providers.mouser import _augment_from_description
+from app.textparse import guess_attrs_from_description
 
 
-# -- Mouser description parsing ------------------------------------------------------------
+# -- description-text attribute parsing (Mouser, Farnell) ----------------------------------
 
 def _parsed(desc: str) -> dict:
     attrs: dict = {}
-    _augment_from_description(attrs, desc)
+    guess_attrs_from_description(attrs, desc)
     return attrs
 
 

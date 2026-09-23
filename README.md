@@ -78,7 +78,7 @@ Version **0.7.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
 ![Building a quote with the cart](docs/screenshots/quote-cart.png)
 
 **Fill it without typing**
-- **Look up specs** from Mouser, Digi-Key and TME (bring your own API keys): parameters,
+- **Look up specs** from Mouser, Digi-Key, TME and Farnell (bring your own API keys): parameters,
   datasheet, picture and prices. Only when you press the button — never in bulk — and
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
@@ -200,7 +200,7 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 2. **Settings (the gear).** Choose your default currency and VAT rate, upload a logo,
    and write the name, address and payment details that should appear at the bottom of
    your invoices. If you use Swish, enter your number to get the QR code. Paste your
-   Mouser, Digi-Key and/or TME API keys if you want spec and price lookups.
+   Mouser, Digi-Key, TME and/or Farnell API keys if you want spec and price lookups.
 3. **Add your first parts.** Press **+ New part**, or **Import** a spreadsheet you
    already have. Open a part and use *Look up specs…* to fill in the details.
 4. **Say how much you have.** On a part's *Stock* tab, add a quantity to a location.
@@ -294,12 +294,12 @@ provided **"as is"**, without warranty of any kind, and **you use it entirely at
   backups (see above), keep them somewhere else, and test that you can restore them. The author is not
   liable for lost, damaged or wrong data.
 - **Supplier data can be wrong.** Specifications, prices, stock levels and part numbers fetched from
-  Mouser, Digi-Key, TME or anywhere else come from third parties and may be incorrect or out of date.
+  Mouser, Digi-Key, TME, Farnell or anywhere else come from third parties and may be incorrect or out of date.
   Check them before you rely on them, especially before you buy, order or build something.
 - **No security promises.** There is no login. Keep it on a trusted network and never expose it to the
   internet. API keys are stored in the database and in snapshots — keep those private.
 - **Third-party services.** You need your own accounts and API keys, and you must follow those
-  services' terms. PartsNAS is not affiliated with or endorsed by Mouser, Digi-Key, TME, PartsBox, KiCad,
+  services' terms. PartsNAS is not affiliated with or endorsed by Mouser, Digi-Key, TME, Farnell, PartsBox, KiCad,
   Synology or anyone else mentioned here; the names belong to their owners.
 
 To the fullest extent the law allows, the author is not responsible or liable for any claim, damage,
