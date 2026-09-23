@@ -9,11 +9,16 @@ A lookup here is 4 requests (worth it once: the result is disk-cached for two we
 every other provider), so `search()` keeps the candidate list short before the follow-up calls.
 
 Auth is TME's own HMAC-SHA1 scheme (their manual: "similar to ... OAuth 1.0a"): every request
-parameter (Token plus the action's own params, NOT the signature itself) is percent-encoded,
-sorted by key and joined with "&"; that string, and the request URL, are themselves
-percent-encoded again and joined as `POST&<url>&<params>`; the HMAC-SHA1 of that, keyed with
-`<Application Secret>&`, base64-encoded, is sent back as the `ApiSignature` form field. See
-`_sign()` below.
+parameter (Token plus the action's own params, NOT the signature itself) is percent-encoded;
+the encoded pairs are sorted and joined with "&" (RFC 5849 3.4.1.3.2 — sorted *after* encoding,
+so a bracket like `SymbolList[0]` sorts where its escaped form `%5B` would); that string, and
+the request URL, are themselves percent-encoded again and joined as `POST&<url>&<params>`. The
+HMAC-SHA1 of that base string is keyed with the Application Secret **alone** — unlike OAuth
+1.0a's `consumer_secret&token_secret`, TME has no second secret, and their own manual describes
+the key only as "assigned to the application" (no trailing "&" mentioned or needed) — base64-
+encoded, sent back as the `ApiSignature` form field. (An earlier version of this file used an
+OAuth-style `secret + "&"` key by analogy; a real account got back `E_INVALID_SIGNATURE` with
+it, which is what pinned this down.) See `_sign()` below.
 
 Creds: env PARTSNAS_TME_TOKEN / PARTSNAS_TME_SECRET, else Setting `provider:tme:config`
 {token, secret} (the "Token" and "Application Secret" from developers.tme.eu -> your app's
@@ -63,9 +68,10 @@ def _flatten(params: dict) -> dict[str, str]:
 
 
 def _sign(method: str, url: str, params: dict[str, str], secret: str) -> str:
-    param_str = "&".join(f"{_quote(k)}={_quote(v)}" for k, v in sorted(params.items()))
+    encoded = sorted((_quote(k), _quote(v)) for k, v in params.items())  # sort AFTER encoding (RFC 5849)
+    param_str = "&".join(f"{k}={v}" for k, v in encoded)
     base_str = f"{method.upper()}&{_quote(url)}&{_quote(param_str)}"
-    digest = hmac.new(f"{secret}&".encode(), base_str.encode(), hashlib.sha1).digest()
+    digest = hmac.new(secret.encode(), base_str.encode(), hashlib.sha1).digest()
     return base64.b64encode(digest).decode()
 
 
