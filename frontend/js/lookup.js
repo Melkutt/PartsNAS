@@ -148,7 +148,7 @@ export async function openLookup(part, classFields, onApplied) {
         el("div", { style: "color:var(--text-muted)" }, r.description || ""),
         el("div", { style: "color:var(--text-faint);font-size:12px" },
           [r.lifecycle, r.in_stock != null ? `${r.in_stock} in stock` : null,
-           r.unit_price ? `${r.unit_price.ex_vat} ${r.unit_price.currency} ex VAT · ${r.unit_price.inc_vat_ceil} inc` : null].filter(Boolean).join("  ·  ")),
+           r.unit_price ? `${r.unit_price.ex_vat} ${r.unit_price.currency} ex VAT` : null].filter(Boolean).join("  ·  ")),
         el("div", {}, r.datasheet_url ? el("a", { href: r.datasheet_url, target: "_blank" }, "datasheet") : "",
           r.product_url ? el("a", { href: r.product_url, target: "_blank", style: "margin-left:10px" }, "product page") : ""),
         r.category_hint ? el("div", { style: "color:var(--text-faint);font-size:12px" },

@@ -208,6 +208,10 @@ def test_farnell_is_registered_and_builds_a_get_url_with_the_key_as_a_plain_para
     assert seen["method"] == "GET" and seen["url"] == farnell_mod.BASE
     assert seen["params"]["callInfo.apiKey"] == "k"
     assert seen["params"]["term"] == "manuPartNum:LM339ADT"
+    # regression: shipped defaulting to uk.farnell.com/GBP, which silently priced a Swedish
+    # user's parts in the wrong currency (0.71 GBP read as if it were 0.71 SEK - the real price
+    # was ~9.19 SEK, a ~13x difference nobody would catch just by looking at the number)
+    assert seen["params"]["storeInfo.id"] == "se.farnell.com"
     assert len(results) == 1
     r = results[0]
     assert r.mpn == "LM339ADT" and r.manufacturer == "Texas Instruments"

@@ -10,10 +10,12 @@ One flat GET, no request signing (unlike TME) — the API key is just a query pa
     &callInfo.apiKey=<key>
 
 Creds: env PARTSNAS_FARNELL_API_KEY, else Setting `provider:farnell:config` {api_key} (the key
-from your Partner Portal account -> "View API Key"). Store region defaults to "uk.farnell.com"
-(GBP); override via Setting `provider:farnell:locale` {store, currency}. element14 runs several
-regional storefronts (uk.farnell.com, de.farnell.com, newark.com for the US, ...) each with its
-own currency and stock, so pick the one you actually buy from.
+from your Partner Portal account -> "View API Key"). Store region defaults to "se.farnell.com"
+(SEK), like every other provider here; override via Setting `provider:farnell:locale`
+{store, currency}. element14 runs several regional storefronts (se.farnell.com, uk.farnell.com,
+de.farnell.com, newark.com for the US, ...) each with its own currency and stock - the wrong one
+doesn't error, it just quietly prices in the wrong currency (live-confirmed: the "uk.farnell.com"
+default this shipped with first returned a real GBP price that read as a ~13x-too-low SEK one).
 
 NOTE: like TME originally, this has not been exercised against a live account. The endpoint,
 query parameter names and `term=manuPartNum:` syntax are confirmed from element14's own docs and
@@ -57,7 +59,7 @@ class FarnellProvider(Provider):
 
     def _locale(self, db: Session) -> dict:
         loc = get_kv(db, "provider:farnell:locale", {}) or {}
-        return {"store": loc.get("store", "uk.farnell.com"), "currency": loc.get("currency", "GBP")}
+        return {"store": loc.get("store", "se.farnell.com"), "currency": loc.get("currency", "SEK")}
 
     def search(self, db: Session, mpn: str) -> list[ProviderResult]:
         mpn = mpn.strip()
