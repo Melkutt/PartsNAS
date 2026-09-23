@@ -95,3 +95,33 @@ def test_settings_can_reset_a_paused_provider(client):
         with SessionLocal() as db:
             from app.providers.safety import reset_breaker
             reset_breaker(db, "tme")
+
+
+def test_tme_errors_say_which_of_the_four_actions_failed(client, monkeypatch):
+    from app.core.db import SessionLocal
+    from app.core.kv import set_kv
+    from app.providers.base import ProviderBlocked, ProviderError
+    import app.providers.tme as tme_mod
+
+    def boom(*a, **kw):
+        raise ProviderError("tme: HTTP 403 — 4: Access denied. You are not allowed to execute this action.")
+
+    def blocked(*a, **kw):
+        raise ProviderBlocked("tme: HTTP 403 (rate limit / block) — pausing this provider for ~8.0 h", 28800)
+
+    with SessionLocal() as db:
+        set_kv(db, "provider:tme:config", {"token": "t", "secret": "s"})
+        monkeypatch.setattr(tme_mod, "guarded_request", boom)
+        try:
+            tme_mod.TMEProvider()._call(db, "Products/Search", {"SearchPlain": "1N4007"})
+            assert False, "should have raised"
+        except ProviderError as e:
+            assert str(e).startswith("Products/Search: ")
+
+        monkeypatch.setattr(tme_mod, "guarded_request", blocked)
+        try:
+            tme_mod.TMEProvider()._call(db, "Products/GetPrices", {"SymbolList": ["X"]})
+            assert False, "should have raised"
+        except ProviderBlocked as e:
+            assert str(e).startswith("Products/GetPrices: ") and e.retry_after_s == 28800
+        set_kv(db, "provider:tme:config", {})

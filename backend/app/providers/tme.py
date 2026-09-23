@@ -44,7 +44,7 @@ from sqlalchemy.orm import Session
 
 from ..core.kv import get_kv
 from ..textparse import canon_tempchar, metric_first
-from .base import PriceBreak, Provider, ProviderError, ProviderResult
+from .base import PriceBreak, Provider, ProviderBlocked, ProviderError, ProviderResult
 from .safety import cache_get, cache_put, guarded_request
 
 BASE = "https://api.tme.eu"
@@ -106,11 +106,20 @@ class TMEProvider(Provider):
         url = f"{BASE}/{action}.json"
         flat = _flatten({"Token": token, **params})
         flat["ApiSignature"] = _sign("POST", url, flat, secret)
-        data = guarded_request(
-            db, self.name, method="POST", url=url, data=flat,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            per_min=PER_MIN, per_day=PER_DAY,
-        )
+        try:
+            data = guarded_request(
+                db, self.name, method="POST", url=url, data=flat,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                per_min=PER_MIN, per_day=PER_DAY,
+            )
+        except ProviderBlocked as e:
+            raise ProviderBlocked(f"{action}: {e}", e.retry_after_s) from e
+        except ProviderError as e:
+            # which of the 4 actions this lookup makes (Search / GetProducts / GetPrices /
+            # GetParameters) failed - without this, every report reads the same and the actual
+            # action has to be guessed from context (see the E_INVALID_SIGNATURE and the "Access
+            # denied" reports, both of which took a round-trip to even localize)
+            raise ProviderError(f"{action}: {e}") from e
         if str(data.get("Status", "OK")).upper() not in ("OK", ""):
             raise ProviderError(f"TME: {data.get('Status')} — {data.get('Data', {}).get('Message', '')}".strip(" —"))
         return data.get("Data") or {}
