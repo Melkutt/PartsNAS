@@ -7,6 +7,10 @@ Base URL `https://api.tme.eu/`, POST only, one JSON action per call:
   https://api.tme.eu/Products/GetParameters.json SymbolList[]=<symbol> -> technical parameters
 A lookup here is 4 requests (worth it once: the result is disk-cached for two weeks same as
 every other provider), so `search()` keeps the candidate list short before the follow-up calls.
+Some TME accounts turn out not to be authorized for Search specifically (seen live: HTTP 403
+"Access denied" naming that one action while the signature itself was valid) even though
+GetProducts/GetPrices/GetParameters work fine - when Search fails, `search()` falls back to
+treating the typed MPN as TME's own Symbol directly for those three, rather than giving up.
 
 Auth is TME's own HMAC-SHA1 scheme (their manual: "similar to ... OAuth 1.0a"): every request
 parameter (Token plus the action's own params, NOT the signature itself) is percent-encoded;
@@ -133,27 +137,40 @@ class TMEProvider(Provider):
             return [_from_dict(r) for r in cached]
 
         loc = self._locale(db)
-        found = self._call(db, "Products/Search", {
-            "SearchPlain": mpn, "Country": loc["country"], "Language": loc["language"],
-        })
-        rows = found.get("ProductList") or found.get("Products") or []
-        symbols = [r.get("Symbol") for r in rows if r.get("Symbol")][:10]
+        search_error: ProviderError | None = None
+        try:
+            found = self._call(db, "Products/Search", {
+                "SearchPlain": mpn, "Country": loc["country"], "Language": loc["language"],
+            })
+            rows = found.get("ProductList") or found.get("Products") or []
+            symbols = [r.get("Symbol") for r in rows if r.get("Symbol")][:10]
+        except ProviderError as e:
+            # some TME accounts can read product data by a known Symbol but are not authorized
+            # for the Search action itself (seen live: "Products/Search: ... Access denied");
+            # fall back to trying the typed MPN as TME's own Symbol directly (often identical,
+            # or close) rather than failing outright - if that also comes up empty, `search_error`
+            # (the more informative one - it names the actual problem) is what gets raised below
+            search_error, rows, symbols = e, [], [mpn]
+
         if not symbols:
             cache_put(self.name, mpn, [])
             return []
 
         by_symbol: dict[str, dict] = {r.get("Symbol"): dict(r) for r in rows if r.get("Symbol")}
+        for sym in symbols:
+            by_symbol.setdefault(sym, {"Symbol": sym})  # the Search-fallback guess has no row of its own yet
         # a short, polite gap between the follow-up calls - courteous regardless of whether TME
         # actually enforces a per-second burst limit (undocumented; better safe)
         try:
             details = self._call(db, "Products/GetProducts", {
                 "SymbolList": symbols, "Country": loc["country"], "Language": loc["language"],
             })
+            got_details = bool(details.get("ProductList"))
             for r in details.get("ProductList") or []:
                 if r.get("Symbol") in by_symbol:
                     by_symbol[r["Symbol"]].update(r)
         except ProviderError:
-            pass  # Search's own fields are already enough for a usable (if thinner) result
+            got_details = False  # Search's own fields are already enough for a usable (if thinner) result
         time.sleep(0.25)
         try:
             prices = self._call(db, "Products/GetPrices", {
@@ -168,6 +185,9 @@ class TMEProvider(Provider):
             attrs_by_symbol = {r.get("Symbol"): r.get("ParameterList") or [] for r in params.get("ProductList") or []}
         except ProviderError:
             attrs_by_symbol = {}
+
+        if search_error is not None and not got_details and not any(price_by_symbol.values()) and not any(attrs_by_symbol.values()):
+            raise search_error  # the Symbol-guess fallback found nothing either - report the real problem, not an empty match
 
         results = [
             _parse_product(by_symbol[sym], price_by_symbol.get(sym) or [], attrs_by_symbol.get(sym) or [], loc["currency"])

@@ -125,3 +125,51 @@ def test_tme_errors_say_which_of_the_four_actions_failed(client, monkeypatch):
         except ProviderBlocked as e:
             assert str(e).startswith("Products/GetPrices: ") and e.retry_after_s == 28800
         set_kv(db, "provider:tme:config", {})
+
+
+def test_search_falls_back_to_the_mpn_as_symbol_when_search_itself_is_forbidden(client, monkeypatch):
+    from app.core.db import SessionLocal
+    from app.core.kv import set_kv
+    from app.providers.base import ProviderError
+    import app.providers.tme as tme_mod
+
+    def fake_call(self, db, action, params):
+        if action == "Products/Search":
+            raise ProviderError("Products/Search: tme: HTTP 403 — 4: Access denied. You are not allowed to execute this action.")
+        sym = params["SymbolList"][0]  # a real GetProducts/GetPrices/GetParameters echoes back whatever Symbol was asked for
+        if action == "Products/GetProducts":
+            return {"ProductList": [{"Symbol": sym, "Description": "Diode 1A 1000V", "Producer": "Diotec"}]}
+        if action == "Products/GetPrices":
+            return {"ProductList": [{"Symbol": sym, "PriceList": [{"Amount": 1, "PriceValue": 0.42}]}]}
+        return {"ProductList": [{"Symbol": sym, "ParameterList": [{"ParameterName": "Voltage", "ParameterValue": "1000V"}]}]}
+
+    with SessionLocal() as db:
+        set_kv(db, "provider:tme:config", {"token": "t", "secret": "s"})
+        monkeypatch.setattr(tme_mod.TMEProvider, "_call", fake_call)
+        results = tme_mod.TMEProvider().search(db, "ZZ-TME-FALLBACK-OK")
+        assert len(results) == 1
+        r = results[0]
+        assert r.manufacturer == "Diotec" and r.description == "Diode 1A 1000V"
+        assert r.unit_price().ex_vat == 0.42
+        assert r.attributes.get("Voltage") == "1000V"
+        set_kv(db, "provider:tme:config", {})
+
+
+def test_search_reports_the_real_error_when_the_fallback_finds_nothing_either(client, monkeypatch):
+    from app.core.db import SessionLocal
+    from app.core.kv import set_kv
+    from app.providers.base import ProviderError
+    import app.providers.tme as tme_mod
+
+    def all_forbidden(self, db, action, params):
+        raise ProviderError(f"{action}: tme: HTTP 403 — 4: Access denied. You are not allowed to execute this action.")
+
+    with SessionLocal() as db:
+        set_kv(db, "provider:tme:config", {"token": "t", "secret": "s"})
+        monkeypatch.setattr(tme_mod.TMEProvider, "_call", all_forbidden)
+        try:
+            tme_mod.TMEProvider().search(db, "ZZ-TME-FALLBACK-ALLFAIL")
+            assert False, "should have raised"
+        except ProviderError as e:
+            assert str(e).startswith("Products/Search: ")  # the original, most actionable error - not a silent empty match
+        set_kv(db, "provider:tme:config", {})
