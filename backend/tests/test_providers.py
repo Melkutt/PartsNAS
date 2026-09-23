@@ -229,3 +229,34 @@ def test_farnell_never_invents_an_image_url_from_a_bare_filename():
     assert r.image_url is None  # a bare filename isn't a loadable URL; a wrong guess would be worse than none
     r2 = _parse_product({"translatedManufacturerPartNumber": "X", "image": {"url": "https://x.example/x.jpg"}}, "GBP")
     assert r2.image_url == "https://x.example/x.jpg"
+
+
+def test_a_malformed_response_is_a_capped_error_message_not_a_breaker_trip(client, monkeypatch):
+    # live case: Mouser (or something in front of it) returned a raw HTML page with no valid
+    # HTTP framing - httpx/h11 calls that "illegal header line" and raises before any status
+    # code exists to check, so it must not cost the provider an 8h pause, and the message must
+    # not echo an unbounded amount of whatever garbage came back
+    from app.core.db import SessionLocal
+    from app.providers.base import ProviderError
+    import app.providers.safety as safety_mod
+
+    import httpx
+
+    monkeypatch.setattr(safety_mod.time, "sleep", lambda *_: None)  # don't actually wait out the retries
+
+    def fake_request(self, *a, **kw):
+        raise httpx.RemoteProtocolError(
+            "illegal header line: bytearray(b'<!doctype html public \"-//w3c//dtd xhtml 1.0 "
+            "transitional//en\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">')"
+        )
+
+    monkeypatch.setattr(httpx.Client, "request", fake_request)
+    with SessionLocal() as db:
+        try:
+            safety_mod.guarded_request(db, "zz-test-neterr", method="GET", url="http://127.0.0.1:1",
+                                        per_min=100, per_day=100)
+            assert False, "should have raised"
+        except ProviderError as e:
+            assert str(e).startswith("zz-test-neterr: network error:") and len(str(e)) < 260
+        st = safety_mod._load_state(db, "zz-test-neterr")
+        assert st["blocked_until"] is None and st["used_today"] == 0

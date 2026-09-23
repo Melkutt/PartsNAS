@@ -159,7 +159,10 @@ def guarded_request(
             with httpx.Client(timeout=HTTP_TIMEOUT) as c:
                 resp = c.request(method, url, headers=headers, **kw)
         except httpx.HTTPError as e:
-            last_err = f"network error: {e}"
+            # a malformed/non-HTTP response (a raw HTML block or challenge page with no proper
+            # status line - h11 calls that an "illegal header line") looks like this too; the
+            # message can be arbitrarily long (it may echo the whole bad body), so cap it
+            last_err = f"network error: {str(e)[:200]}"
             time.sleep(1.5 * (attempt + 1))
             continue
 
