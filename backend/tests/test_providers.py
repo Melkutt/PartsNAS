@@ -48,3 +48,50 @@ def test_tme_is_registered_alongside_mouser_and_digikey(client):
     assert tme.label == "TME" and tme.cred_fields == ["token", "secret"]
     with SessionLocal() as db:
         assert tme.configured(db) is False  # no creds set in this test database
+
+
+def test_reset_breaker_clears_a_pause_but_not_todays_count(client):
+    from app.core.db import SessionLocal
+    from app.providers.safety import _trip_breaker, _load_state, reset_breaker
+
+    with SessionLocal() as db:
+        _trip_breaker(db, "zz-test-provider", "HTTP 403 (rate limit / block)", 3600)
+        st = _load_state(db, "zz-test-provider")
+        assert st["blocked_until"] and st["blocked_until"] > 0
+        reset_breaker(db, "zz-test-provider")
+        st = _load_state(db, "zz-test-provider")
+        assert st["blocked_until"] is None
+
+
+def test_a_structured_api_error_does_not_trip_the_breaker(client):
+    # a 403/429 whose body is the API's OWN error (bad signature, bad parameter - a code bug)
+    # must not cost 8h; only an unexplained block (no such body) should.
+    import httpx
+
+    from app.providers.safety import _api_error_detail
+
+    tme_style = httpx.Response(403, json={"Status": "E_INVALID_SIGNATURE", "Data": [], "ErrorCode": 21,
+                                          "ErrorMessage": "Signature value is invalid.", "Error": []})
+    assert _api_error_detail(tme_style) == "21: Signature value is invalid."
+
+    block_page = httpx.Response(403, text="<html>Access Denied</html>")
+    assert _api_error_detail(block_page) is None
+
+
+def test_settings_can_reset_a_paused_provider(client):
+    from app.core.db import SessionLocal
+    from app.providers.safety import _trip_breaker
+
+    with SessionLocal() as db:
+        _trip_breaker(db, "tme", "HTTP 403 (rate limit / block)", 3600)
+    try:
+        got = {p["name"]: p for p in client.get("/api/settings/providers").json()}
+        assert got["tme"]["blocked_until"] is not None
+        assert client.post("/api/settings/providers/tme/reset").status_code == 200
+        got = {p["name"]: p for p in client.get("/api/settings/providers").json()}
+        assert got["tme"]["blocked_until"] is None
+        assert client.post("/api/settings/providers/nope/reset").status_code == 404
+    finally:
+        with SessionLocal() as db:
+            from app.providers.safety import reset_breaker
+            reset_breaker(db, "tme")

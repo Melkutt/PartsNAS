@@ -37,6 +37,7 @@ import base64
 import hashlib
 import hmac
 import os
+import time
 from urllib.parse import quote
 
 from sqlalchemy.orm import Session
@@ -133,6 +134,8 @@ class TMEProvider(Provider):
             return []
 
         by_symbol: dict[str, dict] = {r.get("Symbol"): dict(r) for r in rows if r.get("Symbol")}
+        # a short, polite gap between the follow-up calls - courteous regardless of whether TME
+        # actually enforces a per-second burst limit (undocumented; better safe)
         try:
             details = self._call(db, "Products/GetProducts", {
                 "SymbolList": symbols, "Country": loc["country"], "Language": loc["language"],
@@ -142,6 +145,7 @@ class TMEProvider(Provider):
                     by_symbol[r["Symbol"]].update(r)
         except ProviderError:
             pass  # Search's own fields are already enough for a usable (if thinner) result
+        time.sleep(0.25)
         try:
             prices = self._call(db, "Products/GetPrices", {
                 "SymbolList": symbols, "Country": loc["country"], "Currency": loc["currency"], "Language": loc["language"],
@@ -149,6 +153,7 @@ class TMEProvider(Provider):
             price_by_symbol = {r.get("Symbol"): r.get("PriceList") or [] for r in prices.get("ProductList") or []}
         except ProviderError:
             price_by_symbol = {}
+        time.sleep(0.25)
         try:
             params = self._call(db, "Products/GetParameters", {"SymbolList": symbols, "Language": loc["language"]})
             attrs_by_symbol = {r.get("Symbol"): r.get("ParameterList") or [] for r in params.get("ProductList") or []}

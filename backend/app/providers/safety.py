@@ -93,6 +93,37 @@ def _trip_breaker(db: Session, name: str, why: str, retry_after: int | None) -> 
     return ProviderBlocked(f"{name}: {why} — pausing this provider for {human}", retry_after)
 
 
+def reset_breaker(db: Session, name: str) -> None:
+    """Manually lift a pause (Settings 'Reset' button). Leaves today's used_today count alone -
+    only the block itself is cleared, so a config bug fixed mid-pause doesn't cost the rest of
+    the day's runway too."""
+    st = _load_state(db, name)
+    st["blocked_until"] = None
+    set_kv(db, _state_key(name), st)
+
+
+def _api_error_detail(resp: httpx.Response) -> str | None:
+    """A 403/429 whose body is the API's OWN structured error (not an anti-bot block page) -
+    e.g. TME's {"ErrorCode":21,"ErrorMessage":"..."}. That means the server understood the
+    request and rejected it for a reason it explains - a signature or parameter bug, fixed by a
+    code change, not by waiting. Only an unexplained 403/429 (no such body) trips the breaker;
+    otherwise a bug during development burns the same 8h pause as a real block, every time."""
+    try:
+        j = resp.json()
+    except ValueError:
+        return None
+    if not isinstance(j, dict):
+        return None
+    for key in ("ErrorMessage", "error_description", "error", "message", "Message"):
+        if j.get(key):
+            code = j.get("ErrorCode") or j.get("Status") or j.get("code")
+            return f"{code}: {j[key]}" if code else str(j[key])
+    errs = j.get("Errors") or j.get("errors")
+    if errs:
+        return "; ".join(str(e) for e in (errs if isinstance(errs, list) else [errs]))
+    return None
+
+
 def guarded_request(
     db: Session,
     name: str,
@@ -136,9 +167,14 @@ def guarded_request(
         st["used_today"] += 1
         set_kv(db, _state_key(name), st)
 
-        if resp.status_code in (403, 429) or _looks_blocked(resp):
+        if resp.status_code in (403, 429):
+            detail = _api_error_detail(resp)
+            if detail is not None:
+                raise ProviderError(f"{name}: HTTP {resp.status_code} — {detail}")
             ra = _retry_after(resp)
             raise _trip_breaker(db, name, f"HTTP {resp.status_code} (rate limit / block)", ra)
+        if _looks_blocked(resp):
+            raise _trip_breaker(db, name, "response body looks like a rate-limit/block page", None)
         if resp.status_code >= 500:
             last_err = f"HTTP {resp.status_code}"
             time.sleep(1.5 * (attempt + 1))

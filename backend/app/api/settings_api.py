@@ -2,6 +2,7 @@
 
 `GET  /api/settings/providers`        list with cred fields / configured / quota
 `PUT  /api/settings/providers/{name}` body {creds: {field: value}} — "" clears one
+`POST /api/settings/providers/{name}/reset` lifts a rate-limit/block pause by hand
 `GET  /api/settings/logo`             {logo_url} or {logo_url: null}
 `POST /api/settings/logo`             multipart upload (field: file) — replaces any existing one
 `DELETE /api/settings/logo`           removes it
@@ -29,6 +30,7 @@ from ..core.config import get_settings
 from ..core.db import get_db
 from ..core.kv import get_default_currency, get_default_vat_percent, get_kv, set_kv
 from ..providers import all_providers, get_provider
+from ..providers.safety import reset_breaker
 from ..providers.safety import status as breaker_status
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -99,6 +101,16 @@ def set_creds(name: str, body: CredsBody, db: Session = Depends(get_db)):
     if body.price_enabled is not None:
         set_kv(db, f"provider:{name}:price_enabled", bool(body.price_enabled))
     return {"ok": True, "configured": p.configured(db)}
+
+
+@router.post("/providers/{name}/reset")
+def reset_provider(name: str, db: Session = Depends(get_db)):
+    """Lift a rate-limit/block pause by hand - for when it was tripped by a bug (bad signature,
+    wrong parameter) rather than a real block, and waiting out the timer would just waste it."""
+    if get_provider(name) is None:
+        raise HTTPException(404, "unknown provider")
+    reset_breaker(db, name)
+    return {"ok": True}
 
 
 @router.get("/logo")

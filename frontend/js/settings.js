@@ -54,11 +54,21 @@ export async function openSettings() {
     const status = p.blocked_until
       ? el("span", { style: "color:var(--warn)" }, `paused until ${new Date(p.blocked_until * 1000).toLocaleTimeString()}`)
       : el("span", { style: "color:var(--text-faint)" }, p.configured ? `ready · ${p.used_today}/${p.quota_day} today · ${p.per_min}/min` : "not configured");
+    const resetBtn = p.blocked_until
+      ? el("button", { class: "ghost", style: "font-size:12px;padding:2px 8px",
+          title: "Only useful if the pause was tripped by a bug (bad signature, wrong parameter) rather than a real block — a real block will just trip again",
+          onclick: async () => {
+            await api(`/api/settings/providers/${p.name}/reset`, { method: "POST" });
+            toast(`${p.label} reset`);
+            handle.close();
+            openSettings();
+          } }, "Reset")
+      : null;
     const block = el("div", { style: "border-top:1px solid var(--border);padding-top:10px;margin-top:10px" },
       el("div", { style: "display:flex;gap:8px;align-items:baseline" },
         el("b", {}, p.label),
         el("a", { href: p.website, target: "_blank", style: "font-size:12px" }, "site"),
-        el("span", { style: "flex:1" }), status));
+        el("span", { style: "flex:1" }), status, resetBtn));
     for (const f of p.cred_fields) {
       const inp = el("input", { type: "password", style: "flex:1",
         placeholder: f.from_env ? "(set via environment)" : f.stored ? "•••••• stored — type to replace" : "paste " + f.name,
@@ -271,7 +281,7 @@ export async function openSettings() {
   renderBomRules();
   body.append(bomHost);
 
-  modal({
+  const handle = modal({
     title: "Settings",
     body,
     confirmText: "Save",
