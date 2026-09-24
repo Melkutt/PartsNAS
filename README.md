@@ -114,6 +114,9 @@ matched against what you actually have in stock.
 6. **Placed.** Tick a line as you solder it on. The tick is saved, the row fades, and on the
    board the part turns blue, so you see what is left and can pick the job up again another evening.
    *Clear placed* starts over for the next board.
+   Switch on **One row per component** to give every C1, C2, C3 … its own Placed box (off by default, since
+   the list gets long on a big board); ticking all of a line's components ticks the line, and the reverse.
+   The print dialog has the same choice (also off by default), with a tick box per component on paper.
 7. **Print pick list.** Choose which columns go on the paper (tick box, reference, part, value, where it is,
    per board, needed, on hand, short), and print just the list or the board on page 1 and the list from
    page 2, with front and/or back and the reference names (C1, R2 …) drawn on it. The board is printed
