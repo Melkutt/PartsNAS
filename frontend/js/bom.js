@@ -419,6 +419,9 @@ export class BomView {
   // ---------- Project detail: shortage + build ----------
   async showDetail(id, boards = 1) {
     this.mode = "detail";
+    if (this.splitParts === undefined) {
+      try { this.splitParts = localStorage.getItem("partsnas.bomSplit") === "1"; } catch { this.splitParts = false; }
+    }
     this._destroyBoard();
     const data = await api(`/api/bom/projects/${id}?boards=${boards}`);
     this.el.innerHTML = "";
@@ -486,14 +489,46 @@ export class BomView {
       });
     };
     const activeLines = data.lines.filter((l) => !l.ignored);
-    const placedRefs = () => activeLines.filter((l) => l.placed).flatMap((l) => splitRefs(l.refdes));
+    const refsOf = (ln) => [...new Set(splitRefs(ln.refdes))];
+    const placedRefs = () => activeLines.flatMap((l) => l.placed_refs || []);
     const progress = el("span", { class: "bom-progress no-print" });
     const updateProgress = () => {
       const n = activeLines.filter((l) => l.placed).length;
-      progress.textContent = `Placed ${n} / ${activeLines.length}`;
+      let text = `Placed ${n} / ${activeLines.length}`;
+      if (this.splitParts) text += ` · ${placedRefs().length} / ${activeLines.reduce((k, l) => k + refsOf(l).length, 0)} components`;
+      progress.textContent = text;
       progress.classList.toggle("done", n > 0 && n === activeLines.length);
     };
     updateProgress();
+    if (this.splitParts) table.classList.add("split-on");
+    // each line's row(s), so ticking the line and ticking its components keep each other in step
+    const lineUi = new Map();
+    const paintLine = (ln) => {
+      const u = lineUi.get(ln.id);
+      if (!u) return;
+      const done = new Set(ln.placed_refs || []);
+      u.tr.classList.toggle("bom-placed", !!ln.placed);
+      u.tick.textContent = ln.placed ? "☑" : "☐";
+      if (u.box) { u.box.checked = !!ln.placed; u.box.indeterminate = !ln.placed && done.size > 0; }
+      for (const [ref, sub] of u.subs) {
+        const on = done.has(ref);
+        sub.tr.classList.toggle("bom-placed", on);
+        sub.tick.textContent = on ? "☑" : "☐";
+        sub.box.checked = on;
+      }
+    };
+    const savePlaced = async (ln, body, apply) => {
+      try {
+        await api(`/api/bom/projects/${id}/lines/${ln.id}`, { method: "PATCH", body });
+      } catch (err) {
+        paintLine(ln);
+        return toast(err.message);
+      }
+      apply();
+      paintLine(ln);
+      updateProgress();
+      if (pcb) pcb.setPlaced(placedRefs());
+    };
     table.append(el("tr", {}, el("th", { class: "print-only pick-col c-pick" }, "✓"),
       el("th", { class: "no-print", title: "Tick off each part as you solder it on: it turns blue on the board and the tick is kept, so a half-built board can be picked up again" }, "Placed"),
       el("th", { class: "c-refdes" }, "Refdes"), el("th", { class: "c-part" }, "Part"), el("th", { class: "c-value" }, "Value"),
@@ -512,23 +547,15 @@ export class BomView {
     for (const ln of lines) {
       const short = ln.short;
       const where = !ln.part_id ? "—" : ln.locations.length ? ln.locations.map((l) => `${l.location}: ${l.qty}`).join("  ·  ") : "none in stock";
-      const placedBox = ln.ignored ? null : el("input", { type: "checkbox", checked: ln.placed ? "checked" : null, title: "Placed on the board",
+      const placedBox = ln.ignored ? null : el("input", { type: "checkbox", checked: ln.placed ? "checked" : null, title: "Placed on the board (all of its components)",
         onclick: (e) => e.stopPropagation(),
-        onchange: async (e) => {
+        onchange: (e) => {
           const want = e.target.checked;
-          try {
-            await api(`/api/bom/projects/${id}/lines/${ln.id}`, { method: "PATCH", body: { placed: want } });
-          } catch (err) {
-            e.target.checked = !want;
-            return toast(err.message);
-          }
-          ln.placed = want;
-          rowOf.get(ln.id)?.classList.toggle("bom-placed", want);
-          updateProgress();
-          if (pcb) pcb.setPlaced(placedRefs());
+          savePlaced(ln, { placed: want }, () => { ln.placed = want; ln.placed_refs = want ? refsOf(ln) : []; });
         } });
+      let tickCell;
       const tr = el("tr", { class: `${hasView ? "bom-line-link" : ""}${ln.ignored ? " bom-skipped no-print" : ""}${ln.placed && !ln.ignored ? " bom-placed" : ""}`, onclick: hasView ? () => pickLine(ln, false) : null },
-        el("td", { class: "print-only pick-col c-pick" }, ln.placed && !ln.ignored ? "☑" : "☐"),
+        (tickCell = el("td", { class: "print-only pick-col c-pick" }, ln.placed && !ln.ignored ? "☑" : "☐")),
         el("td", { class: "no-print" }, placedBox),
         // on paper the references are ranges, one per line (C3-8 / C10-11 / C13): narrow, and easy to read down
         el("td", { class: "c-refdes" }, el("span", { class: "ref-screen" }, ln.refdes || ""),
@@ -553,6 +580,31 @@ export class BomView {
             } }, ln.ignored ? "Use" : "Skip")));
       rowOf.set(ln.id, tr);
       table.append(tr);
+      // one row per component (opt-in, on screen and on paper): a tick box for each C1, C2 ...
+      const subs = new Map();
+      const refs = refsOf(ln);
+      if (!ln.ignored && refs.length > 1) {
+        const done = new Set(ln.placed_refs || []);
+        for (const ref of refs) {
+          const box = el("input", { type: "checkbox", checked: done.has(ref) ? "checked" : null, title: `${ref} placed`,
+            onclick: (e) => e.stopPropagation(),
+            onchange: (e) => {
+              const want = e.target.checked;
+              const next = refs.filter((r) => (r === ref ? want : (ln.placed_refs || []).includes(r)));
+              savePlaced(ln, { placed_refs: next }, () => { ln.placed_refs = next; ln.placed = next.length === refs.length; });
+            } });
+          const tick = el("td", { class: "print-only pick-col c-pick" }, done.has(ref) ? "☑" : "☐");
+          const subTr = el("tr", { class: `bom-sub${hasView ? " bom-line-link" : ""}${done.has(ref) ? " bom-placed" : ""}`,
+            onclick: hasView ? () => { if (pcb) pcb.highlight([ref]); } : null },
+            tick, el("td", { class: "no-print" }, box), el("td", { class: "c-refdes ref-sub" }, ref),
+            ...["c-part", "c-value", "c-where", "c-per num", "c-needed num", "c-onhand num", "c-short num", "c-price num"].map((c) => el("td", { class: c })),
+            el("td", { class: "no-print" }));
+          subs.set(ref, { tr: subTr, box, tick });
+          table.append(subTr);
+        }
+      }
+      lineUi.set(ln.id, { tr, tick: tickCell, box: placedBox, subs });
+      paintLine(ln);
     }
     const buildBtn = el("button", { class: "primary", onclick: async () => {
       if (!confirm(`Deduct stock for ${boardsInp.value} board(s)? This is reversible.`)) return;
@@ -564,6 +616,13 @@ export class BomView {
     } }, "Build (deduct stock)");
     const sortChk = el("input", { type: "checkbox", checked: this.sortByLocation ? "checked" : null,
       onchange: (e) => { this.sortByLocation = e.target.checked; this.showDetail(id, boards); } });
+    const splitChk = el("input", { type: "checkbox", checked: this.splitParts ? "checked" : null,
+      onchange: (e) => {
+        this.splitParts = e.target.checked;
+        try { localStorage.setItem("partsnas.bomSplit", this.splitParts ? "1" : "0"); } catch { /* not remembered */ }
+        table.classList.toggle("split-on", this.splitParts);
+        updateProgress();
+      } });
     const skipChk = el("input", { type: "checkbox", checked: this.showSkipped ? "checked" : null,
       onchange: (e) => { this.showSkipped = e.target.checked; this.showDetail(id, boards); } });
     const pickFile = (accept, upload, done) => {
@@ -631,6 +690,7 @@ export class BomView {
       const only = el("input", { type: "radio", name: "pl", checked: withBoard.checked ? null : "checked" });
       const front = chk(true), back = chk(false), names = chk(true);
       const sum = chk(!!prefs.summary);
+      const splitPrint = chk(!!prefs.splitPrint);
       const margin = el("input", { type: "number", min: 0, step: 5, value: prefs.margin ?? 50, style: "width:5em" });
       const showCost = chk(prefs.showCost !== false), showSell = chk(prefs.showSell !== false);
       const showEx = chk(prefs.showEx !== false), showInc = chk(prefs.showInc !== false);
@@ -642,6 +702,8 @@ export class BomView {
         body: el("div", { class: "modal-body" },
           el("div", { class: "section-title" }, "Columns"),
           sub(grid(...PRINT_COLS.map(([k, label]) => opt(cols[k], label)))),
+          el("div", { class: "section-title" }, "Rows"),
+          opt(splitPrint, "One row per component, each with its own tick box (C1, C2, C3 …) — a longer list"),
           el("div", { class: "section-title" }, "Board"),
           opt(only, "The list, from page 1"),
           opt(withBoard, hasBoard ? "The board on page 1, the list from page 2" : "The board on page 1 (attach a .kicad_pcb to the project first)"),
@@ -658,11 +720,12 @@ export class BomView {
           if (sum.checked && !(showEx.checked || showInc.checked)) throw new Error("Price summary: choose Ex VAT and/or Inc VAT");
           if (withBoard.checked && !front.checked && !back.checked) throw new Error("Choose Front and/or Back");
           try {
-            localStorage.setItem("partsnas.bomPrint", JSON.stringify({ cols: c, board: withBoard.checked, summary: sum.checked,
+            localStorage.setItem("partsnas.bomPrint", JSON.stringify({ cols: c, board: withBoard.checked, summary: sum.checked, splitPrint: splitPrint.checked,
               margin: Number(margin.value) || 0, showCost: showCost.checked, showSell: showSell.checked, showEx: showEx.checked, showInc: showInc.checked }));
           } catch { /* private mode: it just is not remembered */ }
 
           const cleanup = [];
+          if (splitPrint.checked) { table.classList.add("print-split"); cleanup.push(() => table.classList.remove("print-split")); }
           for (const [k, on] of Object.entries(c)) if (!on) { table.classList.add(`hide-${k}`); cleanup.push(() => table.classList.remove(`hide-${k}`)); }
           if (sum.checked) {
             const box = priceSummary(Number(margin.value) || 0, showCost.checked, showSell.checked, showEx.checked, showInc.checked);
@@ -722,6 +785,7 @@ export class BomView {
         el("div", { class: "row no-print" }, el("label", {}, "Boards to build"), boardsInp, buildBtn,
           el("span", { style: "flex:1" }),
           skipped.length ? el("label", { title: "Mounting holes, fiducials, logos and other lines that are not part of the build" }, skipChk, ` Show ${skipped.length} skipped`) : null,
+          el("label", { title: "Show every component (C1, C2, C3 ...) on its own row with its own Placed box. The list gets long on a big board, so it is off until you switch it on." }, splitChk, " One row per component"),
           el("label", { title: "Order the lines by shelf, so you can collect the parts in one round" }, sortChk, " Sort by location"),
           el("button", { onclick: () => printDialog() }, "Print pick list")),
         el("div", { class: "row no-print", style: "gap:10px;align-items:center" }, progress,

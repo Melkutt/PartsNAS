@@ -316,3 +316,35 @@ def test_bulk_prices_follow_the_same_rule_as_a_quote(client, db_session=None):
     finally:
         for p in (a, b):
             client.delete(f"/api/parts/{p}")
+
+
+def test_references_can_be_ticked_as_placed_one_by_one(client):
+    pid = client.post("/api/bom/projects", json={"name": "ZZ_REFS proj", "lines": [
+        {"value": "100n", "qty": 3, "refdes": "C1 C2, C3"}, {"value": "1k", "qty": 1, "refdes": "R1"}]}).json()["id"]
+    try:
+        get = lambda: {ln["refdes"]: ln for ln in client.get(f"/api/bom/projects/{pid}").json()["lines"]}  # noqa: E731
+        caps, res = get()["C1 C2, C3"], get()["R1"]
+        assert caps["placed_refs"] == [] and caps["placed"] is False
+        url = f"/api/bom/projects/{pid}/lines/{caps['id']}"
+        assert client.patch(url, json={"placed_refs": ["C2", "C9"]}).status_code == 200      # C9 is not on the line
+        line = get()["C1 C2, C3"]
+        assert line["placed_refs"] == ["C2"] and line["placed"] is False
+        assert client.patch(url, json={"placed_refs": ["C1", "C2", "C3"]}).status_code == 200
+        line = get()["C1 C2, C3"]
+        assert line["placed"] is True and line["placed_refs"] == ["C1", "C2", "C3"]     # all ticked = the line is done
+        assert client.patch(url, json={"placed": False}).status_code == 200
+        assert get()["C1 C2, C3"]["placed_refs"] == [] and get()["C1 C2, C3"]["placed"] is False
+        assert client.patch(url, json={"placed": True}).status_code == 200                # ticking the line ticks all
+        assert get()["C1 C2, C3"]["placed_refs"] == ["C1", "C2", "C3"]
+        # a line ticked before individual ticks existed (placed, no list) still reads as all placed
+        from app.core.db import SessionLocal
+        from app.models import BomLine
+        with SessionLocal() as db:
+            ln = db.get(BomLine, res["id"])
+            ln.placed, ln.placed_refs = True, None
+            db.commit()
+        assert get()["R1"]["placed_refs"] == ["R1"]
+        assert client.post(f"/api/bom/projects/{pid}/placed", json={"placed": False}).status_code == 200
+        assert all(ln["placed_refs"] == [] for ln in get().values())
+    finally:
+        client.delete(f"/api/bom/projects/{pid}")

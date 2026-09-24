@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -81,6 +82,35 @@ class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     notes: str | None = None
     lines: list[LineIn]
+
+
+_REF_SPLIT = re.compile(r"[\s,;]+")
+
+
+def _line_refs(ln: BomLine) -> list[str]:
+    """The references of a line ("C1 C2, C3"), each once, in the order written."""
+    seen: dict[str, None] = {}
+    for r in _REF_SPLIT.split(ln.refdes or ""):
+        if r:
+            seen.setdefault(r)
+    return list(seen)
+
+
+def _placed_refs(ln: BomLine) -> list[str]:
+    """The references of a line that are placed: the ones ticked one by one, or all of them when the whole
+    line was ticked (placed with no individual ticks)."""
+    refs = _line_refs(ln)
+    if ln.placed_refs is not None:
+        have = set(ln.placed_refs)
+        return [r for r in refs if r in have]
+    return refs if ln.placed else []
+
+
+def _set_placed_refs(ln: BomLine, placed: list[str] | None) -> None:
+    refs = _line_refs(ln)
+    have = set(placed or [])
+    ln.placed_refs = [r for r in refs if r in have]
+    ln.placed = bool(refs) and len(ln.placed_refs) == len(refs)
 
 
 def _project_summary(db: Session, p: Project) -> dict:
@@ -158,6 +188,7 @@ def get_project(pid: int, boards: int = 1, db: Session = Depends(get_db)):
             "short": max(0, needed - have) if ln.part_id and not ln.ignored else None,
             "ignored": bool(ln.ignored),
             "placed": bool(ln.placed),
+            "placed_refs": _placed_refs(ln),
             # ex VAT, from the part's preferred supplier price (else the last purchase): what a quote would use
             "unit_cost": cost[0] if cost else None,
             "currency": cost[1] if cost else None,
@@ -228,6 +259,7 @@ def set_placed(pid: int, body: PlacedIn, db: Session = Depends(get_db)):
     want = set(body.line_ids) if body.line_ids is not None else None
     for ln in proj.bom_lines:
         if want is None or ln.id in want:
+            _set_placed_refs(ln, _line_refs(ln) if body.placed else [])
             ln.placed = body.placed
     db.commit()
     return {"ok": True}
@@ -382,6 +414,7 @@ class LinePatch(BaseModel):
     part_id: str | None = None      # another part; null = back to unresolved
     ignored: bool | None = None
     placed: bool | None = None
+    placed_refs: list[str] | None = None    # tick the references of this line one by one
     qty_per_board: float | None = Field(default=None, gt=0)
     remember: bool = False          # with a part: remember Value + Footprint -> this part for later BOMs
 
@@ -404,7 +437,10 @@ def patch_line(pid: int, lid: int, body: LinePatch, db: Session = Depends(get_db
     if data.get("ignored") is not None:
         ln.ignored = bool(data["ignored"])
     if data.get("placed") is not None:
+        _set_placed_refs(ln, _line_refs(ln) if data["placed"] else [])
         ln.placed = bool(data["placed"])
+    if data.get("placed_refs") is not None:
+        _set_placed_refs(ln, data["placed_refs"])
     if data.get("qty_per_board") is not None:
         ln.qty_per_board = data["qty_per_board"]
     db.commit()

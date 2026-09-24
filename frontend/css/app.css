@@ -865,6 +865,11 @@ table.parts-table {
 .bom-panel { overflow-x: auto; }
 .bom-table { width: 100%; }
 .bom-table .ref-print { display: none; }
+/* one row per component: off until switched on (on screen) or chosen in the print dialog */
+.bom-table .bom-sub { display: none; }
+.bom-table.split-on .bom-sub { display: table-row; }
+.bom-table .bom-sub td { border-top: 0; padding-top: 1px; padding-bottom: 1px; }
+.bom-table .ref-sub { padding-left: 18px; color: var(--text-muted); }
 .bom-table td.bom-part { min-width: 240px; max-width: 460px; }
 .bom-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; margin-top: 4px; }
 .bom-controls > select { max-width: 100%; min-width: 0; }
@@ -885,6 +890,10 @@ table.parts-table {
   .bom-table td.num { white-space: nowrap; }
   .bom-table .ref-screen { display: none; }
   .bom-table .ref-print { display: block; white-space: nowrap; }
+  .bom-table .bom-sub { display: none !important; }
+  .bom-table.print-split .bom-sub { display: table-row !important; }
+  .bom-table .ref-sub { color: #000; }
+  .bom-table .bom-sub td { padding-top: 0; padding-bottom: 0; }
   .bom-table td.c-refdes { width: 1%; }
   .bom-table .hint { font-size: 9px; }
   .bom-where { color: #000 !important; font-size: 10px; }

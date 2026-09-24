@@ -267,6 +267,10 @@ class BomLine(Base):
     ignored: Mapped[bool] = mapped_column(default=False)
     # ticked off while assembling ("Placed"), so a half-built board can be picked up again later
     placed: Mapped[bool] = mapped_column(default=False)
+    # which of this line's references (C1, C2 ...) are placed, when they are ticked one by one. NULL = not
+    # ticked individually: then `placed` alone says all or none. `placed` is true exactly when every
+    # reference of the line is placed.
+    placed_refs: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     project: Mapped["Project"] = relationship(back_populates="bom_lines")
     part: Mapped["Part | None"] = relationship()
