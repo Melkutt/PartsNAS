@@ -214,6 +214,11 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 
 ---
 
+## Documentation
+
+More detailed pages live in [`docs/`](docs/index.md): [BOM and building a board](docs/bom.md),
+[KiCad](docs/kicad.md) and [Troubleshooting](docs/troubleshooting.md). More are planned.
+
 ## Your first ten minutes
 
 1. **Look around.** The category tree is already filled in (passives, semiconductors,
