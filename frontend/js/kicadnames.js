@@ -15,10 +15,12 @@ export function httplibFile(origin) {
 
 const short = (fp) => String(fp || "").split(":").pop();
 
-export async function openKicadNames(onDone) {
+/** `scope` = {id, name} of the category picked in the Parts list: only parts in it (and below it) are considered. */
+export async function openKicadNames(onDone, scope = null) {
+  const cat = scope && scope.id ? `&category_id=${scope.id}` : "";
   let prefer = "hand";
   try { prefer = localStorage.getItem("partsnas.kicadPrefer") || "hand"; } catch { /* default */ }
-  let data = await api(`/api/kicad/suggest?prefer=${prefer}`);
+  let data = await api(`/api/kicad/suggest?prefer=${prefer}${cat}`);
   const picked = new Set();
   const count = el("span", { class: "hint", style: "padding:0" });
   const listHost = el("div");
@@ -28,12 +30,13 @@ export async function openKicadNames(onDone) {
   const paint = () => { count.textContent = `${picked.size} of ${data.proposals.length} selected`; };
   const render = () => {
     picked.clear();
-    data.proposals.forEach((p) => picked.add(p.id));
+    data.proposals.filter((p) => !p.assumed).forEach((p) => picked.add(p.id));     // a guess is never ticked for you
     boxes = [];
     summary.textContent =
+      (data.scope ? `Only parts in ${data.scope} (and below it) are considered. ` : "Every part is considered - pick a category in the list on the left first to narrow it down. ") +
       `${data.ready} part${data.ready === 1 ? " is" : "s are"} ready: they have both a KiCad symbol and a footprint ` +
       "(each written with its library, like Device:C and Capacitor_SMD:C_0603_1608Metric). Set them by hand on a part's details, " +
-      "or let PartsNAS name the standard SMD resistors, ceramic capacitors, inductors and LEDs below. " +
+      "or let PartsNAS name them below: standard SMD resistors, ceramic capacitors, inductors and LEDs from category and size, and ICs, transistors and diodes from the footprint rules (Settings). " +
       `${data.other} other part${data.other === 1 ? "" : "s"} (ICs, connectors, …) still need naming by hand. A name you have typed yourself is never replaced.`;
     listHost.innerHTML = "";
     if (!data.proposals.length) {
@@ -41,18 +44,21 @@ export async function openKicadNames(onDone) {
       return;
     }
     const table = el("table", { class: "mini-table", style: "width:100%" });
-    table.append(el("tr", {}, el("th", {}, ""), el("th", {}, "Part"), el("th", {}, "Package"),
+    table.append(el("tr", {}, el("th", {}, ""), el("th", {}, "Part"), el("th", {}, "Package"), el("th", {}, "Rule"),
       el("th", {}, "KiCad symbol"), el("th", {}, "Default footprint"), el("th", {}, "Also offered")));
     for (const p of data.proposals) {
-      const box = el("input", { type: "checkbox", checked: "checked", onchange: (e) => { e.target.checked ? picked.add(p.id) : picked.delete(p.id); paint(); } });
+      const box = el("input", { type: "checkbox", checked: p.assumed ? null : "checked", onchange: (e) => { e.target.checked ? picked.add(p.id) : picked.delete(p.id); paint(); } });
       boxes.push(box);
       const keeps = el("span", { class: "pill-off" }, "keeps its own");
       table.append(el("tr", {}, el("td", {}, box), el("td", {}, p.name, el("div", { class: "hint", style: "padding:0" }, p.category)),
-        el("td", {}, p.footprint_raw || ""), el("td", {}, p.symbol || keeps.cloneNode(true)),
+        el("td", {}, p.package || p.footprint_raw || ""),
+        el("td", {}, p.rule ? el("span", { class: "hint", style: "padding:0",
+          title: p.assumed ? "Only a guess of the common variant: check it before you tick it" : "A certain rule" }, (p.assumed ? "⚠ " : "") + p.rule) : ""),
+        el("td", {}, p.symbol || keeps.cloneNode(true)),
         el("td", {}, p.footprint ? short(p.footprint) : keeps),
         el("td", {}, p.alts.length ? p.alts.map((a) => el("div", {}, short(a))) : el("span", { class: "pill-off" }, "—"))));
     }
-    const all = el("input", { type: "checkbox", checked: "checked", onchange: (e) => {
+    const all = el("input", { type: "checkbox", checked: data.proposals.some((p) => p.assumed) ? null : "checked", onchange: (e) => {
       boxes.forEach((b) => { b.checked = e.target.checked; });
       picked.clear();
       if (e.target.checked) data.proposals.forEach((p) => picked.add(p.id));
@@ -66,7 +72,7 @@ export async function openKicadNames(onDone) {
   const preferSel = el("select", { onchange: async (e) => {
     prefer = e.target.value;
     try { localStorage.setItem("partsnas.kicadPrefer", prefer); } catch { /* not remembered */ }
-    data = await api(`/api/kicad/suggest?prefer=${prefer}`);
+    data = await api(`/api/kicad/suggest?prefer=${prefer}${cat}`);
     render();
   } }, el("option", { value: "hand" }, "hand-solder pads"), el("option", { value: "standard" }, "standard pads"));
   preferSel.value = prefer;
@@ -96,13 +102,13 @@ export async function openKicadNames(onDone) {
     listHost);
 
   modal({
-    title: "KiCad",
+    title: scope && scope.name ? `KiCad - ${scope.name}` : "KiCad - all parts",
     wide: "min(1100px, 96vw)",
     confirmText: "Name the selected parts",
     body,
     onConfirm: async () => {
       if (!data.proposals.length || !picked.size) return;
-      const r = await api("/api/kicad/apply", { method: "POST", body: { ids: [...picked], prefer } });
+      const r = await api("/api/kicad/apply", { method: "POST", body: { ids: [...picked], prefer, category_id: scope && scope.id ? scope.id : null } });
       toast(`Named ${r.updated} part${r.updated === 1 ? "" : "s"} for KiCad`);
       onDone && onDone();
     },

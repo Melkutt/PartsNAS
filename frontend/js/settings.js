@@ -85,6 +85,45 @@ export async function openSettings() {
     body.append(block);
   }
 
+  // ---- KiCad footprint rules ----
+  const kicadRules = await api("/api/kicad/rules");
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "KiCad footprint rules"));
+  body.append(el("div", { class: "hint" },
+    "Turn a package text into a KiCad footprint. A rule matches when ALL its patterns (regular expressions, any case) match: " +
+    "Case = the supplier's Package / Case, Device = its Supplier Device Package, Footprint = your own Footprint text. " +
+    "Scope = a word the category must contain. Tick 'guess' for a rule that only assumes the common variant: it is proposed unticked. " +
+    "Your rules are tried first, then the built-in ones. A new part gets its KiCad footprint from a certain rule straight away."));
+  const rulesHost = el("div");
+  const ruleRowsK = [];
+  const addRuleRow = (r = {}) => {
+    const w = r.when || {};
+    const f = (v, ph, wd) => el("input", { type: "text", value: v || "", placeholder: ph, style: `width:${wd}px` });
+    const row = { id: f(r.id, "name", 90), case_: f(w.case, "Case pattern", 150), device: f(w.device, "Device pattern", 120),
+      raw: f(w.raw, "Footprint pattern", 110), scope: f(r.scope, "Scope", 70), fp: f(r.footprint, "Library:Footprint", 260),
+      guess: el("input", { type: "checkbox", checked: r.assumed ? "checked" : null, title: "only a guess of the common variant" }) };
+    row.el = el("div", { class: "row", style: "gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px" },
+      row.id, row.case_, row.device, row.raw, row.scope, row.fp, el("label", { style: "display:flex;gap:3px;align-items:center" }, row.guess, "guess"),
+      el("button", { class: "ghost", title: "Remove this rule", onclick: () => { ruleRowsK.splice(ruleRowsK.indexOf(row), 1); row.el.remove(); } }, "✕"));
+    ruleRowsK.push(row);
+    rulesHost.append(row.el);
+  };
+  kicadRules.user.forEach(addRuleRow);
+  body.append(rulesHost);
+  body.append(el("div", { class: "row", style: "margin-top:6px;align-items:center;gap:12px" },
+    el("button", { class: "ghost", onclick: () => addRuleRow() }, "+ Add rule"),
+    el("span", { class: "hint", style: "padding:0" }, `${kicadRules.defaults.length} built-in rules`)));
+  const builtin = el("details", { style: "margin-top:4px" }, el("summary", { class: "hint" }, "Show the built-in rules"));
+  const bt = el("table", { class: "mini-table", style: "width:100%;margin-top:4px" });
+  bt.append(el("tr", {}, el("th", {}, "Rule"), el("th", {}, "Matches"), el("th", {}, "KiCad footprint")));
+  for (const r of kicadRules.defaults) {
+    const w = r.when || {};
+    bt.append(el("tr", {}, el("td", {}, (r.assumed ? "⚠ " : "") + r.id),
+      el("td", { style: "font-family:monospace;font-size:11px" }, Object.entries(w).map(([k, v]) => `${k}: ${v}`).join("   ")),
+      el("td", {}, r.footprint)));
+  }
+  builtin.append(bt);
+  body.append(builtin);
+
   // ---- automatic backup ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Automatic backup"));
   body.append(el("div", { class: "hint" },
@@ -300,6 +339,10 @@ export async function openSettings() {
       const rules = ruleRows
         .filter((e) => e.pat.value.trim() && e.cat.value)
         .map((e) => ({ pattern: e.pat.value.trim(), regex: e.rx.checked, category_id: Number(e.cat.value), note: e.note.value.trim() }));
+      const kr = ruleRowsK.filter((r) => r.case_.value.trim() || r.device.value.trim() || r.raw.value.trim() || r.fp.value.trim()).map((r) => ({
+        id: r.id.value.trim(), when: { case: r.case_.value.trim(), device: r.device.value.trim(), raw: r.raw.value.trim() },
+        scope: r.scope.value.trim(), footprint: r.fp.value.trim(), assumed: r.guess.checked }));
+      await api("/api/kicad/rules", { method: "PUT", body: { rules: kr } });
       const res = await api("/api/meta/attr-rules", { method: "PUT", body: { rules } });
       toast(`Saved ${n} provider(s), ${res.count} rule(s)`);
     },

@@ -147,6 +147,10 @@ draw text, use *Replace board…* once with the same file.
   (`Device:C`, `Capacitor_SMD:C_0603_1608Metric`). Set them on a part's details, or let **KiCad…** name the
   standard SMD resistors, ceramic capacitors, inductors and LEDs from their category and package size, with a
   preview. Names you have typed yourself are never replaced; ICs and connectors are named by hand.
+- **Footprints for ICs, transistors and diodes** come from editable rules (Settings → KiCad footprint rules) that
+  read the supplier's package text, including the width (`8-SOIC (0.154", 3.90mm Width)`), so a narrow and a wide SOIC-8
+  are told apart. **KiCad…** works on the category you have selected, and a new part gets its KiCad footprint
+  automatically when a rule is certain. See [docs/kicad.md](docs/kicad.md).
 - **Several footprints per part.** A part has one default footprint and, under *Other KiCad footprints*, any
   number of others (one per line). Each other footprint also shows up as its own entry in KiCad's chooser
   ("100n 25V X7R · C_0603_1608Metric"), so you pick the pads when you place it, and KiCad's footprint chooser

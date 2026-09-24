@@ -191,7 +191,12 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   = others (one per line); each alt is ALSO its own entry (`<part id>~<n>`, name "<name> · <footprint>") and every
   part carries `footprint_filters` (wildcard for the default's package + the alts). `kicadlib._HAND` = KiCad's
   hand-solder pad names (checked against kicad.github.io/footprints); suggest/apply take `prefer=hand|standard`.
-  Not yet tried in a real KiCad - built from the spec.
+  Footprint RULES (`backend/app/kicadrules.py`, defaults in `seed/kicad_footprint_rules.json`, user rules in Setting
+  `kicad:footprint_rules`, edited in Settings): `when` = regexes on `case` (packagecase), `device` (supplierdevicepackage),
+  `raw` (footprint_raw), optional `scope`, `assumed` = a guess (proposed unticked); user rules first, first match wins.
+  `GET/POST /api/kicad/suggest|apply` take `category_id` (subtree scope). `auto_footprint()` runs on part create and
+  apply-lookup (certain rules only, empty field only); apply-lookup also fills an empty `footprint_raw` via
+  `normalize_package` ("8-SOIC" -> "SOIC-8"). Worked in a real KiCad 10 for the author.
 - Duplicate MPNs (`app/dupes.py`, case/punctuation ignored) are only ever *reported*: list chip,
   `Same MPN` filter, part banner, `GET /api/parts/check-mpn`, `GET /api/parts/duplicates`.
 

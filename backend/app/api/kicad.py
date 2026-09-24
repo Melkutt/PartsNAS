@@ -27,8 +27,9 @@ from sqlalchemy.orm import Session
 from ..bommatch import _VALUE_KEYS, _pick_attr, part_summary
 from ..core.db import get_db
 from ..kicadlib import footprint_filters, is_named, reference_for, split_footprints, suggest_names
+from ..kicadrules import all_rules, default_rules, match_rule, package_texts, save_user_rules, user_rules
 from ..models import Part
-from ..services import category_path_map
+from ..services import category_path_map, descendant_category_ids
 
 router = APIRouter(prefix="/api/kicad", tags=["kicad"])
 
@@ -108,17 +109,25 @@ def one_part(pid: str, db: Session = Depends(get_db)):
 
 # ---- names for standard passives (Parts -> "KiCad names...") -----------------------------------
 
-def _proposals(db: Session, prefer: str = "standard") -> tuple[list[dict], int, int]:
-    """(proposals, ready count, parts with nothing to suggest). A proposal only ever fills what is EMPTY: the
-    default footprint and the alternatives are filled separately, and the alternatives only when the part's
-    footprint is the one suggested here (a footprint typed by hand is not second-guessed)."""
+def _proposals(db: Session, prefer: str = "standard", category_id: int | None = None) -> tuple[list[dict], int, int]:
+    """(proposals, ready count, parts with nothing to suggest) - for one category and everything below it, or
+    all parts. A proposal only ever fills what is EMPTY: the default footprint and the alternatives are filled
+    separately, and the alternatives only when the part's footprint is the one suggested here (a footprint typed
+    by hand is not second-guessed). Standard SMD passives are named from category + package size, everything
+    else from the footprint rules (`assumed` ones are proposed, but unticked)."""
     paths = category_path_map(db)
+    rules = all_rules(db)
+    scope = descendant_category_ids(db, category_id) if category_id else None
     proposals: list[dict] = []
     ready = other = 0
     for p in db.scalars(select(Part)).all():
+        if scope is not None and p.category_id not in scope:
+            continue
         s = suggest_names(paths.get(p.category_id), p.footprint_raw, prefer)
         symbol = footprint = None
         alts: list[str] = []
+        rule = None
+        assumed = False
         if s:
             symbol = None if (p.kicad_symbol or "").strip() else s["symbol"]
             footprint = None if (p.kicad_footprint or "").strip() else s["footprint"]
@@ -127,11 +136,21 @@ def _proposals(db: Session, prefer: str = "standard") -> tuple[list[dict], int, 
             if ours and not (p.kicad_footprint_alts or "").strip():
                 keep = footprint or p.kicad_footprint
                 alts = [o for o in options if o != keep]
+        else:
+            have = (p.kicad_footprint or "").strip()
+            hit = match_rule(rules, package_texts(p.attributes, p.footprint_raw), paths.get(p.category_id))
+            if hit and not have:
+                footprint, rule, assumed = hit["footprint"], hit["rule"], hit["assumed"]
+            elif hit and ":" not in have and hit["footprint"].split(":", 1)[1] == have:
+                # the right footprint typed without its library: only the library is missing, so add it
+                footprint, rule, assumed = hit["footprint"], f"{hit['rule']} (adds the library)", hit["assumed"]
         named = is_named(p.kicad_symbol, p.kicad_footprint)
         ready += named
-        if s and (symbol or footprint or alts):
+        if symbol or footprint or alts:
             proposals.append({"id": p.id, "name": p.name, "category": _cat_name(paths, p.category_id),
-                              "footprint_raw": p.footprint_raw, "symbol": symbol, "footprint": footprint, "alts": alts})
+                              "footprint_raw": p.footprint_raw, "symbol": symbol, "footprint": footprint, "alts": alts,
+                              "rule": rule, "assumed": assumed,
+                              "package": " | ".join(t for t in package_texts(p.attributes, None).values() if t)})
         elif not named:
             other += 1
     proposals.sort(key=lambda x: (x["category"], x["name"].lower()))
@@ -143,21 +162,24 @@ def _prefer(value: str) -> str:
 
 
 @router.get("/suggest")
-def suggest(prefer: str = "standard", db: Session = Depends(get_db)):
-    proposals, ready, other = _proposals(db, _prefer(prefer))
-    return {"ready": ready, "proposals": proposals, "other": other}
+def suggest(prefer: str = "standard", category_id: int | None = None, db: Session = Depends(get_db)):
+    proposals, ready, other = _proposals(db, _prefer(prefer), category_id)
+    paths = category_path_map(db)
+    return {"ready": ready, "proposals": proposals, "other": other,
+            "scope": _cat_name(paths, category_id) if category_id else None}
 
 
 class ApplyIn(BaseModel):
     ids: list[str]
     prefer: str = "standard"      # "hand": hand-solder pads are the default footprint, the standard ones an alternative
+    category_id: int | None = None
 
 
 @router.post("/apply")
 def apply(body: ApplyIn, db: Session = Depends(get_db)):
     """Fill in the suggested names for these parts. Only empty fields are written - a name you have typed yourself
     is never replaced."""
-    proposals, _ready_n, _other = _proposals(db, _prefer(body.prefer))
+    proposals, _ready_n, _other = _proposals(db, _prefer(body.prefer), body.category_id)
     want = set(body.ids)
     n = 0
     for pr in proposals:
@@ -173,3 +195,23 @@ def apply(body: ApplyIn, db: Session = Depends(get_db)):
         n += 1
     db.commit()
     return {"updated": n}
+
+
+# ---- the footprint rules (Settings) ------------------------------------------------------------
+
+class RulesIn(BaseModel):
+    rules: list[dict]
+
+
+@router.get("/rules")
+def get_rules(db: Session = Depends(get_db)):
+    """`user`: your own rules (tried first), `defaults`: the built-in ones (read only)."""
+    return {"user": user_rules(db), "defaults": default_rules()}
+
+
+@router.put("/rules")
+def put_rules(body: RulesIn, db: Session = Depends(get_db)):
+    try:
+        return {"user": save_user_rules(db, body.rules)}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e

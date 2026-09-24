@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..catmatch import match_category
+from ..kicadrules import auto_footprint, footprint_text_from_lookup
 from ..core.db import get_db
 from ..models import Part, PartSupplier, Supplier
 from ..providers import all_providers, get_provider
@@ -231,6 +232,15 @@ def apply_lookup(pid: str, body: ApplyBody, db: Session = Depends(get_db)):
         attrs.update({k: v for k, v in ap.attributes.items() if v not in (None, "")})
         part.attributes = attrs
         changed.append(f"{len(ap.attributes)} attribute(s)")
+
+    # the Footprint text, written the way people write it (the supplier's "8-SOIC" -> "SOIC-8"), when empty
+    if not (part.footprint_raw or "").strip():
+        fp = footprint_text_from_lookup({**(r.get("attributes") or {}), **(part.attributes or {})})
+        if fp:
+            part.footprint_raw = fp
+            changed.append("footprint")
+    if auto_footprint(db, part, r.get("attributes")):
+        changed.append("KiCad footprint")
 
     if ap.lifecycle and r.get("lifecycle"):
         lc = r["lifecycle"].lower()

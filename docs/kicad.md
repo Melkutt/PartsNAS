@@ -21,6 +21,31 @@ library:
 A part without a library prefix (`C_0603_1608Metric`) is not ready, because KiCad could not find it. Set the two
 fields on a part's details page (*KiCad symbol*, *KiCad footprint*).
 
+### Footprint rules for ICs, transistors and diodes
+
+Standard passives are named from category and size (below). Everything else with a package (SOIC, SOT-23, TO-220,
+TQFP, DIP, diodes …) is named by **footprint rules**. A rule has patterns that must all match:
+
+| Pattern on | Reads | Example |
+|---|---|---|
+| `case` | the supplier's *Package / Case* (attribute `packagecase`) | `8-SOIC (0.154", 3.90mm Width)` |
+| `device` | the supplier's *Supplier Device Package* | `8-VSSOP` |
+| `raw` | your own *Footprint* text | `SOIC-8` |
+
+The width in *Package / Case* is what tells a narrow SOIC-8 (3.9 mm) from a wide one (5.3 mm), which your own
+`SOIC-8` cannot. Rules that only read your own text are **guesses** of the common variant: they are proposed but not
+ticked. The first matching rule wins; **your own rules (Settings → KiCad footprint rules) are tried before the
+built-in ones**, and the built-in ones can be read there. Names that need more information (QFN and DFN pad sizes,
+exposed-pad variants, modules) are left for you to name by hand.
+
+**Scope.** Select a category in the Parts list first, then press **KiCad…**: only parts in that category (and below
+it) are considered. With no category selected, every part is.
+
+**New parts.** A new part gets its KiCad footprint straight away when a *certain* rule matches (never a guess), and
+a *Look up specs* fills in *Footprint* the way people write it (the supplier's `8-SOIC` becomes `SOIC-8`) and then the
+KiCad footprint. Existing values are never replaced. A footprint typed without its library (`SOIC-8_3.9x4.9mm_P1.27mm`)
+is completed with it when a rule confirms that it is the right one.
+
 ### Naming standard passives automatically
 
 On the **Parts** tab, **KiCad…** opens a dialog that names the standard SMD resistors, ceramic capacitors,
