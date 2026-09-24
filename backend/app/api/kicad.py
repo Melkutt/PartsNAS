@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from ..bommatch import _VALUE_KEYS, _pick_attr, part_summary
 from ..core.db import get_db
 from ..kicadlib import footprint_filters, is_named, reference_for, split_footprints, suggest_names
-from ..kicadrules import all_rules, default_rules, match_rule, package_texts, save_user_rules, user_rules
+from ..kicadrules import all_rules, default_rules, get_prefer, match_rule, package_texts, save_user_rules, set_prefer, user_rules
 from ..models import Part
 from ..services import category_path_map, descendant_category_ids
 
@@ -215,3 +215,18 @@ def put_rules(body: RulesIn, db: Session = Depends(get_db)):
         return {"user": save_user_rules(db, body.rules)}
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+class PrefIn(BaseModel):
+    prefer: str
+
+
+@router.get("/prefs")
+def get_prefs(db: Session = Depends(get_db)):
+    return {"prefer": get_prefer(db)}
+
+
+@router.put("/prefs")
+def put_prefs(body: PrefIn, db: Session = Depends(get_db)):
+    """Which pads a standard passive gets as its default footprint - also for parts added from now on."""
+    return {"prefer": set_prefer(db, body.prefer)}

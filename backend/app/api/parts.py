@@ -26,7 +26,7 @@ from ..bommatch import parse_component_value, part_value_number, same_value
 from ..dupes import duplicate_counts, duplicate_ids, norm_mpn, parts_with_mpn
 from ..models import Category, Part, StockEntry, Tag
 from ..partschema import fields_for, part_class_schema
-from ..kicadrules import auto_footprint
+from ..kicadrules import auto_names
 from ..services import (
     category_class_map,
     category_path,
@@ -554,7 +554,7 @@ def create_part(body: PartIn, db: Session = Depends(get_db)):
         attributes=body.attributes,
     )
     p.tags = _resolve_tags(db, body.tags)
-    auto_footprint(db, p)        # a KiCad footprint straight away, when a rule is certain of it
+    auto_names(db, p)            # KiCad symbol / footprint straight away, when they are certain
     db.add(p)
     db.commit()
     return {"id": p.id}

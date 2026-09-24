@@ -41,7 +41,13 @@ exposed-pad variants, modules) are left for you to name by hand.
 **Scope.** Select a category in the Parts list first, then press **KiCad…**: only parts in that category (and below
 it) are considered. With no category selected, every part is.
 
-**New parts.** A new part gets its KiCad footprint straight away when a *certain* rule matches (never a guess), and
+**New parts.** A new standard SMD resistor, ceramic capacitor, inductor or LED (a size code like `0603` in
+*Footprint*) gets its KiCad **symbol** (`Device:R`, `Device:C`, `Device:L`, `Device:LED`) and its default footprint
+straight away, with the other pad kind as an alternative; which pads are the default is the *Default footprint*
+choice in the **KiCad…** dialog, which is remembered. **Transistors and ICs get no symbol automatically**: their
+pins are numbered differently from part to part (KiCad has `Q_NPN_BEC`, `Q_NPN_BCE`, `Q_NPN_CBE` … and there is no
+generic IC symbol), so a guess would be a silent wiring mistake. Name those by hand, or with the footprint rules for
+the footprint. A new part also gets its KiCad footprint straight away when a *certain* rule matches (never a guess), and
 a *Look up specs* fills in *Footprint* the way people write it (the supplier's `8-SOIC` becomes `SOIC-8`) and then the
 KiCad footprint. Existing values are never replaced. A footprint typed without its library (`SOIC-8_3.9x4.9mm_P1.27mm`)
 is completed with it when a rule confirms that it is the right one.

@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..catmatch import match_category
-from ..kicadrules import auto_footprint, footprint_text_from_lookup
+from ..kicadrules import auto_names, footprint_text_from_lookup
 from ..core.db import get_db
 from ..models import Part, PartSupplier, Supplier
 from ..providers import all_providers, get_provider
@@ -239,8 +239,8 @@ def apply_lookup(pid: str, body: ApplyBody, db: Session = Depends(get_db)):
         if fp:
             part.footprint_raw = fp
             changed.append("footprint")
-    if auto_footprint(db, part, r.get("attributes")):
-        changed.append("KiCad footprint")
+    if auto_names(db, part, r.get("attributes")):
+        changed.append("KiCad symbol / footprint")
 
     if ap.lifecycle and r.get("lifecycle"):
         lc = r["lifecycle"].lower()

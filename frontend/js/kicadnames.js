@@ -18,8 +18,7 @@ const short = (fp) => String(fp || "").split(":").pop();
 /** `scope` = {id, name} of the category picked in the Parts list: only parts in it (and below it) are considered. */
 export async function openKicadNames(onDone, scope = null) {
   const cat = scope && scope.id ? `&category_id=${scope.id}` : "";
-  let prefer = "hand";
-  try { prefer = localStorage.getItem("partsnas.kicadPrefer") || "hand"; } catch { /* default */ }
+  let prefer = (await api("/api/kicad/prefs")).prefer;     // remembered on the server: new parts use it too
   let data = await api(`/api/kicad/suggest?prefer=${prefer}${cat}`);
   const picked = new Set();
   const count = el("span", { class: "hint", style: "padding:0" });
@@ -71,7 +70,7 @@ export async function openKicadNames(onDone, scope = null) {
 
   const preferSel = el("select", { onchange: async (e) => {
     prefer = e.target.value;
-    try { localStorage.setItem("partsnas.kicadPrefer", prefer); } catch { /* not remembered */ }
+    await api("/api/kicad/prefs", { method: "PUT", body: { prefer } });
     data = await api(`/api/kicad/suggest?prefer=${prefer}${cat}`);
     render();
   } }, el("option", { value: "hand" }, "hand-solder pads"), el("option", { value: "standard" }, "standard pads"));
@@ -98,7 +97,7 @@ export async function openKicadNames(onDone, scope = null) {
     summary,
     el("div", { class: "row", style: "align-items:center;gap:8px" },
       el("label", { style: "display:flex;gap:6px;align-items:center" }, "Default footprint:", preferSel),
-      el("span", { class: "hint", style: "padding:0" }, "the other kind is offered too, as its own entry in KiCad's chooser")),
+      el("span", { class: "hint", style: "padding:0" }, "the other kind is offered too, as its own entry in KiCad's chooser. Also used for parts you add from now on.")),
     listHost);
 
   modal({

@@ -136,16 +136,49 @@ def footprint_text_from_lookup(attributes: dict | None) -> str | None:
     return normalize_package(texts["device"]) or normalize_package(texts["case"])
 
 
-def auto_footprint(db: Session, part, extra: dict | None = None) -> bool:
-    """Give a part its KiCad footprint from the rules - but only when it has none and a rule is CERTAIN (not
-    `assumed`). Used when a part is created and when a lookup fills in its package attributes."""
+_PREFER_KEY = "kicad:prefer"
+
+
+def get_prefer(db: Session) -> str:
+    """Which pads a standard passive gets as its default footprint: "hand" (hand-solder, the default) or "standard"."""
+    return "standard" if get_kv(db, _PREFER_KEY, "hand") == "standard" else "hand"
+
+
+def set_prefer(db: Session, value: str) -> str:
+    value = "standard" if value == "standard" else "hand"
+    set_kv(db, _PREFER_KEY, value)
+    return value
+
+
+def auto_names(db: Session, part, extra: dict | None = None) -> bool:
+    """Give a new part its KiCad names when they are certain, filling only what is EMPTY. Used when a part is
+    created and when a lookup fills in its package.
+
+    * a standard SMD resistor, ceramic capacitor, inductor or LED (category + package size): symbol
+      (Device:R, C, L, LED), default footprint (hand-solder or standard pads, per the KiCad… setting) and the
+      other kind as an alternative;
+    * anything else: the footprint from a certain (not `assumed`) footprint rule.
+    Transistors and ICs get no symbol: their pins are numbered differently from part to part (Q_NPN_BEC / _BCE /
+    _CBE …), so a guess would be a silent wiring mistake."""
+    from .kicadlib import suggest_names
     from .services import category_path
 
+    path = category_path(db, part.category_id)
+    changed = False
+    s = suggest_names(path, part.footprint_raw, get_prefer(db))
+    if s:
+        if not (part.kicad_symbol or "").strip():
+            part.kicad_symbol, changed = s["symbol"], True
+        if not (part.kicad_footprint or "").strip():
+            part.kicad_footprint, changed = s["footprint"], True
+            if not (part.kicad_footprint_alts or "").strip() and s["alts"]:
+                part.kicad_footprint_alts = "\n".join(s["alts"])
+        return changed
     if (part.kicad_footprint or "").strip():
         return False
     texts = package_texts({**(extra or {}), **(part.attributes or {})}, part.footprint_raw)
-    hit = match_rule(all_rules(db), texts, category_path(db, part.category_id))
-    if not hit or hit["assumed"]:
-        return False
-    part.kicad_footprint = hit["footprint"]
-    return True
+    hit = match_rule(all_rules(db), texts, path)
+    if hit and not hit["assumed"]:
+        part.kicad_footprint = hit["footprint"]
+        return True
+    return False

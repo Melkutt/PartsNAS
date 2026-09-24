@@ -80,6 +80,9 @@ def test_suggested_names_fill_only_what_is_empty(client):
     a = client.post("/api/parts", json={"name": "ZZ_SUGG 100n", "mpn": "ZZ-S-1", "category_id": ceramic["id"], "footprint_raw": "0603"}).json()["id"]
     b = client.post("/api/parts", json={"name": "ZZ_SUGG own", "mpn": "ZZ-S-2", "category_id": ceramic["id"], "footprint_raw": "0402",
                                         "kicad_footprint": "My_Lib:My_C_0402"}).json()["id"]
+    # new parts are named on creation now: clear the names, to see what an EXISTING part would be offered
+    client.patch(f"/api/parts/{a}", json={"kicad_symbol": None, "kicad_footprint": None, "kicad_footprint_alts": None})
+    client.patch(f"/api/parts/{b}", json={"kicad_symbol": None, "kicad_footprint_alts": None})
     try:
         sug = client.get("/api/kicad/suggest").json()
         by = {p["id"]: p for p in sug["proposals"]}
@@ -143,6 +146,7 @@ def test_suggestions_offer_the_other_kind_of_pads_and_respect_the_default(client
                 return got
     ceramic = find(cats, "Ceramic")
     a = client.post("/api/parts", json={"name": "ZZ_SUGG2 100n", "mpn": "ZZ-S-3", "category_id": ceramic["id"], "footprint_raw": "0603"}).json()["id"]
+    client.patch(f"/api/parts/{a}", json={"kicad_symbol": None, "kicad_footprint": None, "kicad_footprint_alts": None})
     try:
         std = {p["id"]: p for p in client.get("/api/kicad/suggest?prefer=standard").json()["proposals"]}[a]
         hand = {p["id"]: p for p in client.get("/api/kicad/suggest?prefer=hand").json()["proposals"]}[a]
@@ -154,3 +158,41 @@ def test_suggestions_offer_the_other_kind_of_pads_and_respect_the_default(client
         assert client.post("/api/kicad/apply", json={"ids": [a], "prefer": "standard"}).json()["updated"] == 0   # already filled: left alone
     finally:
         client.delete(f"/api/parts/{a}")
+
+
+def test_a_new_passive_gets_symbol_and_footprint_and_the_pad_choice_is_remembered(client):
+    cats = client.get("/api/categories").json()
+
+    def find(nodes, name):
+        for n in nodes:
+            if n["name"] == name:
+                return n
+            got = find(n.get("children") or [], name)
+            if got:
+                return got
+    ceramic, ics = find(cats, "Ceramic"), find(cats, "Op-amp")
+    ids = []
+
+    def new(name, cat, **kw):
+        i = client.post("/api/parts", json={"name": name, "mpn": name, "category_id": cat, **kw}).json()["id"]
+        ids.append(i)
+        return client.get(f"/api/parts/{i}").json()
+
+    try:
+        assert client.get("/api/kicad/prefs").json() == {"prefer": "hand"}
+        c = new("ZZ_AUTO cap", ceramic["id"], footprint_raw="0603")
+        assert c["kicad_symbol"] == "Device:C"
+        assert c["kicad_footprint"] == "Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder"
+        assert c["kicad_footprint_alts"] == "Capacitor_SMD:C_0603_1608Metric"
+        assert client.put("/api/kicad/prefs", json={"prefer": "standard"}).json() == {"prefer": "standard"}
+        c2 = new("ZZ_AUTO cap2", ceramic["id"], footprint_raw="0603")
+        assert c2["kicad_footprint"] == "Capacitor_SMD:C_0603_1608Metric" and c2["kicad_footprint_alts"].endswith("HandSolder")
+        mine = new("ZZ_AUTO mine", ceramic["id"], footprint_raw="0603", kicad_symbol="My:C", kicad_footprint="My:Fp")
+        assert (mine["kicad_symbol"], mine["kicad_footprint"]) == ("My:C", "My:Fp")          # never replaced
+        ic = new("ZZ_AUTO ic", ics["id"], attributes={"packagecase": "SC-74A, SOT-753"})
+        assert ic["kicad_footprint"] == "Package_TO_SOT_SMD:SOT-23-5" and ic["kicad_symbol"] is None   # a symbol is part-specific
+        assert client.put("/api/kicad/prefs", json={"prefer": "whatever"}).json() == {"prefer": "hand"}
+    finally:
+        client.put("/api/kicad/prefs", json={"prefer": "hand"})
+        for i in ids:
+            client.delete(f"/api/parts/{i}")

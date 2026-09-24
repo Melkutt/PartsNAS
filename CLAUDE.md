@@ -195,7 +195,9 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   `kicad:footprint_rules`, edited in Settings): `when` = regexes on `case` (packagecase), `device` (supplierdevicepackage),
   `raw` (footprint_raw), optional `scope`, `assumed` = a guess (proposed unticked); user rules first, first match wins.
   `GET/POST /api/kicad/suggest|apply` take `category_id` (subtree scope). `auto_footprint()` runs on part create and
-  apply-lookup (certain rules only, empty field only); apply-lookup also fills an empty `footprint_raw` via
+  apply-lookup (`auto_names`: standard SMD R/C/L/LED also get the symbol + default footprint per the server-side pad
+  preference `kicad:prefer`, `GET/PUT /api/kicad/prefs`; ICs/transistors get no symbol - pin order varies per part;
+  certain footprint rules only, empty field only); apply-lookup also fills an empty `footprint_raw` via
   `normalize_package` ("8-SOIC" -> "SOIC-8"). Worked in a real KiCad 10 for the author.
 - Duplicate MPNs (`app/dupes.py`, case/punctuation ignored) are only ever *reported*: list chip,
   `Same MPN` filter, part banner, `GET /api/parts/check-mpn`, `GET /api/parts/duplicates`.
