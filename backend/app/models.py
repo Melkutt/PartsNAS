@@ -122,6 +122,9 @@ class Part(Base):
     )
     kicad_symbol: Mapped[str | None] = mapped_column(String(120))
     kicad_footprint: Mapped[str | None] = mapped_column(String(160))
+    # other footprints KiCad may use for this part, one per line ("C_0603_1608Metric_Pad1.08x0.95mm_HandSolder"):
+    # `kicad_footprint` is the default, these are offered next to it in KiCad's symbol chooser
+    kicad_footprint_alts: Mapped[str | None] = mapped_column(Text)
     datasheet_url: Mapped[str | None] = mapped_column(String(500))
     image_path: Mapped[str | None] = mapped_column(String(300))
 

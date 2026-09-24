@@ -145,6 +145,11 @@ draw text, use *Replace board…* once with the same file.
   (`Device:C`, `Capacitor_SMD:C_0603_1608Metric`). Set them on a part's details, or let **KiCad…** name the
   standard SMD resistors, ceramic capacitors, inductors and LEDs from their category and package size, with a
   preview. Names you have typed yourself are never replaced; ICs and connectors are named by hand.
+- **Several footprints per part.** A part has one default footprint and, under *Other KiCad footprints*, any
+  number of others (one per line). Each other footprint also shows up as its own entry in KiCad's chooser
+  ("100n 25V X7R · C_0603_1608Metric"), so you pick the pads when you place it, and KiCad's footprint chooser
+  offers them later too. **KiCad…** can add both the standard and the hand-solder pad variant of every SMD
+  passive (names checked against KiCad's own libraries) and lets you choose which one is the default.
 - Stock and price are not sent as fields on purpose: every changed field makes KiCad warn about a mismatched
   library symbol in the schematics that use the part.
 

@@ -4,12 +4,18 @@
 `GET /api/kicad/v1/categories.json`           [{id, name, description}] - categories that hold ready parts
 `GET /api/kicad/v1/parts/category/{id}.json`  [{id, name, description}]
 `GET /api/kicad/v1/parts/{id}.json`           one part: symbolIdStr + fields (value, footprint, datasheet, MPN ...)
-`GET /api/kicad/suggest`                      names that can be worked out for standard passives (preview)
-`POST /api/kicad/apply`                       {ids: [...]} fill in those names (only where a part has none)
+`GET /api/kicad/suggest?prefer=`              names that can be worked out for standard passives (preview)
+`POST /api/kicad/apply`                       {ids: [...], prefer} fill in those names (only where a part has none)
 
 Only READY parts are shown to KiCad: those whose KiCad symbol and footprint both name their library
 (see kicadlib.is_named). No token: like the rest of PartsNAS it is meant for a trusted home network.
 All values are strings, as the KiCad specification requires.
+
+A part can have several footprints (`Part.kicad_footprint` is the default, `kicad_footprint_alts` the others,
+one per line). Each other footprint is ALSO listed as an entry of its own ("<name> · <footprint>", id
+"<part id>~<n>"), so which one to use is decided when the part is placed; every entry also carries
+`footprint_filters`, so KiCad's footprint chooser offers the alternatives (and every pad variant of the
+default's package) later too.
 """
 from __future__ import annotations
 
@@ -20,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from ..bommatch import _VALUE_KEYS, _pick_attr, part_summary
 from ..core.db import get_db
-from ..kicadlib import is_named, reference_for, suggest_names
+from ..kicadlib import footprint_filters, is_named, reference_for, split_footprints, suggest_names
 from ..models import Part
 from ..services import category_path_map
 
@@ -30,6 +36,11 @@ router = APIRouter(prefix="/api/kicad", tags=["kicad"])
 def _ready(db: Session) -> list[Part]:
     parts = db.scalars(select(Part).where(Part.kicad_symbol.is_not(None), Part.kicad_footprint.is_not(None))).all()
     return [p for p in parts if is_named(p.kicad_symbol, p.kicad_footprint)]
+
+
+def _alts(p: Part) -> list[str]:
+    """The other footprints of a part (only ones that name their library), never the default again."""
+    return [f for f in split_footprints(p.kicad_footprint_alts) if ":" in f and f != p.kicad_footprint]
 
 
 def _cat_name(paths: dict[int, str], cid: int | None) -> str:
@@ -52,19 +63,33 @@ def categories(db: Session = Depends(get_db)):
 @router.get("/v1/parts/category/{cid}.json")
 def parts_in_category(cid: int, db: Session = Depends(get_db)):
     want = None if cid == 0 else cid
-    return [{"id": p.id, "name": p.name, "description": part_summary(p)}
-            for p in sorted(_ready(db), key=lambda p: (p.name or "").lower()) if p.category_id == want]
+    out = []
+    for p in sorted(_ready(db), key=lambda p: (p.name or "").lower()):
+        if p.category_id != want:
+            continue
+        out.append({"id": p.id, "name": p.name, "description": part_summary(p)})
+        for n, alt in enumerate(_alts(p), start=1):
+            out.append({"id": f"{p.id}~{n}", "name": f"{p.name} · {alt.split(':', 1)[1]}", "description": part_summary(p)})
+    return out
 
 
 @router.get("/v1/parts/{pid}.json")
 def one_part(pid: str, db: Session = Depends(get_db)):
-    p = db.get(Part, pid)
+    base, _, variant = pid.partition("~")
+    p = db.get(Part, base)
     if p is None or not is_named(p.kicad_symbol, p.kicad_footprint):
         raise HTTPException(404, "part not found, or it has no KiCad symbol and footprint yet")
+    alts = _alts(p)
+    footprint, name = p.kicad_footprint, p.name
+    if variant:
+        if not variant.isdigit() or not 1 <= int(variant) <= len(alts):
+            raise HTTPException(404, "no such footprint variant")
+        footprint = alts[int(variant) - 1]
+        name = f"{p.name} · {footprint.split(':', 1)[1]}"
     attrs = p.attributes or {}
     fields: dict[str, dict] = {
         "value": {"value": _pick_attr(attrs, _VALUE_KEYS) or p.name},
-        "footprint": {"value": p.kicad_footprint, "visible": "False"},
+        "footprint": {"value": footprint, "visible": "False"},
         "datasheet": {"value": (p.datasheet_url or "~").strip(), "visible": "False"},
     }
     ref = reference_for(p.kicad_symbol)
@@ -74,48 +99,65 @@ def one_part(pid: str, db: Session = Depends(get_db)):
         fields["MPN"] = {"value": p.mpn, "visible": "False"}
     if p.manufacturer:
         fields["Manufacturer"] = {"value": p.manufacturer, "visible": "False"}
-    return {"id": p.id, "name": p.name, "symbolIdStr": p.kicad_symbol, "description": part_summary(p),
-            "fields": fields}
+    out = {"id": pid, "name": name, "symbolIdStr": p.kicad_symbol, "description": part_summary(p), "fields": fields}
+    filters = footprint_filters(p.kicad_footprint, alts)
+    if filters:
+        out["footprint_filters"] = filters
+    return out
 
 
 # ---- names for standard passives (Parts -> "KiCad names...") -----------------------------------
 
-def _proposals(db: Session) -> tuple[list[dict], int, int]:
-    """(proposals, ready count, parts with nothing to suggest). A proposal only ever fills what is EMPTY."""
+def _proposals(db: Session, prefer: str = "standard") -> tuple[list[dict], int, int]:
+    """(proposals, ready count, parts with nothing to suggest). A proposal only ever fills what is EMPTY: the
+    default footprint and the alternatives are filled separately, and the alternatives only when the part's
+    footprint is the one suggested here (a footprint typed by hand is not second-guessed)."""
     paths = category_path_map(db)
     proposals: list[dict] = []
     ready = other = 0
     for p in db.scalars(select(Part)).all():
-        if is_named(p.kicad_symbol, p.kicad_footprint):
-            ready += 1
-            continue
-        s = suggest_names(paths.get(p.category_id), p.footprint_raw)
-        symbol = None if (p.kicad_symbol or "").strip() else s and s["symbol"]
-        footprint = None if (p.kicad_footprint or "").strip() else s and s["footprint"]
-        if s and (symbol or footprint):
+        s = suggest_names(paths.get(p.category_id), p.footprint_raw, prefer)
+        symbol = footprint = None
+        alts: list[str] = []
+        if s:
+            symbol = None if (p.kicad_symbol or "").strip() else s["symbol"]
+            footprint = None if (p.kicad_footprint or "").strip() else s["footprint"]
+            options = [s["footprint"], *s["alts"]]
+            ours = footprint is not None or (p.kicad_footprint or "") in options
+            if ours and not (p.kicad_footprint_alts or "").strip():
+                keep = footprint or p.kicad_footprint
+                alts = [o for o in options if o != keep]
+        named = is_named(p.kicad_symbol, p.kicad_footprint)
+        ready += named
+        if s and (symbol or footprint or alts):
             proposals.append({"id": p.id, "name": p.name, "category": _cat_name(paths, p.category_id),
-                              "footprint_raw": p.footprint_raw, "symbol": symbol, "footprint": footprint})
-        else:
+                              "footprint_raw": p.footprint_raw, "symbol": symbol, "footprint": footprint, "alts": alts})
+        elif not named:
             other += 1
     proposals.sort(key=lambda x: (x["category"], x["name"].lower()))
     return proposals, ready, other
 
 
+def _prefer(value: str) -> str:
+    return "hand" if value == "hand" else "standard"
+
+
 @router.get("/suggest")
-def suggest(db: Session = Depends(get_db)):
-    proposals, ready, other = _proposals(db)
+def suggest(prefer: str = "standard", db: Session = Depends(get_db)):
+    proposals, ready, other = _proposals(db, _prefer(prefer))
     return {"ready": ready, "proposals": proposals, "other": other}
 
 
 class ApplyIn(BaseModel):
     ids: list[str]
+    prefer: str = "standard"      # "hand": hand-solder pads are the default footprint, the standard ones an alternative
 
 
 @router.post("/apply")
 def apply(body: ApplyIn, db: Session = Depends(get_db)):
-    """Fill in the suggested names for these parts. Only empty fields are written - a name you typed yourself
+    """Fill in the suggested names for these parts. Only empty fields are written - a name you have typed yourself
     is never replaced."""
-    proposals, _ready_n, _other = _proposals(db)
+    proposals, _ready_n, _other = _proposals(db, _prefer(body.prefer))
     want = set(body.ids)
     n = 0
     for pr in proposals:
@@ -126,6 +168,8 @@ def apply(body: ApplyIn, db: Session = Depends(get_db)):
             p.kicad_symbol = pr["symbol"]
         if pr["footprint"]:
             p.kicad_footprint = pr["footprint"]
+        if pr["alts"]:
+            p.kicad_footprint_alts = "\n".join(pr["alts"])
         n += 1
     db.commit()
     return {"updated": n}

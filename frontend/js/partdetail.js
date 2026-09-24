@@ -202,7 +202,7 @@ export class PartDetail {
       name: p.name, mpn: p.mpn || "", manufacturer: p.manufacturer || "",
       category_id: p.category_id || "", mount: p.mount || "",
       footprint_raw: p.footprint_raw || "", kicad_symbol: p.kicad_symbol || "",
-      kicad_footprint: p.kicad_footprint || "", datasheet_url: p.datasheet_url || "",
+      kicad_footprint: p.kicad_footprint || "", kicad_footprint_alts: p.kicad_footprint_alts || "", datasheet_url: p.datasheet_url || "",
       min_stock: p.min_stock, description: p.description || "", notes: p.notes || "",
       tags: p.tags.join(", "),
       attributes: { ...(p.attributes || {}) },
@@ -231,6 +231,8 @@ export class PartDetail {
     field("Footprint", inp("footprint_raw"));
     field("KiCad symbol", inp("kicad_symbol"));
     field("KiCad footprint", inp("kicad_footprint"));
+    field("Other KiCad footprints", el("textarea", { class: "full", rows: 2, placeholder: "one per line, e.g. Capacitor_SMD:C_0603_1608Metric - each is offered next to the one above in KiCad",
+      oninput: (e) => (draft.kicad_footprint_alts = e.target.value) }, draft.kicad_footprint_alts));
     // clickable as soon as there's a valid http(s) URL (tracks what's being typed)
     const dsLink = el("a", { target: "_blank", rel: "noopener noreferrer", style: "white-space:nowrap" }, "open \u2197");
     const syncDs = () => {
@@ -488,6 +490,7 @@ export class PartDetail {
       footprint_raw: draft.footprint_raw.trim() || null,
       kicad_symbol: draft.kicad_symbol.trim() || null,
       kicad_footprint: draft.kicad_footprint.trim() || null,
+      kicad_footprint_alts: draft.kicad_footprint_alts.trim() || null,
       datasheet_url: draft.datasheet_url.trim() || null,
       min_stock: Number(draft.min_stock) || 0,
       description: draft.description.trim() || null,

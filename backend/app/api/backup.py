@@ -70,6 +70,7 @@ def _part_record(db: Session, p: Part, paths: dict[int, str]) -> dict:
         "footprint_raw": p.footprint_raw,
         "kicad_symbol": p.kicad_symbol,
         "kicad_footprint": p.kicad_footprint,
+        "kicad_footprint_alts": p.kicad_footprint_alts,
         "datasheet_url": p.datasheet_url,
         "min_stock": p.min_stock,
         "order_qty": p.order_qty,
@@ -485,7 +486,7 @@ async def import_backup(
         p.name = rec.get("name") or p.name or rec.get("mpn") or "part"
         p.mpn = rec.get("mpn") or p.mpn
         for k in ("manufacturer", "description", "mount", "footprint_raw", "kicad_symbol",
-                  "kicad_footprint", "datasheet_url", "notes", "design_doc", "octopart_id",
+                  "kicad_footprint", "kicad_footprint_alts", "datasheet_url", "notes", "design_doc", "octopart_id",
                   "replacement_mpn", "replacement_sku", "replacement_source"):
             if rec.get(k) is not None:
                 setattr(p, k, rec[k])

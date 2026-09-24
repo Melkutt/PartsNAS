@@ -187,7 +187,11 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   served: `Part.kicad_symbol` AND `kicad_footprint` both carry their library (`Device:C`). `kicadlib.suggest_names`
   works out the standard names for SMD R/C/L/LED from category + package size (`GET /api/kicad/suggest`, `POST
   /api/kicad/apply` fills only EMPTY fields). Stock/price are deliberately not fields (each change = ERC "library
-  symbol mismatch" in schematics). Not yet tried in a real KiCad - built from the spec.
+  symbol mismatch" in schematics). Several footprints: `Part.kicad_footprint` = default, `kicad_footprint_alts`
+  = others (one per line); each alt is ALSO its own entry (`<part id>~<n>`, name "<name> · <footprint>") and every
+  part carries `footprint_filters` (wildcard for the default's package + the alts). `kicadlib._HAND` = KiCad's
+  hand-solder pad names (checked against kicad.github.io/footprints); suggest/apply take `prefer=hand|standard`.
+  Not yet tried in a real KiCad - built from the spec.
 - Duplicate MPNs (`app/dupes.py`, case/punctuation ignored) are only ever *reported*: list chip,
   `Same MPN` filter, part banner, `GET /api/parts/check-mpn`, `GET /api/parts/duplicates`.
 

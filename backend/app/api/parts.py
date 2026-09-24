@@ -53,6 +53,7 @@ class PartIn(BaseModel):
     footprint_raw: str | None = None
     kicad_symbol: str | None = None
     kicad_footprint: str | None = None
+    kicad_footprint_alts: str | None = None
     datasheet_url: str | None = None
     min_stock: int = 0
     notes: str | None = None
@@ -71,6 +72,7 @@ class PartPatch(BaseModel):
     footprint_raw: str | None = None
     kicad_symbol: str | None = None
     kicad_footprint: str | None = None
+    kicad_footprint_alts: str | None = None
     datasheet_url: str | None = None
     min_stock: int | None = None
     order_qty: int | None = Field(default=None, ge=1)  # null clears it
@@ -481,6 +483,7 @@ def get_part(part_id: str, db: Session = Depends(get_db)):
         "footprint_raw": p.footprint_raw,
         "kicad_symbol": p.kicad_symbol,
         "kicad_footprint": p.kicad_footprint,
+        "kicad_footprint_alts": p.kicad_footprint_alts,
         "datasheet_url": p.datasheet_url,
         "image_path": p.image_path,
         "min_stock": p.min_stock,
@@ -543,6 +546,7 @@ def create_part(body: PartIn, db: Session = Depends(get_db)):
         footprint_raw=body.footprint_raw,
         kicad_symbol=body.kicad_symbol,
         kicad_footprint=body.kicad_footprint,
+        kicad_footprint_alts=body.kicad_footprint_alts,
         datasheet_url=body.datasheet_url,
         min_stock=body.min_stock,
         notes=body.notes,

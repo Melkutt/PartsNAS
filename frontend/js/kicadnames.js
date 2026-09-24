@@ -13,30 +13,63 @@ export function httplibFile(origin) {
   }, null, 2) + "\n";
 }
 
-export async function openKicadNames(onDone) {
-  const data = await api("/api/kicad/suggest");
-  const picked = new Set(data.proposals.map((p) => p.id));
-  const count = el("span", { class: "hint", style: "padding:0" });
-  const boxes = [];
-  const paint = () => { count.textContent = `${picked.size} of ${data.proposals.length} selected`; };
+const short = (fp) => String(fp || "").split(":").pop();
 
-  const table = el("table", { class: "mini-table", style: "width:100%" });
-  table.append(el("tr", {}, el("th", {}, ""), el("th", {}, "Part"), el("th", {}, "Category"), el("th", {}, "Package"),
-    el("th", {}, "KiCad symbol"), el("th", {}, "KiCad footprint")));
-  for (const p of data.proposals) {
-    const box = el("input", { type: "checkbox", checked: "checked", onchange: (e) => { e.target.checked ? picked.add(p.id) : picked.delete(p.id); paint(); } });
-    boxes.push(box);
-    table.append(el("tr", {}, el("td", {}, box), el("td", {}, p.name), el("td", {}, p.category), el("td", {}, p.footprint_raw || ""),
-      el("td", {}, p.symbol || el("span", { class: "pill-off" }, "keeps its own")),
-      el("td", {}, p.footprint || el("span", { class: "pill-off" }, "keeps its own"))));
-  }
-  const all = el("input", { type: "checkbox", checked: "checked", onchange: (e) => {
-    boxes.forEach((b) => { b.checked = e.target.checked; });
+export async function openKicadNames(onDone) {
+  let prefer = "hand";
+  try { prefer = localStorage.getItem("partsnas.kicadPrefer") || "hand"; } catch { /* default */ }
+  let data = await api(`/api/kicad/suggest?prefer=${prefer}`);
+  const picked = new Set();
+  const count = el("span", { class: "hint", style: "padding:0" });
+  const listHost = el("div");
+  const summary = el("div", { class: "hint" });
+  let boxes = [];
+
+  const paint = () => { count.textContent = `${picked.size} of ${data.proposals.length} selected`; };
+  const render = () => {
     picked.clear();
-    if (e.target.checked) data.proposals.forEach((p) => picked.add(p.id));
+    data.proposals.forEach((p) => picked.add(p.id));
+    boxes = [];
+    summary.textContent =
+      `${data.ready} part${data.ready === 1 ? " is" : "s are"} ready: they have both a KiCad symbol and a footprint ` +
+      "(each written with its library, like Device:C and Capacitor_SMD:C_0603_1608Metric). Set them by hand on a part's details, " +
+      "or let PartsNAS name the standard SMD resistors, ceramic capacitors, inductors and LEDs below. " +
+      `${data.other} other part${data.other === 1 ? "" : "s"} (ICs, connectors, …) still need naming by hand. A name you have typed yourself is never replaced.`;
+    listHost.innerHTML = "";
+    if (!data.proposals.length) {
+      listHost.append(el("div", { class: "pill-off", style: "margin-top:8px" }, "Nothing more to name automatically."));
+      return;
+    }
+    const table = el("table", { class: "mini-table", style: "width:100%" });
+    table.append(el("tr", {}, el("th", {}, ""), el("th", {}, "Part"), el("th", {}, "Package"),
+      el("th", {}, "KiCad symbol"), el("th", {}, "Default footprint"), el("th", {}, "Also offered")));
+    for (const p of data.proposals) {
+      const box = el("input", { type: "checkbox", checked: "checked", onchange: (e) => { e.target.checked ? picked.add(p.id) : picked.delete(p.id); paint(); } });
+      boxes.push(box);
+      const keeps = el("span", { class: "pill-off" }, "keeps its own");
+      table.append(el("tr", {}, el("td", {}, box), el("td", {}, p.name, el("div", { class: "hint", style: "padding:0" }, p.category)),
+        el("td", {}, p.footprint_raw || ""), el("td", {}, p.symbol || keeps.cloneNode(true)),
+        el("td", {}, p.footprint ? short(p.footprint) : keeps),
+        el("td", {}, p.alts.length ? p.alts.map((a) => el("div", {}, short(a))) : el("span", { class: "pill-off" }, "—"))));
+    }
+    const all = el("input", { type: "checkbox", checked: "checked", onchange: (e) => {
+      boxes.forEach((b) => { b.checked = e.target.checked; });
+      picked.clear();
+      if (e.target.checked) data.proposals.forEach((p) => picked.add(p.id));
+      paint();
+    } });
+    listHost.append(el("div", { class: "row", style: "align-items:center;gap:12px" }, el("label", { style: "display:flex;gap:6px;align-items:center" }, all, " All"), count),
+      el("div", { style: "max-height:40vh;overflow:auto;margin-top:6px" }, table));
     paint();
-  } });
-  paint();
+  };
+
+  const preferSel = el("select", { onchange: async (e) => {
+    prefer = e.target.value;
+    try { localStorage.setItem("partsnas.kicadPrefer", prefer); } catch { /* not remembered */ }
+    data = await api(`/api/kicad/suggest?prefer=${prefer}`);
+    render();
+  } }, el("option", { value: "hand" }, "hand-solder pads"), el("option", { value: "standard" }, "standard pads"));
+  preferSel.value = prefer;
 
   const download = el("button", { class: "ghost", onclick: () => {
     const url = URL.createObjectURL(new Blob([httplibFile(location.origin)], { type: "application/json" }));
@@ -47,6 +80,7 @@ export async function openKicadNames(onDone) {
     URL.revokeObjectURL(url);
   } }, "Download partsnas.kicad_httplib");
 
+  render();
   const body = el("div", { class: "modal-body" },
     el("div", { class: "section-title" }, "Connect KiCad (8 or newer)"),
     el("div", { class: "hint" },
@@ -55,24 +89,20 @@ export async function openKicadNames(onDone) {
       `It points at ${location.origin}/api/kicad/ - the NAS must be reachable from that computer, over plain http.`),
     el("div", { class: "row" }, download),
     el("div", { class: "section-title" }, "Which parts KiCad sees"),
-    el("div", { class: "hint" },
-      `${data.ready} part${data.ready === 1 ? " is" : "s are"} ready: they have both a KiCad symbol and a footprint ` +
-      "(each written with its library, like Device:C and Capacitor_SMD:C_0603_1608Metric). Set them by hand on a part's details, " +
-      "or let PartsNAS name the standard SMD resistors, ceramic capacitors, inductors and LEDs below. " +
-      `${data.other} other part${data.other === 1 ? "" : "s"} (ICs, connectors, …) still need naming by hand. A name you have typed yourself is never replaced.`),
-    data.proposals.length
-      ? el("div", {}, el("div", { class: "row", style: "align-items:center;gap:12px" }, el("label", { style: "display:flex;gap:6px;align-items:center" }, all, " All"), count),
-        el("div", { style: "max-height:42vh;overflow:auto;margin-top:6px" }, table))
-      : el("div", { class: "pill-off", style: "margin-top:8px" }, "Nothing more to name automatically."));
+    summary,
+    el("div", { class: "row", style: "align-items:center;gap:8px" },
+      el("label", { style: "display:flex;gap:6px;align-items:center" }, "Default footprint:", preferSel),
+      el("span", { class: "hint", style: "padding:0" }, "the other kind is offered too, as its own entry in KiCad's chooser")),
+    listHost);
 
   modal({
     title: "KiCad",
-    wide: "min(1000px, 96vw)",
-    confirmText: data.proposals.length ? "Name the selected parts" : "Close",
+    wide: "min(1100px, 96vw)",
+    confirmText: "Name the selected parts",
     body,
     onConfirm: async () => {
       if (!data.proposals.length || !picked.size) return;
-      const r = await api("/api/kicad/apply", { method: "POST", body: { ids: [...picked] } });
+      const r = await api("/api/kicad/apply", { method: "POST", body: { ids: [...picked], prefer } });
       toast(`Named ${r.updated} part${r.updated === 1 ? "" : "s"} for KiCad`);
       onDone && onDone();
     },
