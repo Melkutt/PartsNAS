@@ -136,6 +136,18 @@ the drawing can be redone when PartsNAS learns to show more. The BOM works witho
 board that PartsNAS cannot read never breaks the BOM. If a board was saved before PartsNAS could
 draw text, use *Replace board…* once with the same file.
 
+**Pick the real part while you draw (KiCad 8 or newer)**
+- On the Parts tab, **KiCad…** downloads a small `partsnas.kicad_httplib` file. Save it on the computer you
+  draw on and add it in KiCad under *Preferences → Manage Symbol Libraries*. Your parts then show up in the
+  symbol chooser, and placing one fills in value, footprint, MPN, manufacturer and datasheet, so the BOM comes
+  out with exact MPNs. The NAS must be reachable from that computer over plain http (no login, like the rest).
+- KiCad only sees **ready** parts: those with both a KiCad symbol and a footprint, each written with its library
+  (`Device:C`, `Capacitor_SMD:C_0603_1608Metric`). Set them on a part's details, or let **KiCad…** name the
+  standard SMD resistors, ceramic capacitors, inductors and LEDs from their category and package size, with a
+  preview. Names you have typed yourself are never replaced; ICs and connectors are named by hand.
+- Stock and price are not sent as fields on purpose: every changed field makes KiCad warn about a mismatched
+  library symbol in the schematics that use the part.
+
 **Yours to keep**
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
   filters sit behind a **Filters** button there, so the list gets the screen).
@@ -271,8 +283,9 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
   open the page can read and change everything.
 - The Swish QR code only handles SEK. Currency and VAT are configurable, but the wording
   and a few defaults lean Swedish.
-- KiCad integration today means the **BOM tab**: import a BOM from KiCad's schematic editor and
-  draw the board from its `.kicad_pcb` file. A KiCad HTTP Library is planned, not built.
+- KiCad integration is the **BOM tab** (import a BOM, draw the board from its `.kicad_pcb`) and the
+  **KiCad HTTP library** (below). It has only been checked against KiCad's own specification and PartsNAS's
+  tests, not yet in a real KiCad, so tell me if KiCad complains.
 
 ## Under the hood
 

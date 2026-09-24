@@ -6,6 +6,7 @@ import { CatRail } from "./catrail.js";
 import { addPartsToQuote } from "./quotes.js";
 import { openLookup } from "./lookup.js";
 import { addToLabelSheet } from "./labelcommon.js";
+import { openKicadNames } from "./kicadnames.js";
 
 // only ever link http(s): a datasheet URL is free text and could be javascript:...
 const httpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
@@ -250,7 +251,9 @@ export class PartsView {
       el("option", { value: "name" }, "Sort: name"), el("option", { value: "stock" }, "Sort: stock"));
     this.countTag = el("span", { class: "count-tag" });
     const addBtn = el("button", { class: "primary", onclick: () => this._newPart() }, "+ New part");
-    bar.append(this.qInput, this.filtersBtn, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), addBtn, this.countTag);
+    const kicadBtn = el("button", { class: "ghost", title: "Connect KiCad's symbol chooser to PartsNAS, and name parts for it",
+      onclick: () => openKicadNames(() => this.reload()) }, "KiCad…");
+    bar.append(this.qInput, this.filtersBtn, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), this.shop || this.pick ? null : kicadBtn, addBtn, this.countTag);
     return bar;
   }
 

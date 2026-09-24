@@ -3,7 +3,7 @@
     uvicorn app.main:app --reload --port 8000     (dev, from backend/)
     python -m app.main                            (same, no reload)
 
-Serves the JSON API under /api, the KiCad HTTP library under /kicad, uploaded
+Serves the JSON API under /api, the KiCad HTTP library under /api/kicad, uploaded
 images under /media, and the static vanilla-JS frontend at /.
 """
 from __future__ import annotations
@@ -86,6 +86,7 @@ def _mount_routers() -> None:
         exports,
         images,
         imports,
+        kicad,
         labels,
         locations,
         lookup,
@@ -101,6 +102,7 @@ def _mount_routers() -> None:
     )
 
     app.include_router(bom.router)
+    app.include_router(kicad.router)
     app.include_router(categories.router)
     app.include_router(locations.router)
     app.include_router(parts.router)
@@ -122,7 +124,6 @@ def _mount_routers() -> None:
     app.include_router(backup.router)
     app.include_router(snapshot.router)
     app.include_router(autosnapshot.router)
-    # kicad -> next milestone
 
 
 _mount_routers()

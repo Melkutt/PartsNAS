@@ -181,6 +181,13 @@ data/                (git-ignored) partsnas.db, images/, thumbs/
   a back-side footprint is stored already mirrored; KiCad turns counter-clockwise on screen (y down);
   `F&B.Cu` is a pad layer name. `scripts/kicad_truth.py` dumps pcbnew's own numbers (run with KiCad's python) and
   `scripts/kicad_make_mini_board.py` rebuilds `backend/tests/fixtures/mini.kicad_pcb`.
+- **KiCad HTTP library** (`backend/app/api/kicad.py`, `kicadlib.py`, `frontend/js/kicadnames.js`): KiCad 8+ asks
+  `/api/kicad/v1/` (`categories.json`, `parts/category/{id}.json`, `parts/{id}.json`; spec at
+  dev-docs.kicad.org/en/apis-and-binding/http-libraries; all values strings). No token. Only READY parts are
+  served: `Part.kicad_symbol` AND `kicad_footprint` both carry their library (`Device:C`). `kicadlib.suggest_names`
+  works out the standard names for SMD R/C/L/LED from category + package size (`GET /api/kicad/suggest`, `POST
+  /api/kicad/apply` fills only EMPTY fields). Stock/price are deliberately not fields (each change = ERC "library
+  symbol mismatch" in schematics). Not yet tried in a real KiCad - built from the spec.
 - Duplicate MPNs (`app/dupes.py`, case/punctuation ignored) are only ever *reported*: list chip,
   `Same MPN` filter, part banner, `GET /api/parts/check-mpn`, `GET /api/parts/duplicates`.
 
