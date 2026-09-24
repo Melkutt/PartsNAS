@@ -27,6 +27,17 @@ _HEADER_SYNONYMS: dict[str, list[str]] = {
 }
 
 
+# only used when there is no column that plainly says MPN. The JLCPCB fabrication plugin names the column
+# "LCSC Part #" whatever field was mapped into it - often the MPN, but sometimes a real LCSC number ("C14663"),
+# which is no MPN (see _LCSC_NUMBER), so these columns are read as a second choice
+_MPN_FALLBACK = [
+    "lcsc part #", "lcsc part", "lcsc part number", "lcsc", "jlcpcb part #", "jlcpcb part", "mfg part", "mfg part #",
+    "mfg part number", "mfr part", "mfr. part #", "manufacturer_part_number", "manufacturerpartnumber",
+    "manufacturer part", "manufacturer pn", "pn",
+]
+_LCSC_NUMBER = re.compile(r"^C\d{3,}$", re.I)
+
+
 def _detect_columns(header: list[str]) -> dict[str, int]:
     low = [h.strip().lower() for h in header]
     out: dict[str, int] = {}
@@ -34,6 +45,11 @@ def _detect_columns(header: list[str]) -> dict[str, int]:
         for i, h in enumerate(low):
             if h in names:
                 out[key] = i
+                break
+    if "mpn" not in out:
+        for i, h in enumerate(low):
+            if h in _MPN_FALLBACK:
+                out["mpn_fallback"] = i
                 break
     return out
 
@@ -61,6 +77,9 @@ def parse_bom_csv(raw: bytes) -> list[dict]:
 
         refs = [r for r in re.split(r"[,\s]+", get("refdes")) if r]
         mpn, value, footprint = get("mpn"), get("value"), get("footprint")
+        if not mpn:
+            fallback = get("mpn_fallback")
+            mpn = "" if _LCSC_NUMBER.match(fallback) else fallback
         qty_field = get("qty")
         try:
             qty = float(qty_field) if qty_field else float(len(refs) or 1)

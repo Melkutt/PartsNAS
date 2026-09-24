@@ -348,3 +348,32 @@ def test_references_can_be_ticked_as_placed_one_by_one(client):
         assert all(ln["placed_refs"] == [] for ln in get().values())
     finally:
         client.delete(f"/api/bom/projects/{pid}")
+
+
+# -- the JLCPCB fabrication plugin's bom.csv: the MPN sits in a column called "LCSC Part #" --------
+
+def test_the_lcsc_part_column_is_read_as_the_mpn_when_it_holds_one():
+    from app.bomparse import parse_bom_csv
+    raw = ("﻿Designator,Footprint,Quantity,Value,LCSC Part #\n"
+           "C1,0603,1,100nF,C0603C104K3PACTU\n"
+           "R1,0402,1,100k,C25741\n"                       # a real LCSC number: no MPN
+           "U1,SOT-23-6,1,ATtiny10-TS,\n").encode("utf-8")
+    by = {ln["refdes"]: ln for ln in parse_bom_csv(raw)}
+    assert by["C1"]["mpn"] == "C0603C104K3PACTU"
+    assert by["R1"]["mpn"] is None
+    assert by["U1"]["mpn"] is None
+    # a column that plainly says MPN always wins over the fallback
+    both = "Reference,Value,Footprint,LCSC Part #,MPN\nC1,100n,0603,C1525,REAL-MPN\n".encode()
+    assert parse_bom_csv(both)[0]["mpn"] == "REAL-MPN"
+
+
+def test_a_bom_with_the_mpn_in_the_lcsc_column_matches_exactly(client):
+    a = _part(client, "ZZ_LCSC 100n", "C0603C104K3PACTU-ZZ")
+    try:
+        csv = "Designator,Footprint,Quantity,Value,LCSC Part #\nC1,0603,1,100nF,C0603C104K3PACTU-ZZ\n".encode("utf-8")
+        r = client.post("/api/bom/parse", files={"file": ("bom.csv", csv, "text/csv")})
+        assert r.status_code == 200, r.text
+        m = r.json()["lines"][0]["match"]
+        assert m["kind"] == "mpn" and m["part_id"] == a and m["score"] == 100
+    finally:
+        client.delete(f"/api/parts/{a}")

@@ -100,6 +100,8 @@ matched against what you actually have in stock.
    parts list with the right category and footprint already chosen, the way the quote cart does: click a
    part to look at it (nothing is added), press *Use* to take it. Unit prices (ex VAT) are shown while you
    choose and in the project list.
+   A line with an MPN that is in your parts is matched exactly (100 %); the MPN column may be called MPN, Manufacturer Part Number
+   or similar, or "LCSC Part #" as in the JLCPCB fabrication plugin's `bom.csv` (a real LCSC number like C14663 is ignored).
    Tick *Remember* to reuse your choice for the same value + footprint in the next BOM. The BOM
    does not say voltage, dielectric or fuse type: you decide which real part a "100n" is.
 3. **Skip what is not built in.** Mounting holes, fiducials, logos and similar (`H`, `MH`, `FID`,
