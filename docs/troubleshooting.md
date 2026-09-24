@@ -56,6 +56,20 @@ NAS address when you move over.
 **A part I just named is missing.**
 KiCad caches categories (about 10 minutes) and parts (about 1 minute). Restart KiCad.
 
+**KiCad… shows far fewer parts than I expected.**
+It only looks at the category selected in the Parts list (and below it). Select *All categories* (or another
+category) first. Parts that already have both names, and parts whose package no rule recognises, are not listed.
+
+**A new part did not get a KiCad symbol / footprint.**
+Only standard SMD resistors, ceramic capacitors, inductors and LEDs get a symbol automatically, and only when
+*Footprint* holds a size code (`0603`). Other parts get a footprint only when a *certain* footprint rule matches
+(a rule that only reads your own Footprint text is a guess and is proposed in **KiCad…**, never applied by itself).
+Transistors and ICs never get a symbol automatically: their pin order differs from part to part.
+
+**The wrong footprint was proposed for an IC.**
+Add a rule of your own in *Settings → KiCad footprint rules*; yours are tried before the built-in ones. The width in
+the supplier's *Package / Case* decides between, for example, a narrow and a wide SOIC-8.
+
 **The file dialog only shows `.kicad_sym`.**
 Set the file type to *All files*, or type the full path, or add the library with the **+** button (format **HTTP**).
 See [KiCad](kicad.md).
