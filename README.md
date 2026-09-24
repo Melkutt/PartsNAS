@@ -78,7 +78,7 @@ Version **0.7.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
 ![Building a quote with the cart](docs/screenshots/quote-cart.png)
 
 **Fill it without typing**
-- **Look up specs** from Mouser, Digi-Key, TME and Farnell (bring your own API keys): parameters,
+- **Look up specs** from Mouser, Digi-Key and Farnell (bring your own API keys; TME is built but does not work yet, see *Good to know*): parameters,
   datasheet, picture and prices. Only when you press the button — never in bulk — and
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
@@ -255,6 +255,14 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
 
 ## Good to know
 
+- **TME does not work yet.** The TME lookup is built (their own HMAC signature scheme, and it signs
+  correctly), but on the account it was tested with, TME answers the *Search* action with
+  "HTTP 403 – Access denied. You are not allowed to execute this action", even though the application,
+  token and secret were set up as their guide describes. Without Search there is no way to turn an MPN
+  into TME's own article number, so a lookup fails; a fallback that tries the MPN as the article number
+  exists but has not been seen to work. Until that is sorted out with TME (it is a permission on their
+  side, not something PartsNAS can change), treat TME as **not working** and use Mouser, Digi-Key or
+  Farnell. If your TME account is allowed to Search, it may well work for you - the code is there.
 - **There is no login.** PartsNAS is meant for a trusted home network. Do not expose its
   port to the internet; if you need to reach it from outside, use a VPN. Anyone who can
   open the page can read and change everything.
