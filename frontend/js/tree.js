@@ -38,11 +38,11 @@ export class Tree {
 
     const ul = document.createElement("ul");
     ul.className = "tree";
-    for (const n of this.forest) ul.appendChild(this.renderNode(n));
+    this.forest.forEach((n, i) => ul.appendChild(this.renderNode(n, i, this.forest.length)));
     this.el.appendChild(ul);
   }
 
-  renderNode(node) {
+  renderNode(node, index = 0, count = 1) {
     const li = document.createElement("li");
     const hasKids = node.children && node.children.length > 0;
     const isCollapsed = this.collapsed.has(node.id);
@@ -94,6 +94,9 @@ export class Tree {
 
     const actions = document.createElement("span");
     actions.className = "actions";
+    // order among the siblings: one step at a time (precise, and works on a touch screen)
+    if (index > 0) actions.appendChild(btn("▲", () => this.move(node, "up"), "", "Move up: before the one above"));
+    if (index < count - 1) actions.appendChild(btn("▼", () => this.move(node, "down"), "", "Move down: after the one below"));
     actions.appendChild(btn("+ sub", () => this.create(node.id)));
     actions.appendChild(btn("rename", () => this.startRename(node, label)));
     if (!node.is_unsorted) actions.appendChild(btn("delete", () => this.remove(node), "danger"));
@@ -103,7 +106,7 @@ export class Tree {
 
     if (hasKids) {
       const ul = document.createElement("ul");
-      for (const c of node.children) ul.appendChild(this.renderNode(c));
+      node.children.forEach((c, i) => ul.appendChild(this.renderNode(c, i, node.children.length)));
       li.appendChild(ul);
     }
     return li;
@@ -147,6 +150,15 @@ export class Tree {
     }
   }
 
+  async move(node, direction) {
+    try {
+      await api(`${this.base}/${node.id}/move`, { method: "POST", body: { direction } });
+      await this.reload();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
   async remove(node) {
     const kids = node.children && node.children.length;
     const extra = kids ? `\n${kids} sub-${this.noun}(s) and any parts move up one level.` : "";
@@ -160,10 +172,11 @@ export class Tree {
   }
 }
 
-function btn(text, onClick, cls) {
+function btn(text, onClick, cls, title) {
   const b = document.createElement("button");
   b.textContent = text;
   if (cls) b.className = cls;
+  if (title) b.title = title;
   b.addEventListener("click", onClick);
   return b;
 }

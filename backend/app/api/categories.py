@@ -3,6 +3,7 @@
 `GET  /api/categories`            nested tree (+ direct part counts)
 `POST /api/categories`            create {name, parent_id?, part_class?}
 `PATCH /api/categories/{id}`      rename / move / set part_class / reorder
+`POST /api/categories/{id}/move`   {direction: up|down} one step among the siblings
 `DELETE /api/categories/{id}`     delete; parts + children go to parent or Unsorted
 """
 from __future__ import annotations
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..core.db import get_db
 from ..models import Category, Part
-from .treeutil import build_forest, check_move, get_or_404, next_sort_order
+from .treeutil import build_forest, check_move, get_or_404, move_sibling, next_sort_order
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
@@ -94,6 +95,16 @@ def patch_category(cat_id: int, body: CategoryPatch, db: Session = Depends(get_d
         cat.parent_id = body.parent_id
     db.commit()
     return {"ok": True}
+
+
+class MoveIn(BaseModel):
+    direction: str      # "up" | "down": one step among the siblings
+
+
+@router.post("/{cat_id}/move")
+def move_category(cat_id: int, body: MoveIn, db: Session = Depends(get_db)):
+    """Reorder: one step up or down among the categories with the same parent."""
+    return {"position": move_sibling(db, Category, cat_id, body.direction)}
 
 
 @router.delete("/{cat_id}")

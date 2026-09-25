@@ -82,6 +82,31 @@ def next_sort_order(db: Session, model, parent_id: int | None) -> int:
     return (hi or 0) + 1
 
 
+def move_sibling(db: Session, model, node_id: int, direction: str) -> int:
+    """Move a node one step up or down among its siblings and return its new position (0 = first).
+
+    The siblings are first renumbered 0..n-1 in the order they are shown now (sort_order, then name): many rows
+    share a sort_order (or all have 0), so swapping two of them would otherwise change nothing."""
+    if direction not in ("up", "down"):
+        raise HTTPException(400, "direction must be 'up' or 'down'")
+    node = get_or_404(db, model, node_id)
+    sibs = db.scalars(
+        select(model).where(model.parent_id.is_(None) if node.parent_id is None else model.parent_id == node.parent_id)
+        .order_by(model.sort_order, model.name)
+    ).all()
+    order = [s.id for s in sibs]
+    i = order.index(node_id)
+    j = i - 1 if direction == "up" else i + 1
+    if 0 <= j < len(order):
+        order[i], order[j] = order[j], order[i]
+        i = j
+    by_id = {s.id: s for s in sibs}
+    for pos, sid in enumerate(order):
+        by_id[sid].sort_order = pos
+    db.commit()
+    return i
+
+
 def check_move(db: Session, model, node_id: int, new_parent_id: int | None) -> None:
     if new_parent_id is None:
         return

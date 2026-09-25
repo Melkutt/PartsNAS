@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from ..core.db import get_db
 from ..models import StockEntry, StorageLocation
-from .treeutil import build_forest, check_move, get_or_404, next_sort_order
+from .treeutil import build_forest, check_move, get_or_404, move_sibling, next_sort_order
 
 router = APIRouter(prefix="/api/locations", tags=["locations"])
 
@@ -92,6 +92,16 @@ def patch_location(loc_id: int, body: LocationPatch, db: Session = Depends(get_d
         loc.parent_id = body.parent_id
     db.commit()
     return {"ok": True}
+
+
+class MoveIn(BaseModel):
+    direction: str      # "up" | "down": one step among the siblings
+
+
+@router.post("/{loc_id}/move")
+def move_location(loc_id: int, body: MoveIn, db: Session = Depends(get_db)):
+    """Reorder: one step up or down among the locations with the same parent."""
+    return {"position": move_sibling(db, StorageLocation, loc_id, body.direction)}
 
 
 @router.delete("/{loc_id}")

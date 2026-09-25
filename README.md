@@ -29,7 +29,8 @@ Version **0.7.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
 
 **Keep track of everything you own**
 - A category tree and a storage-location tree, both any depth. Create sub-levels
-  inline, rename and delete; parts move up a level when you delete a branch.
+  inline, rename and delete; parts move up a level when you delete a branch. Hover a row and use
+  **▲ ▼** to put it earlier or later among its siblings (top-level trees and sub-trees alike).
 - Stock is a ledger, not a number you overwrite: add, remove, count and move, one
   part in several places at once, and every change stays in the part's history.
 - Fast filtering: search plus faceted filters (mount, footprint, manufacturer,
