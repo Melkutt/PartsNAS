@@ -14,7 +14,8 @@ Swedish→English maps applied during extraction.
 - Parts with shared fields + per-class fields (resistance, Vds, …) in a JSON
   column, driven by the spec workbook.
 - **Category tree** and **storage-location tree**, both arbitrary depth. Create a
-  sub-node inline, rename, drag to reparent, delete (contents move up a level).
+  sub-node inline, rename, move up/down among the siblings (▲ ▼; there is no drag-and-drop and no way yet to move
+  a branch under another parent), delete (contents move up a level).
 - **Bulk edit**: filter the parts list, "select all matching", then move to a
   category / move stock to a location / tag / set min-stock — one endpoint, one
   undo entry. Built for "re-sort 112 parts into a new box in a few clicks".

@@ -24,6 +24,12 @@ export class CatRail {
   }
 
   async render() {
+    // keep the list where it was: clicking a sub-category redraws the rail, and a rail that is emptied while the
+    // tree is fetched again loses its scroll position (it jumped back to the top). So: remember the position, fetch
+    // first, then swap the content in and put the position back.
+    const prev = this.el.querySelector(".rail-scroll");
+    const top = prev ? prev.scrollTop : 0;
+    const forest = await api(this.base());
     this.el.innerHTML = "";
     const seg = el("div", { class: "seg" });
     for (const m of ["categories", "locations"]) {
@@ -41,7 +47,7 @@ export class CatRail {
     this.el.append(seg);
 
     const scroll = el("div", { class: "rail-scroll" });
-    this.forest = await api(this.base());
+    this.forest = forest;
     const cur = this.selected[this.mode];
     scroll.append(
       this._row({ id: null, name: this.mode === "categories" ? "All categories" : "All locations", children: [] }, 0, cur),
@@ -50,6 +56,7 @@ export class CatRail {
     for (const n of this.forest) ul.append(this._li(n, cur));
     scroll.append(ul);
     this.el.append(scroll);
+    scroll.scrollTop = top;
   }
 
   _li(node, cur) {

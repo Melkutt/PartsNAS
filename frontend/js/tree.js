@@ -20,8 +20,12 @@ export class Tree {
   }
 
   async reload() {
+    // stay where you were (the page scrolls, not the tree): a move, rename or add redraws the whole tree
+    const sp = scrollParent(this.el);
+    const top = sp ? sp.scrollTop : 0;
     this.forest = await api(this.base);
     this.render();
+    if (sp) sp.scrollTop = top;
   }
 
   render() {
@@ -172,6 +176,13 @@ export class Tree {
   }
 }
 
+function scrollParent(node) {
+  for (let p = node && node.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === "auto" || oy === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement;
+}
 function btn(text, onClick, cls, title) {
   const b = document.createElement("button");
   b.textContent = text;
