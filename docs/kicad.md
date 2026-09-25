@@ -56,8 +56,8 @@ is completed with it when a rule confirms that it is the right one.
 
 On the **Parts** tab, **KiCad…** opens a dialog that names the standard SMD resistors, ceramic capacitors,
 inductors and LEDs for you, from the category and the package size (`0603`, `0805`, …), with a preview. Things it
-does not touch: electrolytics, tantalums, resistor networks, anything whose package is not a size code, and ICs and
-connectors (those you name by hand). It only fills fields that are **empty**; a name you typed yourself is never
+does not touch: electrolytics, tantalums, resistor networks and anything whose package is not a size code. ICs,
+transistors and diodes get a footprint from the footprint rules above, but never a symbol: name those by hand. It only fills fields that are **empty**; a name you typed yourself is never
 replaced.
 
 Choose the **default footprint**: *hand-solder pads* (`…_Pad1.08x0.95mm_HandSolder`) or *standard pads*. The other

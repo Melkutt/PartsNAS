@@ -4,8 +4,8 @@ Local electronics / mechanical **component database** for the home lab, in the
 spirit of PartsBox and the old open-source ecDB. Runs on a Synology **DS224+**
 (Container Manager) and is used from a browser on the LAN.
 
-Author: **SA1CKW**. **Private repo** — local `git` only for now, no remote, no
-pushes. Everything — code, comments, UI strings, seed data — is **English only**.
+Author: **SA1CKW**. **Private repo** (`github.com/Melkutt/PartsNAS`) — commit locally, push only when the owner says
+so, and copy to the NAS with `scripts/deploy_nas.ps1` only when asked. Everything — code, comments, UI strings, seed data — is **English only**.
 The source workbooks are Swedish; `scripts/translations.py` holds the
 Swedish→English maps applied during extraction.
 
@@ -355,4 +355,10 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
     Saves as a `Project` + `BomLine`s (pre-existing, previously-unused
     models); `Build` deducts stock for N boards, reversible, shortage
     shown per line. Remembered rules manageable in Settings.
-11. Min-stock warnings; theme sync across devices.
+11. **mostly done** — Min-stock warnings (Order tab); theme sync across devices is still per-browser (`localStorage`).
+12. **done** — BOM tab: own KiCad board viewer, Skip / Placed (per line or per component) / print with prices, editable saved
+    lines, project rename; see the "Board view" and BOM notes above and `docs/bom.md`.
+13. **done** — KiCad HTTP library + footprint rules + several footprints per part (`docs/kicad.md`); suppliers Farnell and
+    TME (TME blocked by a permission on the tested account, see README); tree reorder (▲ ▼), part-panel navigation.
+Documentation lives in `docs/` (index, parts, suppliers, BOM, KiCad, troubleshooting); keep README short and update the
+page whenever a feature changes.

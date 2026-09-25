@@ -14,7 +14,7 @@ and tell you when a resistor drawer is running low. Inspired by
 [PartsBox](https://partsbox.com/) and the old open-source
 [ecDB](https://github.com/jwr/ecDB).
 
-Version **0.7.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [GPL-3.0 license](LICENSE)
+Version **0.8.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [GPL-3.0 license](LICENSE)
 
 > **Please read this first.** PartsNAS is a **hobby project**, shared as it is, free of charge and with
 > **no warranty of any kind**. It is **not** business, accounting or invoicing software. Use it at your
@@ -92,76 +92,41 @@ Version **0.7.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
 
 **Build a board from a KiCad project (the BOM tab)**
 
-The BOM tab turns a KiCad project into a to-do list you can shop, build and solder from,
-matched against what you actually have in stock.
+The BOM tab turns a KiCad project into a to-do list you can shop, build and solder from, matched against what you
+actually have in stock.
 
-1. **Import BOM.** Choose the BOM file KiCad writes (`.csv`: in the schematic editor, *Tools →
-   Generate BOM*, or the *Export BOM* button). Optionally add the project's board file
-   (`<project>.kicad_pcb`) in the same dialog. Nothing is saved until you press *Save project*.
-2. **Review the match.** Every line is matched against your parts. An exact MPN, or a
-   value + footprint you confirmed before, is picked automatically; anything else is only a
-   *suggestion* with a score and the reasons. *Change…* opens a search, and *Browse…* opens the
-   parts list with the right category and footprint already chosen, the way the quote cart does: click a
-   part to look at it (nothing is added), press *Use* to take it. Unit prices (ex VAT) are shown while you
-   choose and in the project list.
-   A line with an MPN that is in your parts is matched exactly (100 %); the MPN column may be called MPN, Manufacturer Part Number
-   or similar, or "LCSC Part #" as in the JLCPCB fabrication plugin's `bom.csv` (a real LCSC number like C14663 is ignored).
-   Tick *Remember* to reuse your choice for the same value + footprint in the next BOM. The BOM
-   does not say voltage, dielectric or fuse type: you decide which real part a "100n" is.
-3. **Skip what is not built in.** Mounting holes, fiducials, logos and similar (`H`, `MH`, `FID`,
-   `G`, `LOGO`, `SYM`, `NT`) are ticked *Skip* from the start; tick or untick any line. Skipped
-   lines stay in the project but are not counted in shortages, builds or the pick list, and are
-   hidden behind *Show N skipped*.
-4. **The project.** Set how many boards to build to see what each line needs, what you have,
-   where it is stored and what is **short**. Rows can be sorted by storage location, so you walk the
-   shelves once. *Build (deduct stock)* takes the parts out of stock, and can be undone.
-5. **Edit later.** A saved line can be changed at any time (*Change…* to pick another part, *Skip* /
-   *Use*), and the project can be renamed with ✎. Nothing needs to be imported again.
-6. **Placed.** Tick a line as you solder it on. The tick is saved, the row fades, and on the
-   board the part turns blue, so you see what is left and can pick the job up again another evening.
-   *Clear placed* starts over for the next board.
-   Switch on **One row per component** to give every C1, C2, C3 … its own Placed box (off by default, since
-   the list gets long on a big board); ticking all of a line's components ticks the line, and the reverse.
-   The print dialog has the same choice (also off by default), with a tick box per component on paper.
-7. **Print pick list.** Choose which columns go on the paper (tick box, reference, part, value, where it is,
-   per board, needed, on hand, short), and print just the list or the board on page 1 and the list from
-   page 2, with front and/or back and the reference names (C1, R2 …) drawn on it. The board is printed
-   light, for paper, as you have turned it on screen. On paper the references are written as ranges, one per
-   line (C3-8, C10-11, C13), so the list stays narrow. Optionally add a **price summary** at the end: what the
-   parts cost, and what they sell for with a margin you set, each ex and inc VAT, using the same supplier
-   prices a quote would use (lines without a price are counted and left out). Skipped lines are not printed,
-   and your choices are remembered.
+- **Import a KiCad BOM** (`.csv`, optionally with the `.kicad_pcb`). Every line is matched to your parts: an exact
+  **MPN** is certain (100 %), a value + footprint you confirmed before is remembered, anything else is a scored
+  suggestion you confirm. *Browse…* opens the parts list with the right category and size chosen, with unit prices.
+- **Skip** holes, fiducials and logos, **edit** saved lines and **rename** the project at any time. Set how many
+  boards to build to see what is **short**, then **Build** to take the parts out of stock (undoable).
+- **Placed** ticks show how far you have come: per line, or per component with *One row per component*. On the
+  board view the placed parts turn blue.
+- **The board view** draws the `.kicad_pcb` itself next to the list (KiCad 6 to 10, no plugin, no 3D): click a line and
+  its parts light up in neon green on the right side of the board, click a part and the list jumps to its line.
+- **Print pick list**: choose the columns, the board on page 1 with the reference names on it, one row per
+  component, and an optional price summary (cost or with margin, ex or inc VAT).
 
-*The board view.* With a `.kicad_pcb` attached, PartsNAS draws the board itself next to the list,
-straight from KiCad's own file (KiCad 6 to 10, no plugin and no 3D models): outline, pads,
-silkscreen and its text, tracks and zones. Turn it, flip it to the back, zoom and pan, and switch
-layers. **Click a line** and its parts light up in neon green on the side they sit on; **click a
-part on the board** and the list jumps to its line, with what it is and where you keep it.
-PartsNAS keeps the drawing (a few hundred KB per board) and a compressed copy of the file, so
-the drawing can be redone when PartsNAS learns to show more. The BOM works without a board, and a
-board that PartsNAS cannot read never breaks the BOM. If a board was saved before PartsNAS could
-draw text, use *Replace board…* once with the same file.
+Details and the recognised column names: [docs/bom.md](docs/bom.md).
 
 **Pick the real part while you draw (KiCad 8 or newer)**
-- On the Parts tab, **KiCad…** downloads a small `partsnas.kicad_httplib` file. Save it on the computer you
-  draw on and add it in KiCad under *Preferences → Manage Symbol Libraries*. Your parts then show up in the
-  symbol chooser, and placing one fills in value, footprint, MPN, manufacturer and datasheet, so the BOM comes
-  out with exact MPNs. The NAS must be reachable from that computer over plain http (no login, like the rest).
+
+KiCad's symbol chooser can list your parts directly (the *HTTP library*): press **KiCad…** on the Parts tab,
+download `partsnas.kicad_httplib`, add it in KiCad, and placing a part fills in value, footprint, MPN,
+manufacturer and datasheet, so the BOM comes out with exact MPNs. It has been used with KiCad 10.
+
 - KiCad only sees **ready** parts: those with both a KiCad symbol and a footprint, each written with its library
-  (`Device:C`, `Capacitor_SMD:C_0603_1608Metric`). Set them on a part's details, or let **KiCad…** name the
-  standard SMD resistors, ceramic capacitors, inductors and LEDs from their category and package size, with a
-  preview. Names you have typed yourself are never replaced; ICs and connectors are named by hand.
-- **Footprints for ICs, transistors and diodes** come from editable rules (Settings → KiCad footprint rules) that
-  read the supplier's package text, including the width (`8-SOIC (0.154", 3.90mm Width)`), so a narrow and a wide SOIC-8
-  are told apart. **KiCad…** works on the category you have selected, and a new part gets its KiCad footprint
-  automatically when a rule is certain. See [docs/kicad.md](docs/kicad.md).
-- **Several footprints per part.** A part has one default footprint and, under *Other KiCad footprints*, any
-  number of others (one per line). Each other footprint also shows up as its own entry in KiCad's chooser
-  ("100n 25V X7R · C_0603_1608Metric"), so you pick the pads when you place it, and KiCad's footprint chooser
-  offers them later too. **KiCad…** can add both the standard and the hand-solder pad variant of every SMD
-  passive (names checked against KiCad's own libraries) and lets you choose which one is the default.
-- Stock and price are not sent as fields on purpose: every changed field makes KiCad warn about a mismatched
-  library symbol in the schematics that use the part.
+  (`Device:C`, `Capacitor_SMD:C_0603_1608Metric`). A new standard SMD resistor, ceramic capacitor, inductor or LED
+  gets both automatically; **KiCad…** names the ones you already have (with a preview, for the category you have
+  selected). Names you typed yourself are never replaced.
+- **Footprints for ICs, transistors and diodes** come from editable rules (*Settings → KiCad footprint rules*) that
+  read the supplier's package text, including the width (`8-SOIC (0.154", 3.90mm Width)`), so a narrow and a wide
+  SOIC-8 are told apart. Symbols for ICs and transistors are set by hand: pin order differs from part to part.
+- **Several footprints per part** (for example standard and hand-solder pads) each show up as their own entry in
+  KiCad's chooser.
+- Stock and price are not sent as fields on purpose (each change makes KiCad warn about a changed symbol).
+
+More: [docs/kicad.md](docs/kicad.md).
 
 **Yours to keep**
 - Light, Gray and Dark themes, and a layout that works on a phone or tablet (categories and
@@ -224,8 +189,9 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 
 ## Documentation
 
-More detailed pages live in [`docs/`](docs/index.md): [BOM and building a board](docs/bom.md),
-[KiCad](docs/kicad.md) and [Troubleshooting](docs/troubleshooting.md). More are planned.
+More detailed pages live in [`docs/`](docs/index.md): [Parts, categories and locations](docs/parts.md),
+[Suppliers and API keys](docs/suppliers.md), [BOM and building a board](docs/bom.md), [KiCad](docs/kicad.md) and
+[Troubleshooting](docs/troubleshooting.md).
 
 ## Your first ten minutes
 
@@ -303,9 +269,9 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
   open the page can read and change everything.
 - The Swish QR code only handles SEK. Currency and VAT are configurable, but the wording
   and a few defaults lean Swedish.
-- KiCad integration is the **BOM tab** (import a BOM, draw the board from its `.kicad_pcb`) and the
-  **KiCad HTTP library** (below). It has only been checked against KiCad's own specification and PartsNAS's
-  tests, not yet in a real KiCad, so tell me if KiCad complains.
+- KiCad integration is the **BOM tab** and the **KiCad HTTP library**, described above and in
+  [docs/kicad.md](docs/kicad.md). Footprint names and rules follow KiCad's standard libraries; if you have renamed
+  or removed libraries, KiCad will not find the parts.
 
 ## Under the hood
 
@@ -319,7 +285,7 @@ frontend/        the browser app (index.html, css/, js/)
 tests/js/        Deno tests for the frontend logic
 seed/            starter categories, footprint aliases, part-class fields
 scripts/         seed generator, deploy_nas.ps1
-docs/            screenshots
+docs/            documentation pages and screenshots
 ```
 
 See [CLAUDE.md](CLAUDE.md) for the design notes, data model and roadmap. To start from

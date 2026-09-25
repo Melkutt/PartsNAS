@@ -5,8 +5,8 @@ what you actually have in stock.
 
 ## 1. Get a BOM out of KiCad
 
-In the schematic editor use the BOM export (the *BOM* button, or *Tools → Generate BOM*, depending on your KiCad
-version). PartsNAS reads the CSV.
+In the schematic editor use the BOM export: the **BOM** button in the toolbar (in some KiCad versions also under
+*Tools*). PartsNAS reads the CSV.
 
 **Make sure the MPN is a column.** KiCad only exports the columns that are switched on. In the export dialog
 tick **Show** for the `MPN` field (and `Manufacturer` if you like). Without an MPN column PartsNAS can only guess
