@@ -28,16 +28,52 @@ const MOUNTS = ["smd", "tht", "other"]; // fallback options before attr-values l
 const commaFix = (v) => (/^-?\d+,\d+$/.test(String(v).trim()) ? String(v).trim().replace(",", ".") : v);
 
 export class PartDetail {
-  constructor(id, { onChange, onClose } = {}) {
+  /**
+   * @param {{onChange?, onClose?, siblings?: () => string[], onSwitch?: (id: string) => void}} opts
+   *   `siblings` = the ids of the parts in the list behind the panel, in the order shown, and `onSwitch` opens another
+   *   part: together they let a click on another part's name, and the arrow keys, go straight to the next part.
+   */
+  constructor(id, { onChange, onClose, siblings, onSwitch } = {}) {
     this.id = id;
     this.onChange = onChange || (() => {});
     this.onClose = onClose || null; // runs once when the panel goes away, however it's closed
+    this.siblings = siblings || null;
+    this.onSwitch = onSwitch || null;
+    this._dirty = false;            // something in the form was edited and not saved yet: the arrow keys leave it alone
     this.tab = "details";
   }
 
+  // A click on the dimmed list behind the panel closes it - unless it is on another part's name: then that part opens.
+  _backdropClick = (e) => {
+    const under = document.elementsFromPoint(e.clientX, e.clientY).find((n) => n !== this.back && !this.panel.contains(n));
+    const row = under && under.closest("td.name") ? under.closest("tr[data-id]") : null;
+    if (row && this.onSwitch && row.dataset.id !== this.id) return this._switchTo(row.dataset.id);
+    this.close();
+  };
+
+  _switchTo(id) {
+    this.close();
+    this.onSwitch(id);
+  }
+
+  // Arrow up / down: the previous / next part in the list, when nothing is being typed and nothing is unsaved.
+  _arrows = (e) => {
+    if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!this.siblings || !this.onSwitch || this._dirty) return;
+    const t = e.target;
+    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+    const mine = Number(this.panel.style.zIndex) || 46;                // a window open ABOVE the panel has the keys
+    if ([...document.querySelectorAll(".modal-back")].some((m) => (Number(m.style.zIndex) || 50) > mine)) return;
+    const ids = this.siblings();
+    const i = ids.indexOf(this.id);
+    const next = ids[i + (e.key === "ArrowDown" ? 1 : -1)];
+    e.preventDefault();                                                // do not scroll the page behind
+    if (i >= 0 && next) this._switchTo(next);
+  };
+
   async open() {
     await this._load();
-    this.back = el("div", { class: "detail-back", onclick: () => this.close() });
+    this.back = el("div", { class: "detail-back", onclick: this._backdropClick });
     this.panel = el("div", { class: "detail-panel" });
     // opened from inside a window (the BOM's Browse): stack on top of it, and let its own windows go on top of this
     if (document.querySelector(".modal-back")) this.back.style.zIndex = String(stackZ());
@@ -45,12 +81,17 @@ export class PartDetail {
     if (this.back.style.zIndex) this.panel.style.zIndex = String(stackZ());
     document.body.append(this.panel);
     document.addEventListener("keydown", this._esc);
+    document.addEventListener("keydown", this._arrows);
     document.addEventListener("paste", this._onPaste);
+    const dirty = () => { this._dirty = true; };
+    this.panel.addEventListener("input", dirty);
+    this.panel.addEventListener("change", dirty);
     this._render();
   }
 
   close = () => {
     document.removeEventListener("keydown", this._esc);
+    document.removeEventListener("keydown", this._arrows);
     document.removeEventListener("paste", this._onPaste);
     this.back?.remove();
     this.panel?.remove();
@@ -85,6 +126,7 @@ export class PartDetail {
   }
 
   _render() {
+    this._dirty = false;
     this.panel.innerHTML = "";
     const p = this.p;
     this.panel.append(

@@ -525,6 +525,7 @@ export class PartsView {
     const rows = [...this.items].sort(
       order === "stock" ? (a, b) => b.on_hand - a.on_hand : (a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()),
     );
+    this._rowIds = rows.map((p) => p.id);        // the order shown: what the arrow keys in a part's panel step through
     this.tableWrap.innerHTML = "";
     this._badges = new Map();
     const t = el("table", { class: "parts-table" });
@@ -588,6 +589,7 @@ export class PartsView {
       el("td", { class: "num " + (p.on_hand <= 0 ? "zero" : p.min_stock && p.on_hand <= p.min_stock ? "low" : "") }, String(p.on_hand)),
       el("td", { class: "num" }, p.unit_price != null ? fmtPrice(p.unit_price, p.currency) : el("span", { class: "zero" }, "—")),
       el("td", { class: "locs" }, p.locations.map((l) => el("span", { class: "chip" }, `${l.location}: ${l.qty}`))));
+    tr.dataset.id = p.id;
     if (this.shop) this._paintBadge(p.id);
     return tr;
   }
@@ -824,6 +826,16 @@ export class PartsView {
   }
 
   async openDetail(id) {
-    await new PartDetail(id, { onChange: () => this.reload() }).open();
+    this._detail?.close();          // one panel at a time (a click on another name switches to that part)
+    const detail = new PartDetail(id, {
+      onChange: () => this.reload(),
+      siblings: () => this._rowIds || [],
+      onSwitch: (nid) => {
+        this.openDetail(nid);
+        this.tableWrap?.querySelector(`tr[data-id="${nid}"]`)?.scrollIntoView({ block: "nearest" });   // keep the row in view
+      },
+    });
+    this._detail = detail;
+    await detail.open();
   }
 }
