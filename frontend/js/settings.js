@@ -124,6 +124,21 @@ export async function openSettings() {
   builtin.append(bt);
   body.append(builtin);
 
+  // ---- updates ----
+  const updSet = await api("/api/update/settings");
+  body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Updates"));
+  body.append(el("div", { class: "hint" },
+    "The About tab's 'Check for updates' reads a small version.json. By default it is the one in the GitHub repository; " +
+    "a private repository cannot be read without a login, so then enter another address that serves the file " +
+    "(or leave it empty once the repository is public)."));
+  const updUrl = el("input", { type: "text", style: "flex:1", placeholder: updSet.default, value: updSet.url });
+  const updToken = el("input", { type: "password", style: "flex:1",
+    placeholder: updSet.has_token ? "•••••• stored — type to replace" : "optional: a GitHub token with read-only access to this repository" });
+  body.append(el("div", { class: "row" }, el("label", { style: "min-width:100px" }, "address"), updUrl),
+    el("div", { class: "row" }, el("label", { style: "min-width:100px" }, "GitHub token"), updToken),
+    el("div", { class: "hint" }, "A token is only sent to GitHub, never to another address. Create one at GitHub → Settings → Developer settings → " +
+      "Fine-grained tokens, for this repository only, with read-only 'Contents'."));
+
   // ---- automatic backup ----
   body.append(el("div", { class: "section-title", style: "margin-top:16px" }, "Automatic backup"));
   body.append(el("div", { class: "hint" },
@@ -343,6 +358,8 @@ export async function openSettings() {
         id: r.id.value.trim(), when: { case: r.case_.value.trim(), device: r.device.value.trim(), raw: r.raw.value.trim() },
         scope: r.scope.value.trim(), footprint: r.fp.value.trim(), assumed: r.guess.checked }));
       await api("/api/kicad/rules", { method: "PUT", body: { rules: kr } });
+      if (updUrl.value.trim() !== updSet.url || updToken.value.trim())
+        await api("/api/update/settings", { method: "PUT", body: { url: updUrl.value.trim(), token: updToken.value.trim() || null } });
       const res = await api("/api/meta/attr-rules", { method: "PUT", body: { rules } });
       toast(`Saved ${n} provider(s), ${res.count} rule(s)`);
     },

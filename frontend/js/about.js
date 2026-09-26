@@ -15,8 +15,31 @@ export class AboutView {
   }
 
   async reload() {
-    this.stats = await api("/api/stats");
+    [this.stats, this.health] = await Promise.all([api("/api/stats"), api("/api/health")]);
     this._render();
+  }
+
+  // "Check for updates": the published version.json against what is running here
+  async _checkUpdates(btn, out) {
+    btn.disabled = true;
+    out.textContent = "Checking…";
+    out.style.color = "";
+    try {
+      const r = await api("/api/update/check?refresh=1");
+      out.textContent = r.message;
+      out.style.color = r.status === "newer" || r.status === "other_build" ? "var(--warn)" : r.status === "error" ? "var(--danger)" : "var(--ok, #3fb950)";
+      if (r.status === "newer" && r.latest) {
+        out.append(document.createElement("br"),
+          `${r.latest.released ? r.latest.released + ": " : ""}${r.latest.notes || ""}`.trim(),
+          document.createElement("br"),
+          "Update: copy the new code to the server and rebuild it (see the README, Backups and updating). Take a snapshot first.");
+      }
+    } catch (e) {
+      out.textContent = `Could not check: ${e.message}`;
+      out.style.color = "var(--danger)";
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   _tile(value, label, title) {
@@ -58,6 +81,15 @@ export class AboutView {
         el("div", { class: "stat-grid" },
           this._tile(s.total_labor_hours, "Labor hours logged", "lifetime, across every quote/invoice"),
         ),
+        el("div", { class: "section-title", style: "margin-top:16px" }, "PartsNAS"),
+        el("div", {}, `Version ${this.health.version} · build ${this.health.build}`),
+        el("div", {}, "SA1CKW - ", el("a", { href: "https://github.com/Melkutt/PartsNAS", target: "_blank", rel: "noopener noreferrer" },
+          "https://github.com/Melkutt/PartsNAS")),
+        (() => {
+          const out = el("div", { class: "hint", style: "padding:6px 0" });
+          const btn = el("button", { class: "ghost", onclick: () => this._checkUpdates(btn, out) }, "Check for updates");
+          return el("div", { style: "margin-top:8px" }, btn, out);
+        })(),
       ),
     );
   }

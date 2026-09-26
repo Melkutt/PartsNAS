@@ -86,5 +86,16 @@ this by not sending stock or price as fields.
 - On the NAS: copy the new code, then delete the project's **container and image** in Container Manager and create
   it again (*Start* alone re-uses the old image). `/api/health` shows the build id; compare it with your copy.
 
+**Check for updates says "answered 404 … private".**
+The check reads `version.json` from the GitHub repository, which a private repository does not hand out without a
+login. In *Settings → Updates* enter a read-only GitHub token (Fine-grained token, this repository only, *Contents:
+read-only*; it is only ever sent to GitHub) or another address that serves the file. It works by itself when the
+repository is public.
+
+**Restoring a snapshot warns that it is from a newer PartsNAS.**
+The snapshot was made by a newer version than the one running. Update PartsNAS first (copy the new code and rebuild),
+then restore. Restoring anyway is possible, but this build may not understand all of it; a safety snapshot of the
+current state is saved first either way.
+
 **A new version number.** `0.x.y`: the middle number goes up when something new is added, the last when only bugs
 are fixed. `1.0.0` is reserved for "finished and stable".

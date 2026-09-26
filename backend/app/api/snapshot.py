@@ -37,6 +37,7 @@ from .. import __version__
 from ..core.config import get_settings
 from ..core.db import Base, SessionLocal, engine, sync_columns
 from ..seed import run_all
+from ..versioning import compare
 
 router = APIRouter(tags=["snapshot"])
 settings = get_settings()
@@ -183,7 +184,7 @@ def _verify(zf: zipfile.ZipFile, tmp: Path) -> dict:
 
 
 @router.post("/api/import/snapshot")
-def import_snapshot(file: UploadFile = File(...), confirm: str = Form("")):
+def import_snapshot(file: UploadFile = File(...), confirm: str = Form(""), allow_newer: str = Form("")):
     if confirm != "REPLACE":
         raise HTTPException(400, 'restoring replaces everything — send confirm="REPLACE"')
     if not _restore_lock.acquire(blocking=False):
@@ -200,6 +201,15 @@ def import_snapshot(file: UploadFile = File(...), confirm: str = Form("")):
                 raise HTTPException(400, "not a zip file")
             with zf:
                 manifest = _verify(zf, tmp)  # nothing is touched until this passes
+
+                # a snapshot from a NEWER PartsNAS may hold data this build does not understand: say so first
+                theirs = manifest.get("app_version")
+                if compare(theirs, __version__) == 1 and allow_newer != "YES":
+                    raise HTTPException(409, {
+                        "code": "newer_snapshot", "snapshot_version": theirs, "running_version": __version__,
+                        "message": (f"This snapshot was made by PartsNAS {theirs}, newer than the {__version__} that is "
+                                    "running. This build may not understand everything in it. Update PartsNAS first, "
+                                    "or restore anyway.")})
 
                 # safety net: the state we're about to overwrite
                 bdir = settings.data_dir / BACKUPS

@@ -246,6 +246,13 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
   and enter its container path. The last result, or the error, is shown in Settings.
 - **Portable backup:** the other export in the same dialog is a data export you can merge
   into another database.
+- **Is there a newer version?** *About → Check for updates* compares the version and build you run with the
+  published `version.json` and says if a newer version exists, or if your build differs. By default it reads the
+  file in the GitHub repository; while that repository is private it needs a read-only GitHub token (*Settings →
+  Updates*) or another address for the file. About also shows the version, the build id and the repository link.
+- **A snapshot from a newer PartsNAS** than the one that is running is not restored silently: you get a warning
+  (with both version numbers) and must confirm, since this build may not understand everything in it. Nothing has
+  been changed by then.
 - **Update:** take a snapshot, replace the code on the server with the new version, and
   rebuild the project (*Container Manager → Project → Build*, or
   `docker compose up -d --build`). The `data/` folder is left alone. On Synology, starting an

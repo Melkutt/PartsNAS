@@ -175,12 +175,24 @@ export function openRestoreSnapshot() {
       const f = fileInput.files[0];
       if (!f) throw new Error("pick a snapshot file first");
       if (word.value.trim() !== "REPLACE") throw new Error('type "REPLACE" exactly to confirm');
-      const fd = new FormData();
-      fd.append("file", f);
-      fd.append("confirm", "REPLACE");
-      const res = await fetch("/api/import/snapshot", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || res.statusText);
+      const send = (allowNewer) => {
+        const fd = new FormData();
+        fd.append("file", f);
+        fd.append("confirm", "REPLACE");
+        if (allowNewer) fd.append("allow_newer", "YES");
+        return fetch("/api/import/snapshot", { method: "POST", body: fd });
+      };
+      let res = await send(false);
+      let data = await res.json();
+      // made by a NEWER PartsNAS than this one: say so and let the user decide (nothing has been touched yet)
+      if (res.status === 409 && data.detail && data.detail.code === "newer_snapshot") {
+        if (!confirm(`${data.detail.message}
+
+Restore anyway?`)) throw new Error("restore cancelled - nothing was changed");
+        res = await send(true);
+        data = await res.json();
+      }
+      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : (data.detail && data.detail.message) || res.statusText);
       out.hidden = false;
       out.textContent = `Restored snapshot from ${data.snapshot_created} (${data.files} files).\n` +
         `Your previous state was saved on the server as ${data.safety_snapshot}.\nReloading…`;

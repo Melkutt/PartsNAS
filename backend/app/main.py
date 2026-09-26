@@ -99,10 +99,12 @@ def _mount_routers() -> None:
         stats,
         stock,
         suppliers,
+        update,
     )
 
     app.include_router(bom.router)
     app.include_router(kicad.router)
+    app.include_router(update.router)
     app.include_router(categories.router)
     app.include_router(locations.router)
     app.include_router(parts.router)

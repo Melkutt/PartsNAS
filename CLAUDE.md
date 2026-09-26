@@ -360,5 +360,9 @@ the *Categories/Locations tabs* also jumps to Parts filtered by it.
     lines, project rename; see the "Board view" and BOM notes above and `docs/bom.md`.
 13. **done** — KiCad HTTP library + footprint rules + several footprints per part (`docs/kicad.md`); suppliers Farnell and
     TME (TME blocked by a permission on the tested account, see README); tree reorder (▲ ▼), part-panel navigation.
+Release checklist: bump `backend/app/__init__.py` + the README version line, run tests, then
+`.venv/Scripts/python scripts/write_version_json.py --notes "..."` (writes `version.json`, read by *About -> Check for
+updates* via `api/update.py`; it is outside the build-id folders), commit, push, `scripts/deploy_nas.ps1`. A snapshot
+whose manifest `app_version` is newer than the running one is refused with a 409 until `allow_newer=YES`.
 Documentation lives in `docs/` (index, parts, suppliers, BOM, KiCad, troubleshooting); keep README short and update the
 page whenever a feature changes.
