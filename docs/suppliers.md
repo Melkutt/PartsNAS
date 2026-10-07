@@ -24,6 +24,15 @@ under **Settings** (the gear) and are stored in your database (and in snapshots:
 **Fetch prices from all APIs** (on a part) asks every configured supplier at once and files one price per supplier.
 Tick *search prices from here* per supplier in Settings to choose which ones take part.
 
+## Suppliers without an API
+
+A lot of parts come from shops that have no API, or from eBay, Tradera or a drawer of unlabelled bits. For those, use
+**Add supplier link** on the part's Suppliers tab instead of *Look up specs…*: pick the supplier, optionally an
+article number, the product page and a price, and mark it *Preferred* if a quote should use it.
+
+The dialog starts on the supplier you picked **last time**, whichever it was, so going through a box of parts from
+one shop takes a single pick. The first time it starts on Mouser. The choice is remembered by the browser you use.
+
 ## Limits and protection
 
 Every supplier has a rate limit and a daily quota (shown in Settings, like `ready · 3/1000 today · 10/min`), and an

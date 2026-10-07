@@ -6,7 +6,7 @@ need to order next. It runs in Docker on a Synology NAS (built and tested on a
 DS224+) or any other machine, and you use it from any browser on your home network.
 No cloud, no account, no subscription: the data is one SQLite file on your own disk.
 
-![Parts list with category tree and filters](docs/screenshots/parts-list.png)
+![The Parts tab: category tree, filters, the list and a part open](docs/screenshots/part-detail.png)
 
 Built by a hobbyist for a home lab that also does the odd repair job for other
 people, so it goes a bit further than an inventory: it can price a job, invoice it,
@@ -87,6 +87,8 @@ Version **0.8.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
   rate-limited, pausing itself if a supplier ever blocks you.
 - Import from a PartsBox export, a Mouser order history (`.xls`), a vendor kit list,
   or a **BOM exported from KiCad** (with matching against your stock).
+- **Add supplier link** remembers the supplier you picked last, whether that is Mouser or a shop without an API
+  (eBay, Tradera, Electrokit …), so a drawer of parts from one shop takes one pick, not one per part.
 - The **Parts list** has a Price column (ex VAT): the preferred supplier's price, else the last
   purchase — the same figure a quote or the BOM's price summary would use, at a glance while you browse.
 
@@ -106,6 +108,8 @@ actually have in stock.
   its parts light up in neon green on the right side of the board, click a part and the list jumps to its line.
 - **Print pick list**: choose the columns, the board on page 1 with the reference names on it, one row per
   component, and an optional price summary (cost or with margin, ex or inc VAT).
+
+![Reviewing a KiCad BOM next to the board](docs/screenshots/bom-review.png)
 
 Details and the recognised column names: [docs/bom.md](docs/bom.md).
 
@@ -136,7 +140,7 @@ More: [docs/kicad.md](docs/kicad.md).
 - **Automatic backup** (Settings, off by default): a snapshot every day into a folder you choose,
   keeping the newest few, with the last result or error shown in Settings.
 
-![A part in detail](docs/screenshots/part-detail.png)
+![The Export dialog: spreadsheet, snapshot and portable backup](docs/screenshots/export.png)
 
 ---
 
@@ -190,8 +194,8 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 ## Documentation
 
 More detailed pages live in [`docs/`](docs/index.md): [Parts, categories and locations](docs/parts.md),
-[Suppliers and API keys](docs/suppliers.md), [BOM and building a board](docs/bom.md), [KiCad](docs/kicad.md) and
-[Troubleshooting](docs/troubleshooting.md).
+[Suppliers and API keys](docs/suppliers.md), [BOM and building a board](docs/bom.md), [KiCad](docs/kicad.md),
+[Backup, restore and updating](docs/backup.md) and [Troubleshooting](docs/troubleshooting.md).
 
 ## Your first ten minutes
 
@@ -235,6 +239,8 @@ Set these as environment variables (in `docker-compose.yml` under `environment:`
 | `PARTSNAS_DATA_DIR` | `./data` (`/data` in Docker) | Where the database and images are kept. |
 
 ## Backups and updating
+
+The short version; the full guide is [docs/backup.md](docs/backup.md).
 
 - **Back up:** *Export → Snapshot — ZIP* gives you one file with everything. Keep a copy
   somewhere other than the NAS. (It contains your supplier API keys, so keep it private.)

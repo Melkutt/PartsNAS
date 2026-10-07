@@ -34,6 +34,8 @@ Nothing is saved until you press **Save project**.
 
 ## 3. Review the match
 
+![Reviewing a BOM next to the board](screenshots/bom-review.png)
+
 Every line is matched against your parts:
 
 | Badge | Meaning |
