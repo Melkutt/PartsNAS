@@ -1,6 +1,6 @@
 {
   "version": "0.8.0",
-  "build": "783049e",
-  "released": "2026-09-26",
-  "notes": "KiCad HTTP library, footprint rules, Placed per component, Farnell and TME, tree reordering, part navigation, update check"
+  "build": "8765682",
+  "released": "2026-10-07",
+  "notes": "KiCad HTTP library, footprint rules, Placed per component, Farnell and TME, tree reordering, part navigation, update check, supplier link remembers last supplier"
 }
