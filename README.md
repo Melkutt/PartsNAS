@@ -23,6 +23,11 @@ Version **0.8.0** · Python / FastAPI / SQLite · vanilla JS, no build step · [
 > file based on it. The author takes **no responsibility or liability** for that. See
 > [Disclaimer](#disclaimer) and the [LICENSE](LICENSE).
 
+> **There is no login.** PartsNAS has no passwords or user accounts: **anyone who can open its page can read, change
+> and delete everything, and download a backup that contains your supplier API keys.** Run it only on your own home
+> network, never forward its port on your router or publish it on the internet, and use a VPN to reach it from
+> outside. Details and what to do: [docs/security.md](docs/security.md).
+
 ---
 
 ## What it does
@@ -162,6 +167,9 @@ Needs DSM 7.2 or newer with **Container Manager** installed.
 Your data lives in the `data/` folder next to the compose file, so it survives
 restarts and updates.
 
+> Keep port 8770 **inside your home network**: there is no login, so do not forward it on your router
+> ([why and what to do instead](docs/security.md)).
+
 ### Option 2 — Any machine with Docker
 
 ```bash
@@ -195,7 +203,8 @@ Open <http://localhost:8000>. The database is created in `./data` the first time
 
 More detailed pages live in [`docs/`](docs/index.md): [Parts, categories and locations](docs/parts.md),
 [Suppliers and API keys](docs/suppliers.md), [BOM and building a board](docs/bom.md), [KiCad](docs/kicad.md),
-[Backup, restore and updating](docs/backup.md) and [Troubleshooting](docs/troubleshooting.md).
+[Backup, restore and updating](docs/backup.md), [Security: there is no login](docs/security.md) and
+[Troubleshooting](docs/troubleshooting.md).
 
 ## Your first ten minutes
 
@@ -277,9 +286,12 @@ The short version; the full guide is [docs/backup.md](docs/backup.md).
   exists but has not been seen to work. Until that is sorted out with TME (it is a permission on their
   side, not something PartsNAS can change), treat TME as **not working** and use Mouser, Digi-Key or
   Farnell. If your TME account is allowed to Search, it may well work for you - the code is there.
-- **There is no login.** PartsNAS is meant for a trusted home network. Do not expose its
-  port to the internet; if you need to reach it from outside, use a VPN. Anyone who can
-  open the page can read and change everything.
+- **There is no login, no users and no passwords.** PartsNAS is meant for a trusted home network. Anyone who can
+  open the page can read, change and delete everything, download a snapshot with your supplier API keys in it, and
+  restore a snapshot over everything. Do not forward its port on your router and do not publish it through a tunnel
+  or reverse proxy without a login in front; reach it from outside through a VPN; keep untrusted devices on a
+  separate network. The `PARTSNAS_API_TOKEN` in `docker-compose.yml` is reserved and does nothing yet. Read
+  [docs/security.md](docs/security.md).
 - The Swish QR code only handles SEK. Currency and VAT are configurable, but the wording
   and a few defaults lean Swedish.
 - KiCad integration is the **BOM tab** and the **KiCad HTTP library**, described above and in
@@ -320,7 +332,7 @@ provided **"as is"**, without warranty of any kind, and **you use it entirely at
   Mouser, Digi-Key, TME, Farnell or anywhere else come from third parties and may be incorrect or out of date.
   Check them before you rely on them, especially before you buy, order or build something.
 - **No security promises.** There is no login. Keep it on a trusted network and never expose it to the
-  internet. API keys are stored in the database and in snapshots — keep those private.
+  internet ([details](docs/security.md)). API keys are stored in the database and in snapshots — keep those private.
 - **Third-party services.** You need your own accounts and API keys, and you must follow those
   services' terms. PartsNAS is not affiliated with or endorsed by Mouser, Digi-Key, TME, Farnell, PartsBox, KiCad,
   Synology or anyone else mentioned here; the names belong to their owners.

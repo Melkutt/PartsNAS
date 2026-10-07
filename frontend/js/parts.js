@@ -253,7 +253,7 @@ export class PartsView {
     const addBtn = el("button", { class: "primary", onclick: () => this._newPart() }, "+ New part");
     const kicadBtn = el("button", { class: "ghost", title: "Connect KiCad's symbol chooser to PartsNAS, and name parts for it",
       onclick: () => openKicadNames(() => this.reload(), this.rail.mode === "categories" && this.rail.id ? { id: this.rail.id, name: this.rail.name } : null) }, "KiCad…");
-    bar.append(this.qInput, this.filtersBtn, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), this.shop || this.pick ? null : kicadBtn, addBtn, this.countTag);
+    bar.append(this.qInput, this.filtersBtn, lowL, noCatL, dupL, scanL, this.orderSel, el("span", { class: "grow" }), ...(this.shop || this.pick ? [] : [kicadBtn]), addBtn, this.countTag);
     return bar;
   }
 

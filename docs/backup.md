@@ -16,7 +16,8 @@ the NAS.
 | **Snapshot (.zip)** | An **exact copy of everything**: database, every file, invoices, customers, settings, images, logo | Backup and restore. This is the one to keep. |
 | **Portable backup (.zip)** | Parts, suppliers, images, stock, design notes, quotes and customers as *data*, not an exact copy | Merging into another PartsNAS database. Can be limited to parts that have a supplier link, and can include your API keys. |
 
-A snapshot contains your **supplier API keys** (they live in the database). Treat the file as private.
+A snapshot contains your **supplier API keys** (they live in the database). Treat the file as private, and see
+[Security](security.md): since there is no login, anyone on your network can also download one.
 
 ## Restore a snapshot
 

@@ -10,6 +10,7 @@ These pages go into how to use it.
 | [BOM and building a board](bom.md) | Import a KiCad BOM, match it to your stock, skip / edit / place lines, the board view, printing a pick list with prices |
 | [KiCad](kicad.md) | Pick real parts while you draw (the HTTP library), footprint rules, several footprints per part, exporting a BOM with MPN |
 | [Backup, restore and updating](backup.md) | The three kinds of export, restoring a snapshot, automatic backup, *Check for updates*, and how to update the NAS |
+| [Security: there is no login](security.md) | What anyone on your network can do, what not to do, VPN, firewall, a login in front |
 | [Troubleshooting](troubleshooting.md) | The error messages you can meet, what they mean and what to do |
 
 Not written yet: getting started in detail, quotes and invoices. Until then their content is in the README.

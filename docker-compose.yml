@@ -18,5 +18,7 @@ services:
     environment:
       PARTSNAS_DEFAULT_CURRENCY: SEK
       PARTSNAS_DEFAULT_VAT_PERCENT: "25"
-      # There is no login: keep the port on your LAN (or behind a VPN).
-      # PARTSNAS_API_TOKEN is reserved for the planned KiCad library and is not enforced yet.
+      # THERE IS NO LOGIN. Anyone who can reach the port can read, change and delete everything and
+      # download a backup that holds your supplier API keys. Keep it on your home LAN, never forward
+      # the port on your router, and use a VPN from outside. See docs/security.md.
+      # PARTSNAS_API_TOKEN is reserved and is not enforced yet: setting it does nothing.
