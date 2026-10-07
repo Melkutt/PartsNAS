@@ -764,8 +764,7 @@ export class PartDetail {
     if (existing) {
       sup.value = String(existing.supplier_id);
     } else {
-      // default to the remembered supplier (last one chosen that is an API
-      // provider), else Mouser
+      // default to the supplier chosen last time, else Mouser
       const want = (localStorage.getItem("partsnas.defaultSupplier") || "Mouser").toLowerCase();
       const opt = [...sup.options].find((o) => o.textContent.toLowerCase() === want)
         || [...sup.options].find((o) => o.textContent.toLowerCase() === "mouser");
@@ -800,10 +799,9 @@ export class PartDetail {
           await api(`/api/parts/${this.id}/suppliers/${existing.id}`, { method: "PATCH", body: payload });
         } else {
           await api(`/api/parts/${this.id}/suppliers`, { method: "POST", body: { supplier_id: Number(sup.value), ...payload } });
-          // remember this supplier as the default if it's an API provider
+          // remember the last supplier picked, whatever it is (eBay, Tradera, Electrokit ...)
           const name = sup.selectedOptions[0]?.textContent || "";
-          const providers = (this._provNames ||= (await api("/api/lookup/providers")).map((p) => p.label.toLowerCase()));
-          if (providers.includes(name.toLowerCase())) localStorage.setItem("partsnas.defaultSupplier", name);
+          if (name) localStorage.setItem("partsnas.defaultSupplier", name);
         }
         toast("Saved");
         await this._reload();
